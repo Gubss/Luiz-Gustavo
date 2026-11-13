@@ -1,0 +1,380 @@
+// YouTube Radar — schema completo da versão 1.
+// Campos "platform" preparam o suporte futuro a TikTok (hoje sempre "youtube").
+// Campos marcados como OAuth ficam vazios até a versão com login no YouTube.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- Configuração e controle de cota ----------
+
+model Setting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+/// Cada chamada à YouTube Data API registra o custo em unidades.
+/// `quotaDay` é a data no fuso America/Los_Angeles (quando o Google zera a cota).
+model QuotaLog {
+  id        Int      @id @default(autoincrement())
+  quotaDay  String
+  endpoint  String
+  units     Int
+  createdAt DateTime @default(now())
+
+  @@index([quotaDay])
+}
+
+/// Histórico de coletas (automáticas ou manuais).
+model CollectionRun {
+  id         Int       @id @default(autoincrement())
+  kind       String // "channels" | "videos" | "my_videos"
+  trigger    String // "auto" | "manual" | "script"
+  status     String    @default("running") // running | ok | error
+  unitsUsed  Int       @default(0)
+  message    String?
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+}
+
+// ---------- Nichos e canais ----------
+
+model Niche {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  channels   NicheChannel[]
+  myChannels MyChannel[]
+  playbooks  NichePlaybook[]
+  ideas      Idea[]
+}
+
+/// Canal de terceiros monitorado. Pode estar em vários nichos.
+model Channel {
+  id                String    @id @default(cuid())
+  platform          String    @default("youtube")
+  externalId        String // ID do canal na plataforma (UC...)
+  title             String
+  handle            String?
+  description       String?
+  thumbnailUrl      String?
+  country           String?
+  subscriberCount   Int?
+  hiddenSubscribers Boolean   @default(false)
+  videoCount        Int?
+  viewCount         Float? // pode passar de 2^31
+  uploadsPlaylistId String?
+  channelCreatedAt  DateTime?
+  statsFetchedAt    DateTime?
+  videosFetchedAt   DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  catalogFetchedAt  DateTime?
+
+  niches    NicheChannel[]
+  videos    Video[]
+  snapshots ChannelSnapshot[]
+  catalog   CatalogEntry[]
+
+  @@unique([platform, externalId])
+}
+
+model NicheChannel {
+  nicheId   String
+  channelId String
+  addedAt   DateTime @default(now())
+
+  niche   Niche   @relation(fields: [nicheId], references: [id], onDelete: Cascade)
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@id([nicheId, channelId])
+}
+
+/// Catálogo completo de títulos de cada canal monitorado (todas as idades),
+/// usado para conferir "esse tema já foi feito por um canal de referência?".
+model CatalogEntry {
+  id          Int      @id @default(autoincrement())
+  channelId   String
+  externalId  String // ID do vídeo
+  title       String
+  publishedAt DateTime
+  createdAt   DateTime @default(now())
+
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, externalId])
+  @@index([channelId])
+}
+
+model ChannelSnapshot {
+  id              Int      @id @default(autoincrement())
+  channelId       String
+  day             String // YYYY-MM-DD (um por dia)
+  subscriberCount Int?
+  videoCount      Int?
+  viewCount       Float?
+  capturedAt      DateTime @default(now())
+
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, day])
+}
+
+/// Canal meu (metadado). Status: PRODUCTION | VALIDATING | RESEARCH
+model MyChannel {
+  id         String   @id @default(cuid())
+  platform   String   @default("youtube")
+  nicheId    String?
+  name       String
+  url        String?
+  externalId String?
+  status     String   @default("RESEARCH")
+  notes      String?
+  // Preparado para OAuth (versão futura)
+  oauthConnected Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  niche    Niche?    @relation(fields: [nicheId], references: [id], onDelete: SetNull)
+  videos   MyVideo[]
+  ideas    Idea[]
+}
+
+// ---------- Vídeos monitorados ----------
+
+model Video {
+  id             String    @id @default(cuid())
+  platform       String    @default("youtube")
+  externalId     String
+  channelId      String
+  title          String
+  description    String?
+  tags           String? // JSON array
+  thumbnailUrl   String?
+  publishedAt    DateTime
+  durationSec    Int?
+  isShort        Boolean   @default(false)
+  viewCount      Int       @default(0)
+  likeCount      Int?
+  commentCount   Int?
+  defaultLang    String?
+  statsFetchedAt DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  channel    Channel         @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  snapshots  VideoSnapshot[]
+  favorite   Favorite?
+  transcript Transcript?
+  diagnosis  Diagnosis?
+  structure  ScriptStructure?
+  inspired   MyVideo[]
+
+  @@unique([platform, externalId])
+  @@index([channelId, publishedAt])
+}
+
+model VideoSnapshot {
+  id           Int      @id @default(autoincrement())
+  videoId      String
+  day          String // YYYY-MM-DD
+  viewCount    Int
+  likeCount    Int?
+  commentCount Int?
+  capturedAt   DateTime @default(now())
+
+  video Video @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  @@unique([videoId, day])
+}
+
+model Favorite {
+  id        String   @id @default(cuid())
+  videoId   String   @unique
+  note      String?
+  createdAt DateTime @default(now())
+
+  video Video @relation(fields: [videoId], references: [id], onDelete: Cascade)
+}
+
+// ---------- Estudo ----------
+
+model Transcript {
+  id        String   @id @default(cuid())
+  videoId   String   @unique
+  language  String
+  source    String // "youtube-transcript" | "yt-dlp"
+  text      String
+  segments  String? // JSON [{start, dur, text}]
+  createdAt DateTime @default(now())
+
+  video Video @relation(fields: [videoId], references: [id], onDelete: Cascade)
+}
+
+model Diagnosis {
+  id                 String    @id @default(cuid())
+  videoId            String    @unique
+  model              String
+  content            String // JSON estruturado (explicação = hipótese)
+  metrics            String? // JSON medido: palavras/s, intervalo entre eventos, abertura, fecho, fórmula do título
+  markdown           String? // versão em texto
+  usedTranscript     Boolean   @default(false)
+  // Análise de comentários (feature 10)
+  commentsAnalysis   String? // JSON
+  commentsModel      String?
+  commentsAnalyzedAt DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  video Video @relation(fields: [videoId], references: [id], onDelete: Cascade)
+}
+
+/// Esqueleto de roteiro extraído de um diagnóstico com transcrição.
+model ScriptStructure {
+  id        String   @id @default(cuid())
+  videoId   String   @unique
+  isShort   Boolean
+  content   String // JSON {hook, turn, development, climax, close} com tempos
+  beats     String? // JSON [{t, kind, text}] — cada "algo novo" com segundo exato
+  wordsPerSec      Float?
+  avgBeatInterval  Float? // segundos médios entre eventos novos
+  maxBeatGap       Float? // maior intervalo sem novidade
+  durationSec      Int?
+  createdAt DateTime @default(now())
+
+  video Video @relation(fields: [videoId], references: [id], onDelete: Cascade)
+}
+
+/// Cartilha do nicho (feature 7).
+model NichePlaybook {
+  id             String   @id @default(cuid())
+  nicheId        String
+  model          String
+  stats          String // JSON calculado em código
+  content        String // JSON do Claude
+  diagnosisCount Int
+  createdAt      DateTime @default(now())
+
+  niche Niche @relation(fields: [nicheId], references: [id], onDelete: Cascade)
+
+  @@index([nicheId, createdAt])
+}
+
+// ---------- Gerador e banco de ideias ----------
+
+/// Status: IDEA | SCRIPT | PRODUCED | PUBLISHED. Format: SHORT | LONG
+model Idea {
+  id            String   @id @default(cuid())
+  nicheId       String?
+  myChannelId   String?
+  format        String
+  theme         String
+  justification String?
+  titles        String // JSON array de títulos
+  chosenTitle   String?
+  status        String   @default("IDEA")
+  script        String?
+  scriptModel   String?
+  referenceIds  String? // JSON array de Video.id usados como referência
+  structureIds  String? // JSON array de ScriptStructure.id usados no roteiro
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  niche     Niche?     @relation(fields: [nicheId], references: [id], onDelete: SetNull)
+  myChannel MyChannel? @relation(fields: [myChannelId], references: [id], onDelete: SetNull)
+  myVideos  MyVideo[]
+}
+
+/// Registro bruto de cada geração (para auditoria e reaproveitamento).
+model Generation {
+  id        String   @id @default(cuid())
+  kind      String // "ideas" | "script" | "playbook" | ...
+  model     String
+  input     String // JSON
+  output    String // JSON
+  createdAt DateTime @default(now())
+}
+
+// ---------- Meus vídeos publicados (feature 8) ----------
+
+model MyVideo {
+  id               String    @id @default(cuid())
+  platform         String    @default("youtube")
+  externalId       String
+  url              String
+  myChannelId      String
+  title            String?
+  thumbnailUrl     String?
+  publishedAt      DateTime?
+  durationSec      Int?
+  isShort          Boolean   @default(false)
+  viewCount        Int?
+  likeCount        Int?
+  commentCount     Int?
+  statsFetchedAt   DateTime?
+  inspiredVideoId  String?
+  inspiredIdeaId   String?
+  // Métricas privadas — preenchidas só na versão com OAuth
+  ctr              Float?
+  impressions      Int?
+  avgViewDuration  Float?
+  avgViewPercent   Float?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  myChannel     MyChannel           @relation(fields: [myChannelId], references: [id], onDelete: Cascade)
+  inspiredVideo Video?              @relation(fields: [inspiredVideoId], references: [id], onDelete: SetNull)
+  inspiredIdea  Idea?               @relation(fields: [inspiredIdeaId], references: [id], onDelete: SetNull)
+  snapshots     MyVideoSnapshot[]
+  checkpoints   MyVideoCheckpoint[]
+
+  @@unique([platform, externalId])
+}
+
+/// Snapshots horários nas primeiras 72h, depois diários.
+model MyVideoSnapshot {
+  id           Int      @id @default(autoincrement())
+  myVideoId    String
+  viewCount    Int
+  likeCount    Int?
+  commentCount Int?
+  capturedAt   DateTime @default(now())
+
+  myVideo MyVideo @relation(fields: [myVideoId], references: [id], onDelete: Cascade)
+
+  @@index([myVideoId, capturedAt])
+}
+
+/// Números do vídeo em idades fixas (1h, 3h, 24h, 48h).
+/// views/likes/comentários vêm da API (com a idade real da medição);
+/// "continuaram assistindo" e "% visto" são colados à mão do YouTube Studio até o OAuth.
+model MyVideoCheckpoint {
+  id              String   @id @default(cuid())
+  myVideoId       String
+  ageHours        Int // 1 | 3 | 24 | 48
+  measuredAgeMin  Int? // idade real em minutos quando a API mediu
+  viewCount       Int?
+  likeCount       Int?
+  commentCount    Int?
+  stayedPct       Float? // Shorts: "continuaram assistindo" (%)
+  avgViewPct      Float? // % médio do vídeo visto
+  avgViewDuration Float? // segundos
+  source          String   @default("api") // api | manual | mixed
+  notes           String?
+  updatedAt       DateTime @updatedAt
+
+  myVideo MyVideo @relation(fields: [myVideoId], references: [id], onDelete: Cascade)
+
+  @@unique([myVideoId, ageHours])
+}
