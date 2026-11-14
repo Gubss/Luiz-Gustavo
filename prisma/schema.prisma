@@ -164,6 +164,7 @@ model Video {
   publishedAt    DateTime
   durationSec    Int?
   isShort        Boolean   @default(false)
+  shortSource    String? // "duration" | "url" — como foi classificado
   viewCount      Int       @default(0)
   likeCount      Int?
   commentCount   Int?

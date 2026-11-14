@@ -9,7 +9,9 @@
     "lint": "eslint",
     "db:setup": "prisma migrate deploy",
     "db:studio": "prisma studio",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "collect": "tsx --env-file=.env scripts/collect.ts",
+    "test": "tsx --test tests/*.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.8.0",

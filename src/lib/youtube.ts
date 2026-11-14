@@ -220,3 +220,90 @@ export function channelFields(c: YtChannel) {
 
 export const channelUrl = (c: { externalId: string; handle?: string | null }) =>
   c.handle ? `https://www.youtube.com/${c.handle}` : `https://www.youtube.com/channel/${c.externalId}`;
+
+// ---------- Vídeos ----------
+
+export type YtPlaylistItem = {
+  contentDetails: { videoId: string; videoPublishedAt?: string };
+  snippet: { title: string; publishedAt: string };
+};
+
+export type YtVideo = {
+  id: string;
+  snippet: {
+    channelId: string;
+    title: string;
+    description?: string;
+    tags?: string[];
+    publishedAt: string;
+    thumbnails?: Thumbs;
+    liveBroadcastContent?: string;
+    defaultAudioLanguage?: string;
+    defaultLanguage?: string;
+  };
+  contentDetails?: { duration?: string };
+  statistics?: { viewCount?: string; likeCount?: string; commentCount?: string };
+};
+
+/** Uma página (até 50) da playlist de uploads, do mais novo para o mais antigo. */
+export async function uploadsPage(playlistId: string, pageToken?: string) {
+  return ytGet<ListResponse<YtPlaylistItem>>("playlistItems.list", {
+    part: "snippet,contentDetails",
+    playlistId,
+    maxResults: 50,
+    ...(pageToken ? { pageToken } : {}),
+  });
+}
+
+/** Detalhes de vídeos em lote (50 por unidade de cota). */
+export async function fetchVideosBatch(ids: string[]): Promise<YtVideo[]> {
+  const out: YtVideo[] = [];
+  for (let i = 0; i < ids.length; i += 50) {
+    const r = await ytGet<ListResponse<YtVideo>>("videos.list", {
+      part: "snippet,contentDetails,statistics",
+      id: ids.slice(i, i + 50).join(","),
+      maxResults: 50,
+    });
+    out.push(...(r.items ?? []));
+  }
+  return out;
+}
+
+/** Converte duração ISO 8601 (PT1H2M3S) em segundos. */
+export function parseDuration(iso?: string): number | null {
+  if (!iso) return null;
+  const m = iso.match(/^P(?:(\d+)D)?T?(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/);
+  if (!m) return null;
+  const [, d, h, min, s] = m.map((x) => (x ? Number(x) : 0));
+  return d * 86400 + h * 3600 + min * 60 + s;
+}
+
+/**
+ * Confere se o vídeo é Short pela URL /shorts/ (não gasta cota):
+ * Shorts respondem 200; vídeos comuns redirecionam para /watch.
+ * Retorna null se não deu para saber.
+ */
+export async function checkIsShortByUrl(videoId: string): Promise<boolean | null> {
+  try {
+    const res = await fetch(`https://www.youtube.com/shorts/${videoId}`, {
+      method: "HEAD",
+      redirect: "manual",
+      headers: { Cookie: "CONSENT=YES+1" },
+      cache: "no-store",
+    });
+    if (res.status === 200) return true;
+    if (res.status >= 300 && res.status < 400) {
+      const loc = res.headers.get("location") ?? "";
+      if (/\/watch/.test(loc)) return false;
+      if (/consent\./.test(loc)) return null;
+      return false;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export const bestThumb = (t?: Thumbs) => (t?.maxres ?? t?.standard ?? t?.high ?? t?.medium ?? t?.default)?.url ?? null;
+export const videoUrl = (externalId: string, isShort?: boolean) =>
+  isShort ? `https://www.youtube.com/shorts/${externalId}` : `https://www.youtube.com/watch?v=${externalId}`;

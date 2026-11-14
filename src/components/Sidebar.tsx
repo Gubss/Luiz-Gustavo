@@ -4,9 +4,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const NAV: { href: string; label: string; soon?: boolean }[] = [
-  { href: "/radar", label: "Radar de outliers", soon: true },
+  { href: "/radar", label: "Radar de outliers" },
   { href: "/nichos", label: "Nichos e canais" },
-  { href: "/favoritos", label: "Favoritos", soon: true },
+  { href: "/favoritos", label: "Favoritos" },
   { href: "/descobrir", label: "Descobrir", soon: true },
   { href: "/gerador", label: "Gerador", soon: true },
   { href: "/ideias", label: "Banco de ideias", soon: true },
@@ -20,7 +20,7 @@ export function Sidebar({ quotaUsed, quotaLimit }: { quotaUsed: number; quotaLim
   const pct = Math.min(100, (quotaUsed / quotaLimit) * 100);
   return (
     <aside className="sticky top-0 flex h-screen w-60 shrink-0 flex-col border-r border-zinc-800 bg-zinc-950 px-3 py-5">
-      <Link href="/nichos" className="mb-6 flex items-center gap-2 px-2">
+      <Link href="/radar" className="mb-6 flex items-center gap-2 px-2">
         <span className="grid h-7 w-7 place-items-center rounded-md bg-red-600 text-sm font-black">▶</span>
         <span className="text-lg font-bold tracking-tight">YouTube Radar</span>
       </Link>

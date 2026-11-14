@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { Sidebar } from "@/components/Sidebar";
+import { AutoCollect } from "@/components/CollectControls";
 import { getSettings } from "@/lib/settings";
 import { quotaUsedToday } from "@/lib/quota";
 
@@ -19,6 +20,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
       <body className="flex min-h-full">
         <Sidebar quotaUsed={used} quotaLimit={settings.dailyQuota} />
         <main className="min-w-0 flex-1 px-8 py-6">{children}</main>
+        <AutoCollect />
       </body>
     </html>
   );

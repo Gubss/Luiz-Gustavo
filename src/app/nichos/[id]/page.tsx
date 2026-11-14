@@ -2,7 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { channelUrl } from "@/lib/youtube";
-import { fmtCompact, fmtDateTime, fmtInt } from "@/lib/format";
+import { fmtCompact, fmtDate, fmtDateTime, fmtInt } from "@/lib/format";
+import { findSimilarTitles } from "@/lib/catalog";
 import {
   addChannels,
   addMyChannel,
@@ -21,16 +22,22 @@ const STATUS_LABEL: Record<string, string> = {
   RESEARCH: "Em pesquisa",
 };
 
-export default async function NichePage({ params }: PageProps<"/nichos/[id]">) {
+export default async function NichePage({ params, searchParams }: PageProps<"/nichos/[id]">) {
   const { id } = await params;
+  const sp = await searchParams;
+  const tema = typeof sp.tema === "string" ? sp.tema.trim() : "";
   const niche = await prisma.niche.findUnique({
     where: { id },
     include: {
-      channels: { include: { channel: true }, orderBy: { addedAt: "asc" } },
+      channels: {
+        include: { channel: { include: { _count: { select: { catalog: true, videos: true } } } } },
+        orderBy: { addedAt: "asc" },
+      },
       myChannels: { orderBy: { createdAt: "asc" } },
     },
   });
   if (!niche) notFound();
+  const matches = tema ? await findSimilarTitles(tema, { nicheId: niche.id }) : [];
 
   const channels = niche.channels
     .map((nc) => nc.channel)
@@ -92,6 +99,7 @@ export default async function NichePage({ params }: PageProps<"/nichos/[id]">) {
                   <th className="px-4 py-3 text-right">Inscritos</th>
                   <th className="px-4 py-3 text-right">Vídeos</th>
                   <th className="px-4 py-3 text-right">Views totais</th>
+                  <th className="px-4 py-3 text-right" title="Vídeos com estatísticas coletadas / títulos no catálogo">Coletados / catálogo</th>
                   <th className="px-4 py-3">Atualizado</th>
                   <th className="px-4 py-3" />
                 </tr>
@@ -116,6 +124,9 @@ export default async function NichePage({ params }: PageProps<"/nichos/[id]">) {
                     </td>
                     <td className="px-4 py-3 text-right tabular-nums">{fmtInt(c.videoCount)}</td>
                     <td className="px-4 py-3 text-right tabular-nums">{fmtCompact(c.viewCount)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums text-zinc-400">
+                      {c._count.videos} / {c._count.catalog}
+                    </td>
                     <td className="px-4 py-3 text-xs text-zinc-500">{fmtDateTime(c.statsFetchedAt)}</td>
                     <td className="px-4 py-3 text-right">
                       <form action={removeChannel.bind(null, niche.id, c.id)}>
@@ -128,6 +139,50 @@ export default async function NichePage({ params }: PageProps<"/nichos/[id]">) {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+      </section>
+
+      {/* Conferir tema no catálogo */}
+      <section className="space-y-3" id="tema">
+        <h2 className="text-xl font-semibold">Esse tema já foi feito?</h2>
+        <form action={`/nichos/${niche.id}#tema`} className="flex gap-2">
+          <input
+            name="tema"
+            defaultValue={tema}
+            className="input"
+            placeholder="Ex.: o que acontece se o elevador despencar"
+          />
+          <button className="btn-secondary">Conferir</button>
+        </form>
+        <p className="text-xs text-zinc-500">
+          Procura nos títulos de todos os vídeos dos canais deste nicho (catálogo completo, não só os recentes).
+        </p>
+        {tema && (
+          <div className="card divide-y divide-zinc-800">
+            {matches.length === 0 ? (
+              <p className="p-4 text-sm text-emerald-400">Nenhum título parecido encontrado nos canais deste nicho.</p>
+            ) : (
+              matches.map((m) => (
+                <a
+                  key={m.externalId}
+                  href={`https://www.youtube.com/watch?v=${m.externalId}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-4 px-4 py-2 text-sm hover:bg-zinc-900"
+                >
+                  <span className={`w-12 shrink-0 text-right font-bold tabular-nums ${m.score >= 0.75 ? "text-red-400" : "text-amber-400"}`}>
+                    {Math.round(m.score * 100)}%
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate">{m.title}</span>
+                    <span className="text-xs text-zinc-500">
+                      {m.channelTitle} · {fmtDate(m.publishedAt)} · em comum: {m.shared.join(", ")}
+                    </span>
+                  </span>
+                </a>
+              ))
+            )}
           </div>
         )}
       </section>
