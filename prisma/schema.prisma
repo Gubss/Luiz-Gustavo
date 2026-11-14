@@ -157,6 +157,9 @@ model MyChannel {
   rules        String? // sempre / nunca
   durationSec  Int? // duração alvo
   catalogFetchedAt DateTime? // última leitura da lista de vídeos do canal no YouTube
+  analytics    String? // números do canal colados/importados (ex.: do YouTube Studio via Maestri)
+  analyticsAt  DateTime?
+  profileImportedAt DateTime? // último perfil importado de arquivo .md
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 

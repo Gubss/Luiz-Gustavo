@@ -315,6 +315,12 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
 
         {sd ? (
           <>
+            <div className="flex flex-wrap items-center gap-3">
+              <a href={`/api/ideias/${idea.id}/roteiro`} download className="btn-secondary">
+                Baixar roteiro (.md) para o Maestri
+              </a>
+              <span className="text-xs text-zinc-500">Vai o roteiro cena a cena + personagens, estilo visual e tom do canal.</span>
+            </div>
             {sd.metrics && (
               <div className="rounded-lg border border-zinc-800 p-4">
                 <H3>Medidas do roteiro × cartilha</H3>

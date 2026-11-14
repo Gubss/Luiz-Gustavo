@@ -168,6 +168,17 @@ títulos parecidos já feitos pelos canais monitorados (checagem grátis no cat�
 publicado (lista do canal, com os mais parecidos primeiro, ou pelo link): a ideia fica "Publicado", mostra as views e o
 gerador não repete o tema.
 
+**Perfil pelo GPT do Maestri (.md):** no perfil, *Baixar o pedido para o GPT (.md)* gera o arquivo
+[`docs/prompt-perfil-canal.md`](docs/prompt-perfil-canal.md) com o nome e a URL do canal. Cole no GPT do Maestri que conhece
+o canal; ele devolve o perfil num modelo fixo (títulos `##` que o app procura, roteiros publicados em `### Roteiro:` e,
+se tiver, os números do YouTube Studio/TikTok). Salve a resposta como .md (ou copie) e use *Importar*: o app mostra a
+**prévia** (campo a campo, roteiros e avisos de títulos que não reconheceu) e só grava quando você confirma. Campo vazio
+ou `-` mantém o que já estava; roteiro com o mesmo título é atualizado. O campo **Números do canal** guarda os analytics
+colados com a data (o gerador lê). Atualizar esses números sozinho precisa do acesso ao Studio (etapa 7).
+
+**Roteiro para o Maestri:** na página da ideia, *Baixar roteiro (.md) para o Maestri* baixa o roteiro cena a cena com
+um bloco de referência do canal (personagens, estilo visual, tom, sempre/nunca).
+
 ## Ordem do menu
 
 O menu é numerado na ordem de uso: 1 Meus canais → 2 Nichos e canais → 3 Descobrir canais → 4 Radar (e Favoritos) →

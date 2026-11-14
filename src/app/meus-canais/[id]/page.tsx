@@ -5,7 +5,8 @@ import { fmtInt } from "@/lib/format";
 import { CHANNEL_STATUS, PROFILE_FIELDS, profileGaps } from "@/lib/generator";
 import { StateForm } from "@/components/StateForm";
 import { ConfirmDelete } from "@/app/nichos/[id]/forms";
-import { deleteMyChannelFromProfile, deleteScript, saveProfile, saveScript, syncMyVideosAction } from "../actions";
+import { applyProfileImport, deleteMyChannelFromProfile, deleteScript, previewProfileImport, saveProfile, saveScript, syncMyVideosAction } from "../actions";
+import { ProfileImport } from "./import";
 import { ActionButton } from "@/app/video/[id]/forms";
 import { RunningNote } from "@/components/RunningNote";
 import { runningJobsFor } from "@/lib/jobs";
@@ -90,6 +91,21 @@ export default async function MyChannelProfilePage({ params }: PageProps<"/meus-
         </p>
       )}
 
+      <section className="card space-y-4 p-5">
+        <div>
+          <h2 className="text-lg font-semibold">Preencher pelo GPT (Maestri)</h2>
+          <p className="text-sm text-zinc-400">
+            Em vez de preencher à mão: <b>1.</b> baixe o pedido, <b>2.</b> cole no GPT do Maestri que conhece este canal, <b>3.</b> salve a resposta
+            como .md (ou copie) e importe aqui. Você vê a prévia antes de salvar.
+            {c.profileImportedAt && ` Última importação: ${fmtDate(c.profileImportedAt)}.`}
+          </p>
+        </div>
+        <a href={`/api/meus-canais/${c.id}/pedido-perfil`} className="btn-secondary" download>
+          1. Baixar o pedido para o GPT (.md)
+        </a>
+        <ProfileImport preview={previewProfileImport} apply={applyProfileImport.bind(null, c.id)} />
+      </section>
+
       <section className="card p-5">
         <h2 className="mb-4 text-lg font-semibold">Perfil</h2>
         <StateForm action={saveProfile.bind(null, c.id)} label="Salvar perfil">
@@ -151,6 +167,16 @@ export default async function MyChannelProfilePage({ params }: PageProps<"/meus-
             <div className="md:col-span-2">
               <label className="label">Outras notas</label>
               <textarea name="notes" rows={2} className="input" defaultValue={c.notes ?? ""} />
+            </div>
+            <div className="md:col-span-2">
+              <label className="label">Números do canal{c.analyticsAt ? ` (atualizado em ${fmtDate(c.analyticsAt)})` : ""}</label>
+              <textarea
+                name="analytics"
+                rows={3}
+                className="input"
+                defaultValue={c.analytics ?? ""}
+                placeholder="Cole do YouTube Studio / TikTok (ou venha pelo GPT): inscritos, views 28 dias, retenção, % continuaram assistindo, vídeos que mais foram bem…"
+              />
             </div>
           </div>
         </StateForm>

@@ -97,6 +97,7 @@ export function profileBlock(c: ChannelWithScripts, format: PlaybookFormat) {
     line("Público", c.audience),
     line("Sempre / nunca", c.rules),
     line("Notas", c.notes),
+    c.analytics?.trim() ? `Números do canal${c.analyticsAt ? ` (em ${c.analyticsAt.toISOString().slice(0, 10)})` : ""}: ${cut(c.analytics.trim(), 1500)}` : null,
   ].filter(Boolean) as string[];
   if (format !== c.format) out.push(`(Este pedido é para ${formatLabel(format, true)}, não o formato principal do canal.)`);
 
