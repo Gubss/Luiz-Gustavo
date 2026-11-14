@@ -1,7 +1,18 @@
 @import "tailwindcss";
 
+/*
+ * Base visual do Radar.
+ * - Fundo grafite neutro, superfícies em degraus (bg → card → card elevado).
+ * - Vermelho só onde importa: ação principal e "quanto estourou" (o multiplicador).
+ * - Rótulos em texto normal (sem CAIXA ALTA), números com algarismos alinhados.
+ */
 @theme {
-  --font-sans: "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-sans: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+  --color-ink: #0e0f12;
+  --color-surface: #16181d;
+  --color-raised: #1c1f25;
+  --color-line: #262a31;
+  --color-line-strong: #343943;
 }
 
 html {
@@ -9,23 +20,66 @@ html {
 }
 
 body {
-  @apply bg-zinc-950 text-zinc-100;
+  @apply bg-ink text-zinc-100;
+  font-feature-settings: "tnum" 0;
+}
+
+::selection {
+  background: rgb(220 38 38 / 0.45);
+}
+
+/* Barra de rolagem discreta (Chrome / Edge no Windows) */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #343943 transparent;
+}
+
+/* <details> sem o triângulo padrão: usamos o nosso chevron */
+summary {
+  list-style: none;
+  cursor: pointer;
+}
+summary::-webkit-details-marker {
+  display: none;
+}
+details[open] > summary .chev {
+  transform: rotate(90deg);
+}
+
+:focus-visible {
+  outline: 2px solid rgb(248 113 113 / 0.8);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
 }
 
 @utility card {
-  @apply rounded-xl border border-zinc-800 bg-zinc-900/60;
+  @apply rounded-xl border border-line bg-surface;
+}
+
+@utility card-raised {
+  @apply rounded-lg border border-line bg-raised;
 }
 
 @utility input {
-  @apply w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-red-500 focus:outline-none;
+  @apply w-full rounded-lg border border-line-strong bg-ink px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-red-500 focus:outline-none;
 }
 
 @utility label {
-  @apply mb-1 block text-xs font-medium uppercase tracking-wide text-zinc-400;
+  @apply mb-1 block text-xs font-medium text-zinc-400;
 }
 
 @utility btn {
-  @apply inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50;
+  @apply inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors disabled:cursor-not-allowed disabled:opacity-50;
+}
+
+@utility btn-sm {
+  @apply px-2.5 py-1.5 text-xs;
 }
 
 @utility btn-primary {
@@ -33,7 +87,7 @@ body {
 }
 
 @utility btn-secondary {
-  @apply btn border border-zinc-700 bg-zinc-800 text-zinc-100 hover:bg-zinc-700;
+  @apply btn border border-line-strong bg-raised text-zinc-100 hover:border-zinc-500 hover:bg-zinc-800;
 }
 
 @utility btn-danger {
@@ -44,3 +98,29 @@ body {
   @apply btn text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100;
 }
 
+/* Filtro clicável (link ou botão) */
+@utility chip {
+  @apply inline-flex items-center gap-1.5 rounded-full border border-line-strong px-2.5 py-0.5 text-[13px] text-zinc-400 transition-colors hover:border-zinc-500 hover:text-white;
+}
+
+@utility chip-active {
+  @apply border-red-500/70 bg-red-600/15 text-white;
+}
+
+/* Etiqueta pequena e não clicável */
+@utility badge {
+  @apply inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] leading-4 font-medium whitespace-nowrap;
+}
+
+/* Item de menu "⋯" */
+@utility menu-item {
+  @apply flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm whitespace-nowrap text-zinc-200 hover:bg-zinc-800 disabled:opacity-50;
+}
+
+@utility link {
+  @apply text-red-400 underline-offset-2 hover:underline;
+}
+
+@utility muted {
+  @apply text-zinc-500;
+}

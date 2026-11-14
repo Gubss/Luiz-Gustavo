@@ -4,71 +4,177 @@ import { fmtCompact, fmtDateTime } from "@/lib/format";
 import { claudeSpendThisMonth, usdToBrl } from "@/lib/claude";
 import { studyByLinkAction } from "@/app/video/actions";
 import { StudyLinkForm } from "@/app/video/[id]/forms";
+import { Badge, Collapsible, EmptyState, FilterChip, FilterRow, PageHeader, Pagination, SearchBox, makeHref, one, paginate, type SP } from "@/components/ui";
 
-export default async function StudiesPage() {
+const PER_PAGE = 20;
+
+function resumoOf(content: string | null | undefined): string | null {
+  if (!content) return null;
+  try {
+    return (JSON.parse(content) as { resumo?: string }).resumo ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export default async function StudiesPage({ searchParams }: PageProps<"/estudos">) {
+  const sp: SP = await searchParams;
+  const formato = one(sp.formato);
+  const canal = one(sp.canal);
+  const etapa = one(sp.etapa);
+  const text = (one(sp.q) ?? "").trim();
   const [videos, spend] = await Promise.all([
     prisma.video.findMany({
       where: { OR: [{ transcript: { isNot: null } }, { diagnosis: { isNot: null } }] },
       include: {
-        channel: { select: { title: true } },
+        channel: { select: { id: true, title: true } },
         transcript: { select: { source: true, wordCount: true, updatedAt: true } },
-        diagnosis: { select: { diagnosedAt: true, commentsAnalyzedAt: true, source: true, updatedAt: true, costUsd: true, commentsCostUsd: true } },
+        diagnosis: { select: { diagnosedAt: true, commentsAnalyzedAt: true, source: true, updatedAt: true, content: true } },
       },
       orderBy: { updatedAt: "desc" },
-      take: 300,
     }),
     claudeSpendThisMonth(),
   ]);
-  const last = (v: (typeof videos)[number]) =>
-    Math.max(v.transcript?.updatedAt.getTime() ?? 0, v.diagnosis?.updatedAt.getTime() ?? 0);
+  const last = (v: (typeof videos)[number]) => Math.max(v.transcript?.updatedAt.getTime() ?? 0, v.diagnosis?.updatedAt.getTime() ?? 0);
   videos.sort((a, b) => last(b) - last(a));
+
+  const hasDiag = (v: (typeof videos)[number]) => !!(v.diagnosis?.diagnosedAt || v.diagnosis?.source === "import");
+  const hasComments = (v: (typeof videos)[number]) => !!v.diagnosis?.commentsAnalyzedAt;
+  const channels = [...new Map(videos.map((v) => [v.channel.id, v.channel.title])).entries()].sort((a, b) => a[1].localeCompare(b[1]));
+  const norm = (x: string) => x.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  const filtered = videos.filter(
+    (v) =>
+      (!formato || (formato === "short" ? v.isShort : !v.isShort)) &&
+      (!canal || v.channel.id === canal) &&
+      (!etapa || (etapa === "completo" ? hasDiag(v) && hasComments(v) : etapa === "sem-diagnostico" ? !hasDiag(v) : !hasComments(v))) &&
+      (!text || norm(`${v.title} ${v.channel.title}`).includes(norm(text))),
+  );
+  const pg = paginate(filtered, one(sp.page), PER_PAGE);
+  const href = makeHref("/estudos", { formato, canal, etapa, q: text || undefined });
+  const count = (f: (v: (typeof videos)[number]) => boolean) => videos.filter(f).length;
 
   return (
     <div className="mx-auto max-w-6xl space-y-5">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold">Estudos de vídeo</h1>
-          <p className="text-sm text-zinc-400">
-            Transcrição, diagnóstico e comentários. Abra um vídeo pelo botão “Estudar” no radar ou nos favoritos, ou cole um link abaixo.
-          </p>
-        </div>
-        <div className="text-right text-sm text-zinc-400">
-          Gasto com o Claude este mês:{" "}
-          <span className="font-semibold text-zinc-100">
-            US$ {spend.usd.toFixed(2).replace(".", ",")} (≈ R$ {(spend.usd * usdToBrl()).toFixed(2).replace(".", ",")})
-          </span>
-          <div className="text-xs text-zinc-500">{spend.calls} chamadas</div>
-        </div>
-      </header>
+      <PageHeader
+        title="Estudos de vídeo"
+        subtitle="Por que cada vídeo funcionou: transcrição, diagnóstico e comentários."
+        actions={
+          <div className="text-right text-xs text-zinc-500" title={`${spend.calls} chamadas ao Claude este mês`}>
+            Gasto com o Claude no mês
+            <div className="text-sm text-zinc-300 tabular-nums">
+              US$ {spend.usd.toFixed(2).replace(".", ",")} <span className="text-zinc-500">≈ R$ {(spend.usd * usdToBrl()).toFixed(2).replace(".", ",")}</span>
+            </div>
+          </div>
+        }
+      />
 
-      <div className="card p-4">
+      <Collapsible title="Estudar um vídeo pelo link" meta="para vídeos fora do radar" className="card p-4">
         <StudyLinkForm action={studyByLinkAction} />
-      </div>
+      </Collapsible>
 
       {videos.length === 0 ? (
-        <div className="card p-10 text-center text-zinc-400">
-          Nenhum vídeo estudado ainda. Vá ao <Link href="/radar" className="text-red-400 hover:underline">radar</Link> e clique em “Estudar” num outlier.
-        </div>
-      ) : (
-        <div className="card divide-y divide-zinc-800">
-          {videos.map((v) => (
-            <Link key={v.id} href={`/video/${v.id}`} className="flex items-center gap-4 p-3 hover:bg-zinc-900">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={v.thumbnailUrl ?? `https://i.ytimg.com/vi/${v.externalId}/mqdefault.jpg`} alt="" className="h-14 w-24 shrink-0 rounded object-cover" />
-              <div className="min-w-0 flex-1">
-                <div className="truncate font-medium">{v.title}</div>
-                <div className="text-xs text-zinc-500">
-                  {v.channel.title} · {fmtCompact(v.viewCount)} views · {v.isShort ? "Short" : "longo"} · {fmtDateTime(new Date(last(v)))}
-                </div>
-              </div>
-              <div className="flex shrink-0 flex-wrap justify-end gap-1 text-[11px]">
-                {v.transcript && <span className="rounded bg-zinc-800 px-2 py-0.5 text-zinc-300">transcrição{v.transcript.source === "import" ? " (importada)" : ""}</span>}
-                {(v.diagnosis?.diagnosedAt || v.diagnosis?.source === "import") && <span className="rounded bg-red-600/30 px-2 py-0.5 text-red-200">diagnóstico</span>}
-                {v.diagnosis?.commentsAnalyzedAt && <span className="rounded bg-sky-700/30 px-2 py-0.5 text-sky-200">comentários</span>}
-              </div>
+        <EmptyState
+          title="Nenhum vídeo estudado ainda"
+          action={
+            <Link href="/radar" className="btn-primary">
+              Abrir o radar
             </Link>
-          ))}
-        </div>
+          }
+        >
+          No radar, clique em &ldquo;Estudar&rdquo; num vídeo que estourou. Ou cole um link acima.
+        </EmptyState>
+      ) : (
+        <>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="space-y-2">
+              <FilterRow label="Formato">
+                <FilterChip href={href({ formato: undefined, page: undefined })} active={!formato}>
+                  Todos <span className="text-zinc-500">{videos.length}</span>
+                </FilterChip>
+                <FilterChip href={href({ formato: "short", page: undefined })} active={formato === "short"}>
+                  Shorts <span className="text-zinc-500">{count((v) => v.isShort)}</span>
+                </FilterChip>
+                <FilterChip href={href({ formato: "long", page: undefined })} active={formato === "long"}>
+                  Longos <span className="text-zinc-500">{count((v) => !v.isShort)}</span>
+                </FilterChip>
+              </FilterRow>
+              <FilterRow label="Etapa">
+                <FilterChip href={href({ etapa: undefined, page: undefined })} active={!etapa}>
+                  Todas
+                </FilterChip>
+                <FilterChip href={href({ etapa: "completo", page: undefined })} active={etapa === "completo"}>
+                  Completos <span className="text-zinc-500">{count((v) => hasDiag(v) && hasComments(v))}</span>
+                </FilterChip>
+                <FilterChip href={href({ etapa: "sem-diagnostico", page: undefined })} active={etapa === "sem-diagnostico"}>
+                  Falta diagnóstico <span className="text-zinc-500">{count((v) => !hasDiag(v))}</span>
+                </FilterChip>
+                <FilterChip href={href({ etapa: "sem-comentarios", page: undefined })} active={etapa === "sem-comentarios"}>
+                  Falta comentários <span className="text-zinc-500">{count((v) => !hasComments(v))}</span>
+                </FilterChip>
+              </FilterRow>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <form action="/estudos" className="flex items-center gap-2">
+                {formato && <input type="hidden" name="formato" value={formato} />}
+                {etapa && <input type="hidden" name="etapa" value={etapa} />}
+                {text && <input type="hidden" name="q" value={text} />}
+                <select name="canal" defaultValue={canal ?? ""} className="input w-48 py-1.5" aria-label="Canal">
+                  <option value="">Todos os canais</option>
+                  {channels.map(([id, t]) => (
+                    <option key={id} value={id}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+                <button className="btn-secondary btn-sm">Filtrar</button>
+              </form>
+              <SearchBox action="/estudos" q={text} keep={{ formato, canal, etapa }} placeholder="Buscar título ou canal" />
+            </div>
+          </div>
+
+          {pg.total === 0 ? (
+            <EmptyState title="Nenhum estudo com esses filtros">
+              <Link href="/estudos" className="link">
+                Limpar filtros
+              </Link>
+            </EmptyState>
+          ) : (
+            <div className="card divide-y divide-line overflow-hidden">
+              {pg.slice.map((v) => {
+                const resumo = resumoOf(v.diagnosis?.content);
+                const diag = hasDiag(v);
+                const com = hasComments(v);
+                return (
+                  <Link key={v.id} href={`/video/${v.id}`} className="flex items-center gap-4 p-3 hover:bg-raised">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={v.thumbnailUrl ?? `https://i.ytimg.com/vi/${v.externalId}/mqdefault.jpg`}
+                      alt=""
+                      className="h-14 w-24 shrink-0 rounded bg-zinc-800 object-cover"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate font-medium">{v.title}</div>
+                      <div className="text-xs text-zinc-500">
+                        {v.channel.title} · {fmtCompact(v.viewCount)} views · {v.isShort ? "Short" : "longo"} · estudado em {fmtDateTime(new Date(last(v)))}
+                      </div>
+                      {resumo && <div className="mt-0.5 line-clamp-1 text-xs text-zinc-400">{resumo}</div>}
+                    </div>
+                    <div className="shrink-0">
+                      {diag && com ? (
+                        <Badge tone="green">Completo</Badge>
+                      ) : !diag ? (
+                        <Badge tone="amber">Falta diagnóstico</Badge>
+                      ) : (
+                        <Badge tone="muted">Falta comentários</Badge>
+                      )}
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+          <Pagination page={pg.page} pages={pg.pages} total={pg.total} label="estudos" href={(n) => href({ page: String(n) })} />
+        </>
       )}
     </div>
   );

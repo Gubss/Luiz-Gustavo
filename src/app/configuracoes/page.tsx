@@ -105,7 +105,7 @@ function Check({ name, label, checked, hint }: { name: string; label: string; ch
 async function KeyBox({ k, title, where, free }: { k: SecretKey; title: string; where: React.ReactNode; free: string }) {
   const st = await secretStatus(k);
   return (
-    <div className="space-y-3 rounded-lg border border-zinc-800 p-4">
+    <div className="space-y-3 rounded-lg border border-line p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="font-medium">{title}</h3>
         {st.source === "none" ? (
@@ -160,7 +160,7 @@ export default async function SettingsPage() {
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       <header>
-        <h1 className="text-2xl font-bold">Configurações</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Configurações</h1>
         <p className="text-sm text-zinc-400">
           Chaves, cota do YouTube, gastos com o Claude, regras do radar e o que o app faz sozinho. Tudo que você salvar aqui vale na hora, sem
           reiniciar.
@@ -217,7 +217,7 @@ export default async function SettingsPage() {
             }
           />
         </div>
-        <div className="rounded-lg border border-zinc-800 p-4 text-sm">
+        <div className="rounded-lg border border-line p-4 text-sm">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="font-medium">Login do Google (YouTube Analytics dos seus canais)</h3>
             {googleConfigured() ? (
@@ -269,7 +269,7 @@ export default async function SettingsPage() {
               <table className="w-full text-sm">
                 <tbody>
                   {breakdown.bySource.map((r) => (
-                    <tr key={r.source ?? "outros"} className="border-t border-zinc-800">
+                    <tr key={r.source ?? "outros"} className="border-t border-line">
                       <td className="py-1.5">{r.label}</td>
                       <td className="py-1.5 text-right tabular-nums">{fmtInt(r.units)}</td>
                       <td className="w-16 py-1.5 text-right text-xs tabular-nums text-zinc-500">{used ? Math.round((r.units / used) * 100) : 0}%</td>
@@ -294,7 +294,7 @@ export default async function SettingsPage() {
           </div>
         </div>
 
-        <div className="rounded-lg border border-zinc-800 p-4 text-sm">
+        <div className="rounded-lg border border-line p-4 text-sm">
           <h3 className="mb-1 font-medium">Quanto o dia normal precisa</h3>
           <p className="text-zinc-400">
             Coleta diária: {fmtInt(monitored)} canais monitorados × ~{COLLECT_PER_CHANNEL} = <b>{fmtInt(monitored * COLLECT_PER_CHANNEL)}</b>
@@ -341,20 +341,20 @@ export default async function SettingsPage() {
         desc="Cada botão que usa o Claude mostra o custo estimado antes de rodar; aqui fica o custo real somado. Os valores são calculados pelos tokens de cada resposta (a fatura oficial está no console da Anthropic)."
       >
         <div className="grid gap-4 sm:grid-cols-3">
-          <div className="rounded-lg border border-zinc-800 p-4">
-            <div className="text-xs uppercase tracking-wide text-zinc-500">Este mês</div>
+          <div className="rounded-lg border border-line p-4">
+            <div className="text-xs text-zinc-500">Este mês</div>
             <div className="mt-1 text-2xl font-semibold tabular-nums">{usd(spend.usd)}</div>
             <div className="text-xs text-zinc-500">
               ≈ {brl(spend.usd)} · {fmtInt(spend.calls)} chamada(s)
             </div>
           </div>
-          <div className="rounded-lg border border-zinc-800 p-4">
-            <div className="text-xs uppercase tracking-wide text-zinc-500">No ritmo atual, o mês fecha em</div>
+          <div className="rounded-lg border border-line p-4">
+            <div className="text-xs text-zinc-500">No ritmo atual, o mês fecha em</div>
             <div className="mt-1 text-2xl font-semibold tabular-nums">{usd(spend.projectedUsd)}</div>
             <div className="text-xs text-zinc-500">≈ {brl(spend.projectedUsd)}</div>
           </div>
-          <div className="rounded-lg border border-zinc-800 p-4">
-            <div className="text-xs uppercase tracking-wide text-zinc-500">Mês passado</div>
+          <div className="rounded-lg border border-line p-4">
+            <div className="text-xs text-zinc-500">Mês passado</div>
             <div className="mt-1 text-2xl font-semibold tabular-nums">{usd(spend.prevMonthUsd)}</div>
             <div className="text-xs text-zinc-500">
               ≈ {brl(spend.prevMonthUsd)} · {fmtInt(spend.prevMonthCalls)} chamada(s)
@@ -386,7 +386,7 @@ export default async function SettingsPage() {
               <table className="w-full text-sm">
                 <tbody>
                   {spend.byKind.map((r) => (
-                    <tr key={r.kind} className="border-t border-zinc-800">
+                    <tr key={r.kind} className="border-t border-line">
                       <td className="py-1.5">{r.label}</td>
                       <td className="py-1.5 text-right text-xs tabular-nums text-zinc-500">{fmtInt(r.calls)}×</td>
                       <td className="py-1.5 text-right tabular-nums">{usd(r.usd)}</td>
@@ -413,7 +413,7 @@ export default async function SettingsPage() {
             <table className="mt-2 w-full text-sm">
               <tbody>
                 {spend.recent.map((g) => (
-                  <tr key={g.id} className="border-t border-zinc-800">
+                  <tr key={g.id} className="border-t border-line">
                     <td className="py-1.5 text-xs text-zinc-500">{fmtDateTime(g.createdAt)}</td>
                     <td className="py-1.5">
                       {g.videoId ? (
@@ -581,7 +581,7 @@ export default async function SettingsPage() {
             <table className="mt-2 w-full text-sm">
               <tbody>
                 {backups.map((b) => (
-                  <tr key={b.name} className="border-t border-zinc-800">
+                  <tr key={b.name} className="border-t border-line">
                     <td className="py-1.5 font-mono text-xs">{b.name}</td>
                     <td className="py-1.5 text-xs text-zinc-500">{fmtDateTime(b.createdAt)}</td>
                     <td className="py-1.5 text-right text-xs tabular-nums text-zinc-500">{(b.bytes / 1_048_576).toFixed(1).replace(".", ",")} MB</td>

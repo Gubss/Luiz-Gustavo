@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { Chevron, Collapsible } from "@/components/ui";
+import { ClampText } from "@/components/ui-client";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { channelUrl, videoUrl } from "@/lib/youtube";
@@ -62,8 +64,8 @@ function Section({ n, title, right, children }: { n: number; title: string; righ
 
 function Tile({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-3" title={hint}>
-      <div className="text-[10px] uppercase tracking-wide text-zinc-500">{label}</div>
+    <div className="card-raised p-3" title={hint}>
+      <div className="text-xs text-zinc-500">{label}</div>
       <div className="text-lg font-semibold tabular-nums">{value}</div>
       {hint && <div className="mt-0.5 text-[11px] leading-tight text-zinc-500">{hint}</div>}
     </div>
@@ -71,7 +73,7 @@ function Tile({ label, value, hint }: { label: string; value: string; hint?: str
 }
 
 function H3({ children }: { children: React.ReactNode }) {
-  return <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-zinc-400">{children}</h3>;
+  return <h3 className="mb-2 text-sm font-semibold text-zinc-300">{children}</h3>;
 }
 
 function MetricsPanel({ m, isShort, channel }: { m: StudyMetrics; isShort: boolean; channel?: VideoMetrics | null }) {
@@ -107,9 +109,10 @@ function MetricsPanel({ m, isShort, channel }: { m: StudyMetrics; isShort: boole
           <Tile label="x velocidade" value={fmtMult(channel.velocityRatio)} hint="sobre a velocidade normal do canal" />
         </div>
       )}
+      <Collapsible title={<span className="text-sm">Abertura, fecho e título medidos</span>} bodyClassName="mt-3 space-y-3">
       <div className="grid gap-3 md:grid-cols-2">
         {m.opening && (
-          <div className="rounded-lg border border-zinc-800 p-3 text-sm">
+          <div className="rounded-lg border border-line p-3 text-sm">
             <div className="mb-1 text-xs text-zinc-500">
               Abertura (primeiros {m.opening.seconds}s{m.firstWordAt != null ? ` · primeira fala em ${m.firstWordAt}s` : ""} · {m.opening.words} palavras)
             </div>
@@ -117,7 +120,7 @@ function MetricsPanel({ m, isShort, channel }: { m: StudyMetrics; isShort: boole
           </div>
         )}
         {m.closing && (
-          <div className="rounded-lg border border-zinc-800 p-3 text-sm">
+          <div className="rounded-lg border border-line p-3 text-sm">
             <div className="mb-1 text-xs text-zinc-500">
               Fecho (últimos {m.closing.seconds}s){m.closing.hasCta ? " · tem chamada (inscreva-se/comente/parte 2)" : " · sem chamada"}
               {m.closing.endsWithQuestion ? " · termina em pergunta" : ""}
@@ -138,6 +141,7 @@ function MetricsPanel({ m, isShort, channel }: { m: StudyMetrics; isShort: boole
         {m.title.hasBrackets && " · parênteses/colchetes"}
         {m.title.emoji && " · emoji"}
       </div>
+      </Collapsible>
     </div>
   );
 }
@@ -146,105 +150,35 @@ const CONF: Record<string, string> = { alta: "bg-emerald-600/30 text-emerald-300
 const PART_LABEL: Record<string, string> = { gancho: "Gancho", virada: "Virada", desenvolvimento: "Desenvolvimento", climax: "Clímax", fecho: "Fecho" };
 
 function DiagnosisView({ d, duration }: { d: DiagnosisContent; duration: number | null }) {
+  const box = "rounded-lg border border-line p-4";
   return (
-    <div className="space-y-6 text-sm">
-      <p className="text-base text-zinc-200">{d.resumo}</p>
+    <div className="space-y-4 text-sm">
+      <ClampText lines={4} className="text-[15px] leading-relaxed text-zinc-200">
+        {d.resumo}
+      </ClampText>
 
       <div>
-        <H3>Por que funcionou (hipóteses)</H3>
-        <ul className="space-y-2">
+        <H3>Por que funcionou</H3>
+        <ul className="space-y-1.5">
           {d.porqueFuncionou.map((h, i) => (
-            <li key={i} className="rounded-lg border border-zinc-800 p-3">
-              <div className="flex items-start justify-between gap-3">
-                <span className="font-medium text-zinc-100">{h.hipotese}</span>
-                <span className={`shrink-0 rounded px-2 py-0.5 text-[11px] ${CONF[h.confianca] ?? CONF.baixa}`}>confiança {h.confianca}</span>
-              </div>
-              <p className="mt-1 text-zinc-400">{h.evidencia}</p>
+            <li key={i} className="rounded-lg border border-line">
+              <details className="group">
+                <summary className="flex items-start gap-2 px-3 py-2 hover:bg-raised">
+                  <span className="mt-1">
+                    <Chevron />
+                  </span>
+                  <span className="min-w-0 flex-1 font-medium text-zinc-100">{h.hipotese}</span>
+                  <span className={`badge shrink-0 ${CONF[h.confianca] ?? CONF.baixa}`}>confiança {h.confianca}</span>
+                </summary>
+                <p className="px-3 pb-3 pl-8 text-zinc-400">{h.evidencia}</p>
+              </details>
             </li>
           ))}
         </ul>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <div>
-          <H3>Título</H3>
-          <p className="rounded bg-zinc-950 px-2 py-1 font-mono text-xs text-amber-300">{d.titulo.formula}</p>
-          <p className="mt-2 text-xs text-zinc-500">Gatilhos: {d.titulo.gatilhos.join(", ")}</p>
-          <p className="mt-1 text-zinc-300">{d.titulo.comentario}</p>
-        </div>
-        <div>
-          <H3>Thumbnail</H3>
-          <p className="text-zinc-300">{d.thumbnail.descricao}</p>
-          <p className="mt-1 text-xs text-zinc-500">Elementos: {d.thumbnail.elementos.join(", ")}</p>
-          <p className="mt-1 text-zinc-400">{d.thumbnail.relacaoComTitulo}</p>
-        </div>
-        <div>
-          <H3>Gancho</H3>
-          {d.gancho.texto && <blockquote className="border-l-2 border-red-500 pl-2 italic text-zinc-200">{d.gancho.texto}</blockquote>}
-          <p className="mt-1 text-xs text-zinc-500">{d.gancho.tecnica}</p>
-          <p className="mt-1 text-zinc-300">{d.gancho.comentario}</p>
-        </div>
-      </div>
-
-      {d.estrutura && (
-        <div>
-          <H3>Esqueleto do roteiro</H3>
-          {duration ? (
-            <div className="mb-3 flex h-3 overflow-hidden rounded bg-zinc-800">
-              {Object.entries(d.estrutura).map(([k, p], i) => (
-                <div
-                  key={k}
-                  title={`${PART_LABEL[k]} ${ts(p.inicio)}–${ts(p.fim)}`}
-                  className={["bg-red-500", "bg-amber-500", "bg-sky-600", "bg-fuchsia-500", "bg-emerald-500"][i]}
-                  style={{ width: `${Math.max(1, ((p.fim - p.inicio) / duration) * 100)}%` }}
-                />
-              ))}
-            </div>
-          ) : null}
-          <ol className="space-y-1">
-            {Object.entries(d.estrutura).map(([k, p]) => (
-              <li key={k} className="flex gap-3">
-                <span className="w-32 shrink-0 text-zinc-500">
-                  {PART_LABEL[k]} <span className="tabular-nums">{ts(p.inicio)}–{ts(p.fim)}</span>
-                </span>
-                <span className="text-zinc-200">{p.resumo}</span>
-              </li>
-            ))}
-          </ol>
-        </div>
-      )}
-
-      {d.beats.length > 0 && (
-        <div>
-          <H3>Momentos que prendem ({d.beats.length})</H3>
-          <ol className="max-h-80 space-y-1 overflow-y-auto pr-2">
-            {d.beats.map((b, i) => (
-              <li key={i} className="flex gap-3">
-                <span className="w-12 shrink-0 tabular-nums text-zinc-500">{ts(b.t)}</span>
-                <span className="w-28 shrink-0 text-xs text-zinc-400">{b.tipo}</span>
-                <span className="text-zinc-200">{b.texto}</span>
-              </li>
-            ))}
-          </ol>
-        </div>
-      )}
-
-      {d.pontosDeRisco.length > 0 && (
-        <div>
-          <H3>Pontos de risco</H3>
-          <ul className="space-y-1">
-            {d.pontosDeRisco.map((p, i) => (
-              <li key={i} className="flex gap-3">
-                <span className="w-12 shrink-0 tabular-nums text-zinc-500">{ts(p.t)}</span>
-                <span className="text-zinc-300">{p.motivo}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      <div className="grid gap-4 md:grid-cols-2">
-        <div>
+      {d.comoReplicar.length > 0 && (
+        <div className="rounded-lg bg-emerald-500/5 p-4 ring-1 ring-emerald-500/20">
           <H3>Como replicar</H3>
           <ul className="list-disc space-y-1 pl-5 text-zinc-200">
             {d.comoReplicar.map((x, i) => (
@@ -252,15 +186,105 @@ function DiagnosisView({ d, duration }: { d: DiagnosisContent; duration: number 
             ))}
           </ul>
         </div>
-        <div>
-          <H3>Temas derivados</H3>
-          <ul className="list-disc space-y-1 pl-5 text-zinc-200">
-            {d.temasDerivados.map((x, i) => (
-              <li key={i}>{x}</li>
-            ))}
-          </ul>
+      )}
+
+      <Collapsible title="Título, thumbnail e gancho" className={box}>
+        <div className="grid gap-4 md:grid-cols-3">
+          <div>
+            <H3>Título</H3>
+            <p className="rounded bg-ink px-2 py-1 font-mono text-xs text-amber-200">{d.titulo.formula}</p>
+            <p className="mt-2 text-xs text-zinc-500">Gatilhos: {d.titulo.gatilhos.join(", ")}</p>
+            <p className="mt-1 text-zinc-300">{d.titulo.comentario}</p>
+          </div>
+          <div>
+            <H3>Thumbnail</H3>
+            <p className="text-zinc-300">{d.thumbnail.descricao}</p>
+            <p className="mt-1 text-xs text-zinc-500">Elementos: {d.thumbnail.elementos.join(", ")}</p>
+            <p className="mt-1 text-zinc-400">{d.thumbnail.relacaoComTitulo}</p>
+          </div>
+          <div>
+            <H3>Gancho</H3>
+            {d.gancho.texto && <blockquote className="border-l-2 border-red-500/70 pl-2 text-zinc-200 italic">{d.gancho.texto}</blockquote>}
+            <p className="mt-1 text-xs text-zinc-500">{d.gancho.tecnica}</p>
+            <p className="mt-1 text-zinc-300">{d.gancho.comentario}</p>
+          </div>
         </div>
-      </div>
+      </Collapsible>
+
+      {(d.estrutura || d.beats.length > 0) && (
+        <Collapsible title="Esqueleto do roteiro e momentos que prendem" meta={d.beats.length ? `${d.beats.length} momentos` : undefined} className={box} bodyClassName="mt-3 space-y-4">
+          {d.estrutura && (
+            <div>
+              {duration ? (
+                <div className="mb-3 flex h-3 overflow-hidden rounded bg-zinc-800">
+                  {Object.entries(d.estrutura).map(([k, p], i) => (
+                    <div
+                      key={k}
+                      title={`${PART_LABEL[k]} ${ts(p.inicio)}–${ts(p.fim)}`}
+                      className={["bg-red-500", "bg-amber-500", "bg-sky-600", "bg-fuchsia-500", "bg-emerald-500"][i]}
+                      style={{ width: `${Math.max(1, ((p.fim - p.inicio) / duration) * 100)}%` }}
+                    />
+                  ))}
+                </div>
+              ) : null}
+              <ol className="space-y-1">
+                {Object.entries(d.estrutura).map(([k, p]) => (
+                  <li key={k} className="flex gap-3">
+                    <span className="w-32 shrink-0 text-zinc-500">
+                      {PART_LABEL[k]} <span className="tabular-nums">{ts(p.inicio)}–{ts(p.fim)}</span>
+                    </span>
+                    <span className="text-zinc-200">{p.resumo}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
+          {d.beats.length > 0 && (
+            <div>
+              <H3>Momentos que prendem ({d.beats.length})</H3>
+              <ol className="max-h-80 space-y-1 overflow-y-auto pr-2">
+                {d.beats.map((b, i) => (
+                  <li key={i} className="flex gap-3">
+                    <span className="w-12 shrink-0 text-zinc-500 tabular-nums">{ts(b.t)}</span>
+                    <span className="w-28 shrink-0 text-xs text-zinc-400">{b.tipo}</span>
+                    <span className="text-zinc-200">{b.texto}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
+        </Collapsible>
+      )}
+
+      {(d.pontosDeRisco.length > 0 || d.temasDerivados.length > 0) && (
+        <Collapsible title="Pontos de risco e temas derivados" className={box}>
+          <div className="grid gap-4 md:grid-cols-2">
+            {d.pontosDeRisco.length > 0 && (
+              <div>
+                <H3>Pontos de risco</H3>
+                <ul className="space-y-1">
+                  {d.pontosDeRisco.map((p, i) => (
+                    <li key={i} className="flex gap-3">
+                      <span className="w-12 shrink-0 text-zinc-500 tabular-nums">{ts(p.t)}</span>
+                      <span className="text-zinc-300">{p.motivo}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {d.temasDerivados.length > 0 && (
+              <div>
+                <H3>Temas derivados</H3>
+                <ul className="list-disc space-y-1 pl-5 text-zinc-200">
+                  {d.temasDerivados.map((x, i) => (
+                    <li key={i}>{x}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        </Collapsible>
+      )}
     </div>
   );
 }
@@ -283,7 +307,8 @@ function CommentsView({ c }: { c: CommentsAnalysis }) {
   return (
     <div className="space-y-5 text-sm">
       <p className="text-base text-zinc-200">{c.resumo}</p>
-      {c.publico && <p className="text-zinc-400">Público: {c.publico}</p>}
+      {c.publico && <ClampText lines={2} className="text-zinc-400">Público: {c.publico}</ClampText>}
+      <Collapsible title="Ver o que o público disse" className="rounded-lg border border-line p-4" bodyClassName="mt-3 space-y-5">
       <div className="grid gap-4 md:grid-cols-2">
         <div>
           <H3>O que gostaram</H3>
@@ -326,6 +351,7 @@ function CommentsView({ c }: { c: CommentsAnalysis }) {
           </ul>
         </div>
       )}
+      </Collapsible>
     </div>
   );
 }
@@ -447,7 +473,7 @@ export default async function VideoStudyPage({ params }: PageProps<"/video/[id]"
               </form>
             ) : null}
           </div>
-          <div className="rounded-lg border border-zinc-800 bg-zinc-950/50 p-3">
+          <div className="rounded-lg border border-line bg-zinc-950/50 p-3">
             {studyJob ? (
               <RunningNote job={studyJob} what={`Estudo completo · ${studyJob.step ?? ""}`} />
             ) : diagJob || comJob ? (
@@ -506,7 +532,7 @@ export default async function VideoStudyPage({ params }: PageProps<"/video/[id]"
           />
         )}
         {v.transcript && (
-          <details className="rounded-lg border border-zinc-800">
+          <details className="rounded-lg border border-line">
             <summary className="cursor-pointer px-3 py-2 text-sm text-zinc-300">Ver transcrição</summary>
             <div className="max-h-96 space-y-0.5 overflow-y-auto px-3 pb-3 text-sm">
               {segs.length
@@ -522,7 +548,7 @@ export default async function VideoStudyPage({ params }: PageProps<"/video/[id]"
             </div>
           </details>
         )}
-        <details className="rounded-lg border border-zinc-800" open={!v.transcript ? undefined : false}>
+        <details className="rounded-lg border border-line" open={!v.transcript ? undefined : false}>
           <summary className="cursor-pointer px-3 py-2 text-sm text-zinc-400">
             {v.transcript ? "Trocar pela transcrição colada à mão" : "Colar transcrição à mão"}
           </summary>
@@ -532,7 +558,7 @@ export default async function VideoStudyPage({ params }: PageProps<"/video/[id]"
             </p>
             <PasteTranscriptForm action={pasteTranscriptAction.bind(null, v.id)} defaultLang={v.transcript?.language ?? v.defaultLang?.split("-")[0] ?? "pt"} />
             {v.transcript && (
-              <div className="flex flex-wrap gap-3 border-t border-zinc-800 pt-3">
+              <div className="flex flex-wrap gap-3 border-t border-line pt-3">
                 <ActionButton action={fetchTranscriptAction.bind(null, v.id)} label="Buscar de novo no YouTube" busy="Buscando…" className="btn-ghost" />
                 <form action={deleteTranscriptAction.bind(null, v.id)}>
                   <button className="btn-danger">Apagar transcrição</button>
@@ -565,20 +591,20 @@ export default async function VideoStudyPage({ params }: PageProps<"/video/[id]"
         {transcriptNewer && <p className="text-xs text-amber-300">A transcrição mudou depois deste diagnóstico. Gere de novo para atualizar os momentos e o esqueleto.</p>}
         {content ? (
           <>
-            <div className="border-t border-zinc-800 pt-4">
+            <div className="border-t border-line pt-4">
               <DiagnosisView d={content} duration={metrics?.durationSec ?? v.durationSec} />
             </div>
             {diag?.markdown && (
-              <details className="rounded-lg border border-zinc-800">
+              <details className="rounded-lg border border-line">
                 <summary className="cursor-pointer px-3 py-2 text-sm text-zinc-400">Texto para copiar (Markdown)</summary>
                 <textarea readOnly rows={14} className="input m-3 w-[calc(100%-1.5rem)] font-mono text-xs" defaultValue={diag.markdown} />
               </details>
             )}
           </>
         ) : diag?.markdown ? (
-          <div className="whitespace-pre-line rounded-lg border border-zinc-800 p-4 text-sm text-zinc-200">{diag.markdown}</div>
+          <div className="whitespace-pre-line rounded-lg border border-line p-4 text-sm text-zinc-200">{diag.markdown}</div>
         ) : null}
-        <div className="border-t border-zinc-800 pt-4">
+        <div className="border-t border-line pt-4">
           {!v.transcript && (
             <p className="mb-3 text-sm text-amber-300">
               Sem transcrição o diagnóstico olha só título, thumbnail e números (sem esqueleto e sem ritmo). Pegue a transcrição primeiro, se der.
@@ -611,7 +637,7 @@ export default async function VideoStudyPage({ params }: PageProps<"/video/[id]"
         }
       >
         {comments && <CommentsView c={comments} />}
-        <div className={comments ? "border-t border-zinc-800 pt-4" : ""}>
+        <div className={comments ? "border-t border-line pt-4" : ""}>
           {comJob ? (
             <RunningNote job={comJob} what="Análise dos comentários" />
           ) : (

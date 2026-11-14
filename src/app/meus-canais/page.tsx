@@ -15,14 +15,14 @@ export default async function MyChannelsPage() {
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       <header>
-        <h1 className="text-2xl font-bold">Meus canais</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Meus canais</h1>
         <p className="text-sm text-zinc-400">
           O perfil de cada canal (personagens, formatos de história, tom e roteiros já publicados) é o que o gerador usa para adaptar a cartilha
           ao seu jeito de contar.
         </p>
       </header>
 
-      <div className="card divide-y divide-zinc-800">
+      <div className="card divide-y divide-line">
         {channels.length === 0 && <p className="px-5 py-4 text-sm text-zinc-400">Nenhum canal seu cadastrado ainda.</p>}
         {channels.map((c) => {
           const gaps = profileGaps(c, c._count.scripts);

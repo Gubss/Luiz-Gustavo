@@ -101,7 +101,7 @@ export default async function NichePage({ params, searchParams }: PageProps<"/ni
         {channels.length > 0 && (
           <div className="card overflow-hidden">
             <table className="w-full text-sm">
-              <thead className="border-b border-zinc-800 text-left text-xs uppercase text-zinc-500">
+              <thead className="border-b border-line text-left text-xs text-zinc-500">
                 <tr>
                   <th className="px-4 py-3">Canal</th>
                   <th className="px-4 py-3 text-right">Inscritos</th>
@@ -112,9 +112,9 @@ export default async function NichePage({ params, searchParams }: PageProps<"/ni
                   <th className="px-4 py-3" />
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-800">
+              <tbody className="divide-y divide-line">
                 {channels.map((c) => (
-                  <tr key={c.id} className="hover:bg-zinc-900">
+                  <tr key={c.id} className="hover:bg-raised">
                     <td className="px-4 py-3">
                       <a href={channelUrl(c)} target="_blank" rel="noreferrer" className="flex items-center gap-3">
                         {c.thumbnailUrl && (
@@ -167,7 +167,7 @@ export default async function NichePage({ params, searchParams }: PageProps<"/ni
           Procura nos títulos de todos os vídeos dos canais deste nicho (catálogo completo, não só os recentes).
         </p>
         {tema && (
-          <div className="card divide-y divide-zinc-800">
+          <div className="card divide-y divide-line">
             {matches.length === 0 ? (
               <p className="p-4 text-sm text-emerald-400">Nenhum título parecido encontrado nos canais deste nicho.</p>
             ) : (
@@ -177,7 +177,7 @@ export default async function NichePage({ params, searchParams }: PageProps<"/ni
                   href={`https://www.youtube.com/watch?v=${m.externalId}`}
                   target="_blank"
                   rel="noreferrer"
-                  className="flex items-center gap-4 px-4 py-2 text-sm hover:bg-zinc-900"
+                  className="flex items-center gap-4 px-4 py-2 text-sm hover:bg-raised"
                 >
                   <span className={`w-12 shrink-0 text-right font-bold tabular-nums ${m.score >= 0.75 ? "text-red-400" : "text-amber-400"}`}>
                     {Math.round(m.score * 100)}%
@@ -200,7 +200,7 @@ export default async function NichePage({ params, searchParams }: PageProps<"/ni
         <h2 className="text-xl font-semibold">
           Meus canais neste nicho <span className="text-zinc-500">({niche.myChannels.length})</span>
         </h2>
-        <div className="card divide-y divide-zinc-800">
+        <div className="card divide-y divide-line">
           {niche.myChannels.map((m) => (
             <div key={m.id} className="flex flex-wrap items-center gap-4 px-5 py-3">
               <div className="min-w-0 flex-1">

@@ -14,7 +14,7 @@ export default async function FavoritesPage() {
   return (
     <div className="mx-auto max-w-7xl space-y-8">
       <header>
-        <h1 className="text-2xl font-bold">Favoritos</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Favoritos</h1>
         <p className="text-sm text-zinc-400">{count} vídeo{count === 1 ? "" : "s"} salvo{count === 1 ? "" : "s"} para estudo.</p>
       </header>
       {count === 0 && (

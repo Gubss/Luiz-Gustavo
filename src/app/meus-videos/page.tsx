@@ -1,4 +1,7 @@
 import Link from "next/link";
+import { Collapsible, Help, PageHeader } from "@/components/ui";
+import { ClampText } from "@/components/ui-client";
+import { FilterChip } from "@/components/ui";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { fmtCompact, fmtDateTime, fmtInt } from "@/lib/format";
@@ -23,13 +26,7 @@ import { estimateHint, parse, ratioClass, VerdictBadge } from "./ui";
 
 const SHOWN_CHECKPOINTS = [1, 3, 24, 48, 72, 168];
 
-function Chip({ href, active, children }: { href: string; active: boolean; children: React.ReactNode }) {
-  return (
-    <Link href={href} className={`rounded-full border px-3 py-1 text-sm ${active ? "border-red-500 bg-red-950/40 text-white" : "border-zinc-700 text-zinc-400 hover:text-white"}`}>
-      {children}
-    </Link>
-  );
-}
+const Chip = FilterChip;
 
 function GoogleBanner({ status, msg }: { status?: string; msg?: string }) {
   if (!status) return null;
@@ -53,7 +50,7 @@ function Row({ v, all, now }: { v: VideoRow; all: VideoRow[]; now: Date }) {
   const d = parse<MyDiagnosisContent>(v.diagnoses[0]?.content);
   const pct = v.avgViewPercent != null && v.avgViewPercent > 0 ? v.avgViewPercent : null;
   return (
-    <tr className="border-t border-zinc-800 align-middle">
+    <tr className="border-t border-line align-middle">
       <td className="py-2 pr-4">
         <Link href={`/meus-videos/${v.id}`} className="flex items-center gap-3">
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -86,7 +83,7 @@ function Row({ v, all, now }: { v: VideoRow; all: VideoRow[]; now: Date }) {
                 ? "o app não estava acompanhando nessa hora (o YouTube não guarda views por hora)"
                 : "ainda sem dado do Analytics para essa idade";
         return (
-          <td key={h} className={`w-16 border-l border-zinc-800/60 py-2 text-center text-xs tabular-nums ${ratioClass(r)}`} title={title}>
+          <td key={h} className={`w-16 border-l border-line/60 py-2 text-center text-xs tabular-nums ${ratioClass(r)}`} title={title}>
             {cp?.viewCount != null ? (
               <>
                 {est && <span className="text-zinc-500">≈</span>}
@@ -101,7 +98,7 @@ function Row({ v, all, now }: { v: VideoRow; all: VideoRow[]; now: Date }) {
         );
       })}
       <td
-        className="w-16 border-l border-zinc-800/60 py-2 text-center text-xs tabular-nums"
+        className="w-16 border-l border-line/60 py-2 text-center text-xs tabular-nums"
         title={pct != null && pct > 100 ? "acima de 100% = gente assistindo mais de uma vez (loop)" : "% médio do vídeo assistido (YouTube Analytics)"}
       >
         {pct != null ? `${pct.toFixed(0)}%` : <span className="text-zinc-600">—</span>}
@@ -118,7 +115,7 @@ function VideosTable({ rows, all, now }: { rows: VideoRow[]; all: VideoRow[]; no
         <thead className="text-xs text-zinc-500">
           <tr>
             <th className="font-normal" colSpan={2} />
-            <th className="border-l border-zinc-800/60 pb-1 text-center font-normal text-zinc-400" colSpan={SHOWN_CHECKPOINTS.length}>
+            <th className="border-l border-line/60 pb-1 text-center font-normal text-zinc-400" colSpan={SHOWN_CHECKPOINTS.length}>
               Views com…
             </th>
             <th className="font-normal" colSpan={2} />
@@ -127,11 +124,11 @@ function VideosTable({ rows, all, now }: { rows: VideoRow[]; all: VideoRow[]; no
             <th className="pb-2 text-left font-normal">Vídeo</th>
             <th className="pb-2 pr-4 text-right font-normal">Views agora</th>
             {SHOWN_CHECKPOINTS.map((h) => (
-              <th key={h} className="border-l border-zinc-800/60 pb-2 text-center font-normal">
+              <th key={h} className="border-l border-line/60 pb-2 text-center font-normal">
                 {h < 24 ? checkpointLabel(h) : h === 24 ? "1 dia" : h === 48 ? "2 dias" : `${Math.round(h / 24)} dias`}
               </th>
             ))}
-            <th className="border-l border-zinc-800/60 pb-2 text-center font-normal" title="% médio do vídeo assistido (YouTube Analytics)">
+            <th className="border-l border-line/60 pb-2 text-center font-normal" title="% médio do vídeo assistido (YouTube Analytics)">
               % visto
             </th>
             <th className="pb-2 pl-4 text-left font-normal">Diagnóstico</th>
@@ -156,7 +153,7 @@ export default async function MyVideosPage({ searchParams }: { searchParams: Pro
   if (!channels.length)
     return (
       <div className="mx-auto max-w-4xl space-y-4">
-        <h1 className="text-2xl font-bold">Meus vídeos</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Meus vídeos</h1>
         <GoogleBanner status={one(sp.google)} msg={one(sp.msg)} />
         <p className="text-zinc-400">
           Cadastre seu canal em{" "}
@@ -195,13 +192,16 @@ export default async function MyVideosPage({ searchParams }: { searchParams: Pro
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
-      <header>
-        <h1 className="text-2xl font-bold">Meus vídeos</h1>
-        <p className="text-sm text-zinc-400">
-          Acompanha cada vídeo do seu canal em 1h, 3h, 24h, 48h, 3 dias e 7 dias, compara com o normal do próprio canal na mesma idade e explica por que deu
-          certo ou não (gancho, retenção, título, cartilha). As lições vão direto para o Gerador.
-        </p>
-      </header>
+      <PageHeader
+        title="Meus vídeos"
+        subtitle="Como cada vídeo seu está indo comparado com o normal do canal, e por quê."
+        help={
+          <p>
+            Acompanha cada vídeo do seu canal em 1h, 3h, 24h, 48h, 3 dias e 7 dias, compara com o normal do próprio canal na mesma idade e explica por
+            que deu certo ou não (gancho, retenção, título, cartilha). As lições vão direto para o Gerador.
+          </p>
+        }
+      />
 
       <GoogleBanner status={one(sp.google)} msg={one(sp.msg)} />
 
@@ -255,7 +255,7 @@ export default async function MyVideosPage({ searchParams }: { searchParams: Pro
           </p>
         </div>
 
-        <div className="space-y-3 rounded-lg border border-zinc-800 bg-zinc-950/50 p-4 text-sm">
+        <div className="space-y-3 rounded-lg border border-line bg-zinc-950/50 p-4 text-sm">
           <div className="font-medium">YouTube Analytics (retenção, % visto, de onde vieram as views)</div>
           {google?.status === "ok" ? (
             <div className="space-y-2">
@@ -320,7 +320,7 @@ export default async function MyVideosPage({ searchParams }: { searchParams: Pro
             Reserva sem login do Google: números colados do canal (Studio, Maestri/GPT)
             {c.analytics ? ` · colados em ${fmtDateTime(c.analyticsAt)} (o que o app mede agora vale mais)` : ""}
           </summary>
-          <div className="grid gap-4 border-t border-zinc-800 p-3 md:grid-cols-[2fr_1fr]">
+          <div className="grid gap-4 border-t border-line p-3 md:grid-cols-[2fr_1fr]">
             <StateForm action={saveAnalyticsNotesAction.bind(null, c.id)} label="Salvar" className="btn-secondary">
               <textarea
                 name="analyticsNotes"
@@ -337,14 +337,30 @@ export default async function MyVideosPage({ searchParams }: { searchParams: Pro
           </div>
         </details>
         {rc && report && (
-          <div className="space-y-4 border-t border-zinc-800 pt-4 text-sm">
+          <div className="space-y-4 border-t border-line pt-4 text-sm">
             <p className="text-xs text-zinc-500">
               {fmtDateTime(report.createdAt)} · {report.videoCount} vídeos · {report.trigger === "auto" ? "automático" : "manual"} · {diagCount} diagnósticos de vídeo até agora
             </p>
-            <p className="text-zinc-200">{rc.resumo}</p>
+            <ClampText lines={4} className="text-[15px] leading-relaxed text-zinc-200">
+              {rc.resumo}
+            </ClampText>
+            <div className="rounded-lg border border-red-900/60 bg-red-950/20 p-3">
+              <h3 className="mb-1 text-xs font-semibold text-red-300">Lições que o Gerador vai seguir</h3>
+              <ul className="list-disc space-y-1 pl-5">
+                {rc.licoesParaRoteiros.map((l, i) => (
+                  <li key={i}>{l}</li>
+                ))}
+              </ul>
+            </div>
+            <Collapsible
+              title="O que funciona, o que não funciona e a cartilha no seu canal"
+              meta={`${rc.padroesQueFuncionam.length} funcionam · ${rc.padroesQueNaoFuncionam.length} não`}
+              className="rounded-lg border border-line p-4"
+              bodyClassName="mt-3 space-y-4"
+            >
             <div className="grid gap-4 md:grid-cols-2">
               <div>
-                <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-emerald-400">O que funciona no seu canal</h3>
+                <h3 className="mb-1 text-xs font-semibold text-emerald-400">O que funciona no seu canal</h3>
                 <ul className="space-y-1">
                   {rc.padroesQueFuncionam.map((p, i) => (
                     <li key={i}>
@@ -354,7 +370,7 @@ export default async function MyVideosPage({ searchParams }: { searchParams: Pro
                 </ul>
               </div>
               <div>
-                <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-red-400">O que não funciona</h3>
+                <h3 className="mb-1 text-xs font-semibold text-red-400">O que não funciona</h3>
                 <ul className="space-y-1">
                   {rc.padroesQueNaoFuncionam.map((p, i) => (
                     <li key={i}>
@@ -366,7 +382,7 @@ export default async function MyVideosPage({ searchParams }: { searchParams: Pro
             </div>
             {rc.cartilhaNoMeuCanal.length > 0 && (
               <div>
-                <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-zinc-400">Cartilha × seu canal</h3>
+                <h3 className="mb-1 text-xs font-semibold text-zinc-400">Cartilha × seu canal</h3>
                 <ul className="space-y-1">
                   {rc.cartilhaNoMeuCanal.map((x, i) => (
                     <li key={i}>
@@ -379,23 +395,15 @@ export default async function MyVideosPage({ searchParams }: { searchParams: Pro
                 </ul>
               </div>
             )}
-            <div className="rounded-lg border border-red-900/60 bg-red-950/20 p-3">
-              <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-red-300">Lições que o Gerador vai seguir</h3>
-              <ul className="list-disc space-y-1 pl-5">
-                {rc.licoesParaRoteiros.map((l, i) => (
-                  <li key={i}>{l}</li>
-                ))}
-              </ul>
-            </div>
+            </Collapsible>
             {rc.proximosTestes.length > 0 && (
-              <div>
-                <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-zinc-400">Próximos testes</h3>
+              <Collapsible title={`Próximos testes (${rc.proximosTestes.length})`} className="rounded-lg border border-line p-4">
                 <ul className="list-disc space-y-1 pl-5 text-zinc-300">
                   {rc.proximosTestes.map((l, i) => (
                     <li key={i}>{l}</li>
                   ))}
                 </ul>
-              </div>
+              </Collapsible>
             )}
           </div>
         )}
@@ -403,11 +411,11 @@ export default async function MyVideosPage({ searchParams }: { searchParams: Pro
 
       <section className="card space-y-3 p-5">
         <h2 className="text-lg font-semibold">Últimos 30 dias ({recent.length})</h2>
-        <p className="text-xs text-zinc-500">
+        <Help label="Como ler a tabela">
           Cada coluna é o número de views naquela idade. Verde = bem acima do normal do canal na mesma idade; vermelho = abaixo. “≈” = estimado pelas views por
           dia do Analytics. “—” = o app não estava acompanhando naquela hora (1h e 3h só existem para vídeos publicados com o app aberto ou agendado). “·” = o vídeo
           ainda não chegou nessa idade. Passe o mouse para ver o normal.
-        </p>
+        </Help>
         {recent.length ? <VideosTable rows={recent} all={videos} now={now} /> : <p className="text-sm text-zinc-500">Nenhum vídeo nos últimos 30 dias.</p>}
       </section>
 

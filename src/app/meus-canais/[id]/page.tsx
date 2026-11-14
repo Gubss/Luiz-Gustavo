@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Collapsible } from "@/components/ui";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { fmtInt } from "@/lib/format";
@@ -80,7 +81,7 @@ export default async function MyChannelProfilePage({ params }: PageProps<"/meus-
           <Link href="/meus-canais" className="text-xs text-zinc-500 hover:text-zinc-300">
             ← Meus canais
           </Link>
-          <h1 className="text-2xl font-bold">{c.name}</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">{c.name}</h1>
           <p className="text-sm text-zinc-400">
             Perfil do canal. Quanto mais claro, melhor o gerador traduz o que funciona no nicho para o seu formato.
           </p>
@@ -101,9 +102,16 @@ export default async function MyChannelProfilePage({ params }: PageProps<"/meus-
         </p>
       )}
 
-      <section id="do-canal" className="card space-y-4 p-5">
+      <Collapsible
+        title={<span className="text-base">Preencher o perfil automaticamente</span>}
+        meta="pelos vídeos do canal ou pelo GPT"
+        open={gaps.length > 0 || !!draft || !!profileJob}
+        className="card p-5"
+        bodyClassName="mt-4 space-y-5"
+      >
+      <div id="do-canal" className="space-y-4">
         <div>
-          <h2 className="text-lg font-semibold">Preencher a partir do meu canal</h2>
+          <h3 className="font-semibold">Pelos vídeos do canal</h3>
           <p className="text-sm text-zinc-400">
             O Radar lê os seus vídeos (títulos, descrições, legendas, views e, com o login do Google, retenção e % visto) e o Claude escreve o
             rascunho do perfil e dos roteiros publicados. Você vê a prévia e só salva se quiser. Lê em detalhe os 6 vídeos que mais deram view e os 6
@@ -148,11 +156,11 @@ export default async function MyChannelProfilePage({ params }: PageProps<"/meus-
             </form>
           </div>
         )}
-      </section>
+      </div>
 
-      <section className="card space-y-4 p-5">
+      <div className="space-y-4 border-t border-line pt-5">
         <div>
-          <h2 className="text-lg font-semibold">Ou: preencher pelo GPT (Maestri)</h2>
+          <h3 className="font-semibold">Ou pelo GPT (Maestri)</h3>
           <p className="text-sm text-zinc-400">
             Em vez de preencher à mão: <b>1.</b> baixe o pedido, <b>2.</b> cole no GPT do Maestri que conhece este canal, <b>3.</b> salve a resposta
             como .md (ou copie) e importe aqui. Você vê a prévia antes de salvar.
@@ -163,7 +171,9 @@ export default async function MyChannelProfilePage({ params }: PageProps<"/meus-
           1. Baixar o pedido para o GPT (.md)
         </a>
         <ProfileImport preview={previewProfileImport} apply={applyProfileImport.bind(null, c.id)} />
-      </section>
+      </div>
+
+      </Collapsible>
 
       <section className="card p-5">
         <h2 className="mb-4 text-lg font-semibold">Perfil</h2>
@@ -250,13 +260,13 @@ export default async function MyChannelProfilePage({ params }: PageProps<"/meus-
           </p>
         </div>
         {c.scripts.map((s) => (
-          <details key={s.id} className="rounded-lg border border-zinc-800">
+          <details key={s.id} className="rounded-lg border border-line">
             <summary className="flex cursor-pointer flex-wrap items-center gap-2 px-3 py-2 text-sm">
               <span className="font-medium">{s.title}</span>
               {s.views != null && <span className="text-xs text-zinc-500">{fmtInt(s.views)} views</span>}
               <span className="text-xs text-zinc-500">· {s.script.split(/\s+/).length} palavras</span>
             </summary>
-            <div className="space-y-3 border-t border-zinc-800 p-3">
+            <div className="space-y-3 border-t border-line p-3">
               <StateForm action={saveScript.bind(null, c.id, s.id)} label="Salvar" className="btn-secondary">
                 <ScriptFields s={s} />
               </StateForm>
@@ -295,9 +305,9 @@ export default async function MyChannelProfilePage({ params }: PageProps<"/meus-
           />
         )}
         {videos.length > 0 && (
-          <details className="rounded-lg border border-zinc-800">
+          <details className="rounded-lg border border-line">
             <summary className="cursor-pointer px-3 py-2 text-sm text-zinc-300">Ver a lista</summary>
-            <ul className="max-h-96 divide-y divide-zinc-800 overflow-y-auto text-sm">
+            <ul className="max-h-96 divide-y divide-line overflow-y-auto text-sm">
               {videos.map((v) => (
                 <li key={v.id} className="flex items-center gap-3 px-3 py-1.5">
                   <a href={`https://www.youtube.com/watch?v=${v.externalId}`} target="_blank" rel="noreferrer" className="min-w-0 flex-1 truncate hover:text-red-400">

@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { Collapsible } from "@/components/ui";
+import { ClampText } from "@/components/ui-client";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { fmtDateTime, fmtInt } from "@/lib/format";
@@ -26,8 +28,8 @@ const pct = (x: number | null | undefined) => (x == null ? "—" : `${Math.round
 
 function Tile({ label, value, hint, cls }: { label: string; value: string; hint?: string; cls?: string }) {
   return (
-    <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-3">
-      <div className="text-[10px] uppercase tracking-wide text-zinc-500">{label}</div>
+    <div className="rounded-lg border border-line bg-ink/60 p-3">
+      <div className="text-[10px] text-zinc-500">{label}</div>
       <div className={`text-lg font-semibold tabular-nums ${cls ?? ""}`}>{value}</div>
       {hint && <div className="mt-0.5 text-[11px] leading-tight text-zinc-500">{hint}</div>}
     </div>
@@ -35,16 +37,32 @@ function Tile({ label, value, hint, cls }: { label: string; value: string; hint?
 }
 
 function H3({ children, cls = "text-zinc-400" }: { children: React.ReactNode; cls?: string }) {
-  return <h3 className={`mb-2 text-xs font-semibold uppercase tracking-wide ${cls}`}>{children}</h3>;
+  return <h3 className={`mb-2 text-xs font-semibold ${cls}`}>{children}</h3>;
 }
 
 function DiagnosisView({ d }: { d: MyDiagnosisContent }) {
   return (
     <div className="space-y-4 text-sm">
-      <p className="text-base text-zinc-100">{d.resumo}</p>
+      <ClampText lines={4} className="text-[15px] leading-relaxed text-zinc-100">
+        {d.resumo}
+      </ClampText>
       <p className="text-xs text-zinc-500">
         Confiança {d.confianca}: {d.motivoConfianca}
       </p>
+      <div className="rounded-lg border border-red-900/60 bg-red-950/20 p-3">
+        <H3 cls="text-red-300">Lições para os próximos roteiros (vão para o Gerador)</H3>
+        <ul className="list-disc space-y-1 pl-5">
+          {d.licoes.map((l, i) => (
+            <li key={i}>{l}</li>
+          ))}
+        </ul>
+      </div>
+      <Collapsible
+        title="O que funcionou, o que não funcionou, gancho, retenção e cartilha"
+        meta={`${d.oQueFuncionou.length} pontos bons · ${d.oQueNaoFuncionou.length} a melhorar`}
+        className="rounded-lg border border-line p-4"
+        bodyClassName="mt-3 space-y-4"
+      >
       <div className="grid gap-4 md:grid-cols-2">
         <div>
           <H3 cls="text-emerald-400">O que funcionou</H3>
@@ -71,7 +89,7 @@ function DiagnosisView({ d }: { d: MyDiagnosisContent }) {
         </div>
       </div>
       <div className="grid gap-4 md:grid-cols-2">
-        <div className="rounded-lg border border-zinc-800 p-3">
+        <div className="rounded-lg border border-line p-3">
           <H3>
             Gancho: <span className={d.gancho.nota === "forte" ? "text-emerald-300" : d.gancho.nota === "fraco" ? "text-red-300" : "text-zinc-200"}>{d.gancho.nota}</span>
           </H3>
@@ -80,7 +98,7 @@ function DiagnosisView({ d }: { d: MyDiagnosisContent }) {
             <span className="text-zinc-500">Melhor assim:</span> {d.gancho.comoMelhorar}
           </p>
         </div>
-        <div className="rounded-lg border border-zinc-800 p-3">
+        <div className="rounded-lg border border-line p-3">
           <H3>Título e capa</H3>
           <p>{d.tituloECapa.leitura}</p>
           {d.tituloECapa.sugestoes.length > 0 && (
@@ -98,7 +116,7 @@ function DiagnosisView({ d }: { d: MyDiagnosisContent }) {
         {d.retencao.quedas.length > 0 && (
           <ul className="mt-2 space-y-2">
             {d.retencao.quedas.map((q, i) => (
-              <li key={i} className="rounded border border-zinc-800 p-2">
+              <li key={i} className="rounded border border-line p-2">
                 <span className="font-mono text-red-300">{mmss(q.segundo)}</span> {q.oQueAcontecia}
                 <div className="text-zinc-400">Por quê: {q.porqueProvavel}</div>
                 <div className="text-zinc-300">Evitar: {q.comoEvitar}</div>
@@ -126,14 +144,7 @@ function DiagnosisView({ d }: { d: MyDiagnosisContent }) {
         <H3>Comparando com seus outros vídeos</H3>
         <p>{d.comparacao}</p>
       </div>
-      <div className="rounded-lg border border-red-900/60 bg-red-950/20 p-3">
-        <H3 cls="text-red-300">Lições para os próximos roteiros (vão para o Gerador)</H3>
-        <ul className="list-disc space-y-1 pl-5">
-          {d.licoes.map((l, i) => (
-            <li key={i}>{l}</li>
-          ))}
-        </ul>
-      </div>
+      </Collapsible>
       <p className="text-zinc-400">
         <span className="text-zinc-500">Observar depois:</span> {d.oQueObservarDepois}
       </p>
@@ -273,19 +284,19 @@ export default async function MyVideoPage({ params }: { params: Promise<{ id: st
           </p>
         )}
         {v.diagnoses.length > 1 && (
-          <div className="space-y-2 border-t border-zinc-800 pt-3">
+          <div className="space-y-2 border-t border-line pt-3">
             <H3>Diagnósticos anteriores (veja como a leitura mudou)</H3>
             {v.diagnoses.slice(1).map((d) => {
               const c = parse<MyDiagnosisContent>(d.content);
               if (!c) return null;
               return (
-                <details key={d.id} className="rounded-lg border border-zinc-800">
+                <details key={d.id} className="rounded-lg border border-line">
                   <summary className="flex cursor-pointer flex-wrap items-center gap-2 px-3 py-2 text-sm">
                     <span>Com {fmtAge(d.ageHours)}</span>
                     <VerdictBadge v={c.veredito} />
                     <span className="line-clamp-1 text-zinc-400">{c.resumo}</span>
                   </summary>
-                  <div className="border-t border-zinc-800 p-3">
+                  <div className="border-t border-line p-3">
                     <DiagnosisView d={c} />
                   </div>
                 </details>
@@ -327,7 +338,7 @@ export default async function MyVideoPage({ params }: { params: Promise<{ id: st
                 const med = peers.byCheckpoint[h]?.median;
                 const r = c?.viewCount != null && med ? c.viewCount / med : null;
                 return (
-                  <tr key={h} className="border-t border-zinc-800">
+                  <tr key={h} className="border-t border-line">
                     <td className="py-1.5 font-medium">{checkpointLabel(h)}</td>
                     <td className="py-1.5 pr-3 text-right text-xs text-zinc-500">{c?.source === "analytics" ? "≈ views por dia do Analytics" : c?.measuredAgeMin != null ? fmtAge(c.measuredAgeMin / 60) : c ? "Studio" : "—"}</td>
                     <td className={`py-1.5 pr-3 text-right tabular-nums ${ratioClass(r)}`}>
@@ -365,7 +376,7 @@ export default async function MyVideoPage({ params }: { params: Promise<{ id: st
         )}
         <details className="rounded-lg border border-dashed border-zinc-700">
           <summary className="cursor-pointer px-3 py-2 text-sm">Colar números do YouTube Studio num marco</summary>
-          <div className="border-t border-zinc-800 p-3">
+          <div className="border-t border-line p-3">
             <StateForm action={saveCheckpointAction.bind(null, v.id)} label="Salvar números do Studio" className="btn-secondary">
               <div className="grid gap-3 md:grid-cols-4">
                 <div>
