@@ -84,6 +84,9 @@ export default async function NichePage({ params, searchParams }: PageProps<"/ni
             Canais monitorados <span className="text-zinc-500">({channels.length})</span>
           </h2>
           <div className="flex flex-wrap items-center gap-3">
+            <Link href={`/cartilha?niche=${niche.id}`} className="btn-secondary">
+              Cartilha do nicho
+            </Link>
             <Link href={`/descobrir?niche=${niche.id}`} className="btn-secondary">
               Descobrir canais parecidos
             </Link>

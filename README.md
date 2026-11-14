@@ -9,7 +9,7 @@ outliers, estuda título/thumbnail/roteiro com o Claude e gera temas e roteiros.
 - [x] **Etapa 2** — coleta de vídeos, snapshots diários, base do canal, velocidade, outliers, "Canal pequeno estourou", catálogo de títulos ("esse tema já foi feito?"), radar e favoritos
 - [x] **Etapa 3** — estudo do vídeo: transcrição, diagnóstico medido, comentários, esqueleto de roteiro
 - [x] **Etapa 4** — descoberta de canais (busca por palavra-chave, canais indicados, raio-x do canal)
-- [ ] Etapa 5 — cartilha do nicho
+- [x] **Etapa 5** — cartilha do nicho (por formato: Shorts e longos separados)
 - [ ] Etapa 6 — gerador de temas, títulos e roteiros; banco de ideias
 - [ ] Etapa 7 — meus vídeos publicados (marcos 1h/3h/24h/48h) e cruzamento com referências
 - [ ] Etapa 8 — configurações e controle de cota
@@ -114,11 +114,31 @@ o canal apareceu × bônus para canal com menos de 1 ano. As abas Shorts/Longos 
 raio-x, a proporção real de Shorts do canal. Tudo fica salvo (`DiscoveredChannel`, `DiscoverySearch`): reabrir a tela
 não gasta cota.
 
+## Cartilha do nicho (etapa 5)
+
+Menu **Cartilha do nicho** (ou o botão na página do nicho). Escolha o nicho e o formato: **Shorts** e **vídeos longos**
+têm cartilhas separadas.
+
+- **Base** — entram os vídeos com diagnóstico pronto (gerado aqui ou importado) cujo canal está no nicho. Vídeo estudado
+  por link, de canal fora dos nichos, entra se você escolher o nicho em *Entra na cartilha de* na página do vídeo.
+  Vídeos só com transcrição aparecem como pendentes.
+- **Confiança** pela quantidade de estudos: 1–2 preliminar (rascunho), 3–4 inicial, 5–9 boa, 10+ sólida. Com 1–2 estudos
+  o Claude é avisado para não generalizar e listar o que estudar a seguir.
+- **Medidas dos estudos** (grátis, calculadas em código): mediana de views, x média do canal, duração, palavras/s,
+  intervalo entre momentos novos, maior buraco, ritmo começo/meio/fim, padrões de título (pergunta, número, "você",
+  "E se"), fecho com chamada e onde cada parte do esqueleto termina (% da duração).
+- **Cartilha** (Claude Opus 5.5, custo estimado no botão; ≈ US$ 0,10–0,40 conforme o número de estudos): ganchos,
+  fórmulas de título, thumbnail, estrutura, ritmo, fecho, temas, o que o público pede, o que evitar, checklist e lacunas.
+  Cada item mostra em quantos estudos aparece (#1, #2… levam ao estudo).
+- Cada geração é uma versão nova (`NichePlaybook`, com `format`, estudos usados e custo); as antigas ficam em
+  *Versões anteriores*. Quando há estudo novo ou refeito, a tela avisa para gerar de novo.
+  `latestPlaybook(nicheId, format)` em `src/lib/playbook.ts` fica pronto para a etapa 6.
+
 ## Testes
 
 `npm test` roda os testes de cálculo e uma coleta completa com a API do YouTube simulada
 (usa `prisma/test.db`, nunca o seu banco). O estudo do vídeo é testado com YouTube e Anthropic simulados
-(`prisma/test-study.db`, sem custo). A descoberta de canais é testada com a API simulada (`prisma/test-discover.db`).
+(`prisma/test-study.db`, sem custo). A descoberta de canais é testada com a API simulada (`prisma/test-discover.db`). A cartilha é testada com a Anthropic simulada (`prisma/test-playbook.db`).
 
 ## Stack
 
