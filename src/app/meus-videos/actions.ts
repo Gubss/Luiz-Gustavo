@@ -6,6 +6,12 @@ import { linkMyChannel } from "@/lib/my-videos";
 import { fetchYoutubeTranscript, parsePastedTranscript } from "@/lib/transcript";
 import { startChannelReportJob, startMyDiagnosisJob, startRefreshChannelJob, startRefreshVideoJob } from "@/lib/tracker";
 import type { FormState } from "@/app/video/actions";
+import { applyProfileImport } from "@/app/meus-canais/actions";
+import { startJob } from "@/lib/jobs";
+import { usdToBrl } from "@/lib/claude";
+import { clearProfileDraft, runProfileFromChannel } from "@/lib/profile-from-channel";
+
+const money = (usd: number) => `US$ ${usd.toFixed(usd < 0.1 ? 3 : 2).replace(".", ",")} (≈ R$ ${(usd * usdToBrl()).toFixed(2).replace(".", ",")})`;
 
 const BACKGROUND_OK = "Começou em segundo plano. Pode sair desta tela: o aviso no canto mostra quando terminar.";
 const errMsg = (e: unknown) => (e instanceof Error ? e.message : "Erro inesperado.");
@@ -185,4 +191,37 @@ export async function importAnalyticsFileAction(myChannelId: string, _prev: Form
   await prisma.myChannel.update({ where: { id: myChannelId }, data: { analytics: text, analyticsAt: new Date() } });
   refresh(myChannelId);
   return { ok: `Importado: ${f.name} (${text.length.toLocaleString("pt-BR")} caracteres).` };
+}
+
+// ---------- Perfil a partir do meu canal ----------
+
+export async function profileFromChannelAction(myChannelId: string): Promise<FormState> {
+  try {
+    const c = await prisma.myChannel.findUniqueOrThrow({ where: { id: myChannelId }, select: { name: true, externalId: true, url: true } });
+    if (!c.externalId && !c.url) return { error: "Coloque a URL do canal no perfil (ou entre com o Google em Meus vídeos) primeiro." };
+    await startJob(
+      { kind: "profile-from-channel", targetId: myChannelId, label: `Perfil de ${c.name} pelos vídeos do canal`, href: `/meus-canais/${myChannelId}#do-canal`, expectedSec: 120, step: "Começando" },
+      async (report) => {
+        const r = await runProfileFromChannel(myChannelId, (p, step) => report(p, step));
+        return `Rascunho pronto (${r.videos} vídeos lidos, ${r.captions} legendas novas). Confira a prévia e salve. Custo: ${money(r.costUsd)}.`;
+      },
+    );
+    refresh(myChannelId);
+    return { ok: BACKGROUND_OK };
+  } catch (e) {
+    return { error: errMsg(e) };
+  }
+}
+
+/** Salva o rascunho (pela mesma importação do .md) e apaga o rascunho. */
+export async function applyProfileDraftAction(myChannelId: string, text: string): Promise<FormState> {
+  const r = await applyProfileImport(myChannelId, text);
+  if (r?.ok) await clearProfileDraft(myChannelId);
+  refresh(myChannelId);
+  return r;
+}
+
+export async function discardProfileDraftAction(myChannelId: string) {
+  await clearProfileDraft(myChannelId);
+  refresh(myChannelId);
 }

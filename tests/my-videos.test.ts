@@ -54,6 +54,22 @@ const REPORT = {
   proximosTestes: ["Gancho pergunta × afirmação"],
 };
 
+const PROFILE = {
+  formato: "short",
+  duracaoAlvoSeg: 29,
+  plataformas: "YouTube Shorts",
+  doQueTrata: "Curiosidades do dia a dia em animação 3D.",
+  personagens: "Narrador: curioso, rápido",
+  formatosDeHistoria: "Pergunta curiosa e resposta surpreendente (ex.: tampa da caneta)",
+  estiloVisual: "Animação 3D (conferir: inferido sem ver o vídeo)",
+  tom: "leve",
+  publico: "geral",
+  sempreNunca: "Sempre abre com a pergunta",
+  notas: "Fiozinho foi 4x o normal.",
+  roteiros: [{ videoId: "fio0000000a", roteiro: "NARRADOR: Puxei um fiozinho da blusa...", oQueFuncionou: "Ação no primeiro segundo; 4x o normal." }],
+  avisos: ["Confira o estilo visual."],
+};
+
 function ytVideo(id: string) {
   const v = VIDS[id as keyof typeof VIDS];
   return {
@@ -114,12 +130,13 @@ before(() => {
       const body = JSON.parse(String(init?.body));
       bodies.push(body);
       const isReport = String(body.system).includes("Encontre os padrões");
+      const isProfile = String(body.system).includes("escreve o PERFIL");
       return json({
         id: "msg_test",
         type: "message",
         role: "assistant",
         model: "claude-opus-5-5",
-        content: [{ type: "text", text: JSON.stringify(isReport ? REPORT : DIAG) }],
+        content: [{ type: "text", text: JSON.stringify(isProfile ? PROFILE : isReport ? REPORT : DIAG) }],
         stop_reason: "end_turn",
         stop_sequence: null,
         usage: { input_tokens: 10_000, output_tokens: 3_000, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 },
@@ -278,4 +295,24 @@ test("meus vídeos: lê o canal, acompanha marcos, Analytics, diagnóstico e li�
   // Comparação com o canal na mesma idade
   const peers = await mv.channelPeers(ch.id, true);
   assert.equal(peers.baseMedian, 13000, "mediana de fio (21 mil) e antigo (5 mil)");
+
+  // 9) Perfil a partir do meu canal: rascunho no modelo .md da importação, com prévia antes de salvar.
+  const pf = await import("../src/lib/profile-from-channel");
+  const pest = await pf.estimateProfileFromChannel(ch.id);
+  assert.ok(pest.usd > 0 && pest.videos === 3);
+  const pr = await pf.runProfileFromChannel(ch.id);
+  assert.match(bodies.at(-1)!.messages[0].content.map((c) => c.text ?? "").join(""), /Legenda: Puxei um fiozinho da blusa/);
+  const { parseProfileMd } = await import("../src/lib/profile-md");
+  const parsed = parseProfileMd(pr.md);
+  assert.equal(parsed.fields.format, "short");
+  assert.equal(parsed.fields.durationSec, 29);
+  assert.match(parsed.fields.concept!, /Curiosidades/);
+  assert.equal(parsed.scripts.length, 1);
+  assert.equal(parsed.scripts[0].title, "Puxei um fiozinho e olha no que deu");
+  assert.equal(parsed.scripts[0].views, 21000);
+  assert.deepEqual(parsed.warnings, []);
+  const draft = await pf.profileDraft(ch.id);
+  assert.equal(draft?.md, pr.md);
+  const unchanged = await prisma.myChannel.findUniqueOrThrow({ where: { id: ch.id } });
+  assert.equal(unchanged.concept, "Animação 3D de curiosidades.", "nada é salvo sem confirmar");
 });

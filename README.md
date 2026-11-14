@@ -168,7 +168,13 @@ títulos parecidos já feitos pelos canais monitorados (checagem grátis no cat�
 publicado (lista do canal, com os mais parecidos primeiro, ou pelo link): a ideia fica "Publicado", mostra as views e o
 gerador não repete o tema.
 
-**Perfil pelo GPT do Maestri (.md):** no perfil, *Baixar o pedido para o GPT (.md)* gera o arquivo
+**Perfil a partir do meu canal (recomendado):** no perfil, *Gerar perfil a partir do meu canal* (custo no botão, ≈ US$ 0,15–0,30).
+O Radar lê os vídeos do canal (títulos, descrições, legendas grátis, views e, com o login do Google, retenção e % visto), lê
+em detalhe os 6 que mais deram view e os 6 mais recentes, e o Claude escreve o rascunho do perfil e dos roteiros publicados
+(reconstruídos das legendas, com "o que funcionou"). Abre a mesma prévia da importação: nada é salvo sem você clicar em
+*Importar e salvar no perfil*.
+
+**Alternativa — perfil pelo GPT do Maestri (.md):** no perfil, *Baixar o pedido para o GPT (.md)* gera o arquivo
 [`docs/prompt-perfil-canal.md`](docs/prompt-perfil-canal.md) com o nome e a URL do canal. Cole no GPT do Maestri que conhece
 o canal; ele devolve o perfil num modelo fixo (títulos `##` que o app procura, roteiros publicados em `### Roteiro:` e,
 se tiver, os números do YouTube Studio/TikTok). Salve a resposta como .md (ou copie) e use *Importar*: o app mostra a

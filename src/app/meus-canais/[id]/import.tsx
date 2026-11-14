@@ -26,13 +26,18 @@ const LABELS: Record<keyof ProfileFields, string> = {
 export function ProfileImport({
   preview,
   apply,
+  initialText = "",
+  initialParsed = null,
 }: {
   preview: (text: string) => Promise<ParsedProfile>;
   apply: (text: string) => Promise<FormState>;
+  /** Rascunho já pronto (ex.: "Gerar perfil a partir do meu canal"): abre com a prévia. */
+  initialText?: string;
+  initialParsed?: ParsedProfile | null;
 }) {
   const router = useRouter();
-  const [text, setText] = useState("");
-  const [parsed, setParsed] = useState<ParsedProfile | null>(null);
+  const [text, setText] = useState(initialText);
+  const [parsed, setParsed] = useState<ParsedProfile | null>(initialParsed);
   const [result, setResult] = useState<FormState>(null);
   const [pending, start] = useTransition();
 

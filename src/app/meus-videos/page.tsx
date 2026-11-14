@@ -214,6 +214,9 @@ export default async function MyVideosPage({ searchParams }: { searchParams: Pro
               className="btn-secondary"
             />
           )}
+          <Link href={`/meus-canais/${c.id}#do-canal`} className="text-sm text-red-400 hover:underline">
+            Gerar o perfil do canal a partir destes vídeos →
+          </Link>
           <p className="text-xs text-zinc-500">
             Com o app aberto, ele confere sozinho a cada 5 minutos (vídeo novo, marcos de 1h, 3h, 24h…). Com o app fechado, use o <code>npm run track</code> no
             Agendador de Tarefas (README).
