@@ -83,7 +83,7 @@ export function SearchForm({
           />
           {suggestions.length > 0 && (
             <div className="mt-2">
-              <span className="text-xs text-zinc-500">Sugestões tiradas dos títulos que mais deram view no nicho (clique para usar):</span>
+              <span className="text-xs text-zinc-500">Sugestões dos títulos que mais deram view no nicho. Clique para usar:</span>
               <div className="mt-1 flex flex-wrap gap-1.5">
                 {suggestions.map((s) => (
                   <button
@@ -202,16 +202,18 @@ export function ActionButton({
   className = "btn-secondary",
   pendingText,
   title,
+  formClassName = "flex flex-col items-end gap-1",
 }: {
   action: () => Promise<FormState>;
   children: React.ReactNode;
   className?: string;
   pendingText?: string;
   title?: string;
+  formClassName?: string;
 }) {
   const [state, formAction] = useActionState(async () => action(), null);
   return (
-    <form action={formAction} className="flex flex-col items-end gap-1" title={title}>
+    <form action={formAction} className={formClassName} title={title}>
       <Submit className={className} pendingText={pendingText}>
         {children}
       </Submit>
@@ -233,5 +235,36 @@ export function FeaturedButton({ action, cost, disabled }: { action: () => Promi
       </div>
       <Feedback state={state} />
     </form>
+  );
+}
+
+/** Escolha do jeito de buscar: só um formulário aparece por vez. */
+export function MethodTabs({ tabs, initial }: { tabs: { key: string; label: string; hint: string; content: React.ReactNode }[]; initial?: string }) {
+  const [cur, setCur] = useState(initial ?? tabs[0]?.key);
+  const active = tabs.find((t) => t.key === cur) ?? tabs[0];
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-1 rounded-lg bg-ink p-1">
+        {tabs.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            onClick={() => setCur(t.key)}
+            className={`flex-1 rounded-md px-3 py-1.5 text-sm whitespace-nowrap ${
+              t.key === active.key ? "bg-raised font-medium text-white shadow" : "text-zinc-400 hover:text-white"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+      <p className="text-xs text-zinc-500">{active.hint}</p>
+      {tabs.map((t) => (
+        // Mantém os formulários montados (não perde o que foi digitado ao trocar de aba)
+        <div key={t.key} hidden={t.key !== active.key}>
+          {t.content}
+        </div>
+      ))}
+    </div>
   );
 }

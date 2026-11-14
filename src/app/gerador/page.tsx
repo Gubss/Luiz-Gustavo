@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { FilterChip, PageHeader } from "@/components/ui";
 import { prisma } from "@/lib/db";
 import { fmtCompact, fmtDateTime } from "@/lib/format";
 import { modelLabel, usdToBrl, type CostEstimate } from "@/lib/claude";
@@ -18,18 +19,7 @@ const usd = (n: number) => `US$ ${n.toFixed(n < 0.1 ? 3 : 2).replace(".", ",")}`
 const brl = (n: number) => `R$ ${(n * usdToBrl()).toFixed(2).replace(".", ",")}`;
 const estimateHint = (e: CostEstimate) => `${modelLabel(e.model)} · custo estimado ${usd(e.usd)} a ${usd(e.usdMax)} (≈ ${brl(e.usd)} a ${brl(e.usdMax)})`;
 
-function Chip({ href, active, children }: { href: string; active: boolean; children: React.ReactNode }) {
-  return (
-    <Link
-      href={href}
-      className={`rounded-full border px-3 py-1 text-sm ${
-        active ? "border-red-500 bg-red-600/20 text-white" : "border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-white"
-      }`}
-    >
-      {children}
-    </Link>
-  );
-}
+const Chip = FilterChip;
 
 export default async function GeneratorPage({ searchParams }: PageProps<"/gerador">) {
   const sp: SP = await searchParams;
@@ -42,7 +32,7 @@ export default async function GeneratorPage({ searchParams }: PageProps<"/gerado
   if (channels.length === 0)
     return (
       <div className="mx-auto max-w-3xl space-y-3">
-        <h1 className="text-2xl font-bold">Gerador</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Gerador</h1>
         <p className="text-zinc-400">
           Cadastre seu canal primeiro em{" "}
           <Link href="/meus-canais" className="text-red-400 hover:underline">
@@ -93,13 +83,16 @@ export default async function GeneratorPage({ searchParams }: PageProps<"/gerado
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
-      <header>
-        <h1 className="text-2xl font-bold">Gerador de temas, títulos e roteiros</h1>
-        <p className="text-sm text-zinc-400">
-          Pega o <b>como</b> da cartilha (gancho, fórmula de título, ritmo, virada, fecho) e conta a história no <b>formato do seu canal</b>, com os
-          seus personagens. Os vídeos estudados podem ser de outro estilo: o gerador usa a mecânica, não o formato.
-        </p>
-      </header>
+      <PageHeader
+        title="Gerador de ideias"
+        subtitle="Ideias e roteiros no formato do seu canal, usando o que funciona na cartilha."
+        help={
+          <p>
+            Pega o <b>como</b> da cartilha (gancho, fórmula de título, ritmo, virada, fecho) e conta a história no <b>formato do seu canal</b>, com os
+            seus personagens. Os vídeos estudados podem ser de outro estilo: o gerador usa a mecânica, não o formato.
+          </p>
+        }
+      />
 
       <div className="space-y-2">
         <div className="flex flex-wrap items-center gap-2">
@@ -136,7 +129,7 @@ export default async function GeneratorPage({ searchParams }: PageProps<"/gerado
       {/* O que entra no pedido */}
       <section className="grid gap-3 md:grid-cols-3">
         <div className="card space-y-1 p-4 text-sm">
-          <div className="text-xs uppercase tracking-wide text-zinc-500">Perfil do canal</div>
+          <div className="text-xs text-zinc-500">Perfil do canal</div>
           <div className="font-medium">{channel.name}</div>
           <div className="text-zinc-400">
             {channel._count.scripts} {channel._count.scripts === 1 ? "roteiro publicado" : "roteiros publicados"} cadastrados
@@ -160,7 +153,7 @@ export default async function GeneratorPage({ searchParams }: PageProps<"/gerado
           </Link>
         </div>
         <div className="card space-y-1 p-4 text-sm">
-          <div className="text-xs uppercase tracking-wide text-zinc-500">Cartilha ({formatLabel(format, true)})</div>
+          <div className="text-xs text-zinc-500">Cartilha ({formatLabel(format, true)})</div>
           {ctx.playbook ? (
             <>
               <div className="font-medium">{ctx.nicheName}</div>
@@ -186,7 +179,7 @@ export default async function GeneratorPage({ searchParams }: PageProps<"/gerado
           )}
         </div>
         <div className="card space-y-1 p-4 text-sm">
-          <div className="text-xs uppercase tracking-wide text-zinc-500">Vídeo de referência (opcional)</div>
+          <div className="text-xs text-zinc-500">Vídeo de referência (opcional)</div>
           {ctx.reference ? (
             <>
               <div className="font-medium">{ctx.reference.title}</div>
@@ -206,12 +199,12 @@ export default async function GeneratorPage({ searchParams }: PageProps<"/gerado
           <summary className="cursor-pointer px-4 py-3 text-sm text-zinc-300">
             Adaptar um vídeo estudado ({studies.length} {formatLabel(format, studies.length !== 1)} no nicho)
           </summary>
-          <ul className="divide-y divide-zinc-800 border-t border-zinc-800">
+          <ul className="divide-y divide-line border-t border-line">
             {studies.map((st) => (
               <li key={st.id}>
                 <Link
                   href={href({ ref: st.id === ctx.reference?.id ? undefined : st.id })}
-                  className={`flex items-center gap-3 px-4 py-2 hover:bg-zinc-900 ${st.id === ctx.reference?.id ? "bg-red-950/30" : ""}`}
+                  className={`flex items-center gap-3 px-4 py-2 hover:bg-raised ${st.id === ctx.reference?.id ? "bg-red-950/30" : ""}`}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={st.thumbnailUrl ?? `https://i.ytimg.com/vi/${st.externalId}/mqdefault.jpg`} alt="" className="h-9 w-16 shrink-0 rounded object-cover" />

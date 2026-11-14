@@ -3,100 +3,110 @@ import { prisma } from "@/lib/db";
 import { IDEA_STATUS } from "@/lib/idea-status";
 import { IdeaCard } from "@/components/IdeaCard";
 import { repeatsForIdeas } from "@/lib/my-catalog";
+import { EmptyState, FilterChip, FilterRow, PageHeader, Pagination, SearchBox, Tabs, makeHref, one, paginate, type SP } from "@/components/ui";
 
-type SP = Record<string, string | string[] | undefined>;
-const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
-
-function Chip({ href, active, children }: { href: string; active: boolean; children: React.ReactNode }) {
-  return (
-    <Link
-      href={href}
-      className={`rounded-full border px-3 py-1 text-sm ${
-        active ? "border-red-500 bg-red-600/20 text-white" : "border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-white"
-      }`}
-    >
-      {children}
-    </Link>
-  );
-}
+const PER_PAGE = 12;
 
 export default async function IdeasPage({ searchParams }: PageProps<"/ideias">) {
   const sp: SP = await searchParams;
   const canal = one(sp.canal);
   const status = one(sp.status);
-  const [channels, ideas, counts] = await Promise.all([
+  const formato = one(sp.formato);
+  const text = (one(sp.q) ?? "").trim();
+  const base = { ...(canal ? { myChannelId: canal } : {}), ...(formato ? { format: formato } : {}) };
+  const [channels, all, counts, formatCounts] = await Promise.all([
     prisma.myChannel.findMany({ orderBy: { createdAt: "asc" }, select: { id: true, name: true } }),
     prisma.idea.findMany({
-      where: {
-        ...(canal ? { myChannelId: canal } : {}),
-        ...(status ? { status } : { status: { not: "DISCARDED" } }),
-      },
+      where: { ...base, ...(status ? { status } : { status: { not: "DISCARDED" } }) },
       include: { publishedVideo: true },
       orderBy: { updatedAt: "desc" },
-      take: 200,
     }),
-    prisma.idea.groupBy({ by: ["status"], where: canal ? { myChannelId: canal } : {}, _count: true }),
+    prisma.idea.groupBy({ by: ["status"], where: base, _count: true }),
+    prisma.idea.groupBy({ by: ["format"], where: canal ? { myChannelId: canal, status: { not: "DISCARDED" } } : { status: { not: "DISCARDED" } }, _count: true }),
   ]);
-  const repeats = await repeatsForIdeas(ideas);
+  // Busca por texto em título, tema e premissa
+  const norm = (x: string) => x.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  const filtered = text
+    ? all.filter((i) => norm(`${i.chosenTitle ?? ""} ${i.titles} ${i.theme} ${i.ideaData ?? ""}`).includes(norm(text)))
+    : all;
+  const pg = paginate(filtered, one(sp.page), PER_PAGE);
+  const repeats = await repeatsForIdeas(pg.slice);
   const names = new Map(channels.map((c) => [c.id, c.name]));
   const countOf = (s: string) => counts.find((c) => c.status === s)?._count ?? 0;
-  const href = (patch: Record<string, string | undefined>) => {
-    const p = new URLSearchParams();
-    for (const [k, v] of Object.entries({ canal, status, ...patch })) if (v) p.set(k, v);
-    return `/ideias${p.size ? `?${p}` : ""}`;
-  };
+  const active = counts.filter((c) => c.status !== "DISCARDED").reduce((n, c) => n + c._count, 0);
+  const fCount = (f: string) => formatCounts.find((c) => c.format === f)?._count ?? 0;
+  const href = makeHref("/ideias", { canal, status, formato, q: text || undefined });
 
   return (
     <div className="mx-auto max-w-6xl space-y-5">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold">Banco de ideias</h1>
-          <p className="text-sm text-zinc-400">Todas as ideias e roteiros gerados. Mude o status conforme for produzindo.</p>
-        </div>
-        <Link href={canal ? `/gerador?canal=${canal}` : "/gerador"} className="btn-primary">
-          Gerar mais ideias
-        </Link>
-      </header>
+      <PageHeader
+        title="Banco de ideias"
+        subtitle="Tudo que o gerador criou. Mude o status conforme for produzindo."
+        actions={
+          <Link href={canal ? `/gerador?canal=${canal}` : "/gerador"} className="btn-primary">
+            Gerar mais ideias
+          </Link>
+        }
+      />
 
-      {channels.length > 1 && (
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm text-zinc-500">Canal:</span>
-          <Chip href={href({ canal: undefined })} active={!canal}>
-            todos
-          </Chip>
-          {channels.map((c) => (
-            <Chip key={c.id} href={href({ canal: c.id })} active={canal === c.id}>
-              {c.name}
-            </Chip>
-          ))}
+      <Tabs
+        items={[
+          { href: href({ status: undefined, page: undefined }), label: "Ativas", count: active, active: !status },
+          ...Object.entries(IDEA_STATUS).map(([k, l]) => ({ href: href({ status: k, page: undefined }), label: l, count: countOf(k), active: status === k })),
+        ]}
+      />
+
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-4">
+          {channels.length > 1 && (
+            <FilterRow label="Canal">
+              <FilterChip href={href({ canal: undefined, page: undefined })} active={!canal}>
+                Todos
+              </FilterChip>
+              {channels.map((c) => (
+                <FilterChip key={c.id} href={href({ canal: c.id, page: undefined })} active={canal === c.id}>
+                  {c.name}
+                </FilterChip>
+              ))}
+            </FilterRow>
+          )}
+          <FilterRow label="Formato">
+            <FilterChip href={href({ formato: undefined, page: undefined })} active={!formato}>
+              Todos
+            </FilterChip>
+            <FilterChip href={href({ formato: "short", page: undefined })} active={formato === "short"}>
+              Shorts <span className="text-zinc-500">{fCount("short")}</span>
+            </FilterChip>
+            <FilterChip href={href({ formato: "long", page: undefined })} active={formato === "long"}>
+              Longos <span className="text-zinc-500">{fCount("long")}</span>
+            </FilterChip>
+          </FilterRow>
         </div>
-      )}
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm text-zinc-500">Status:</span>
-        <Chip href={href({ status: undefined })} active={!status}>
-          ativas
-        </Chip>
-        {Object.entries(IDEA_STATUS).map(([k, l]) => (
-          <Chip key={k} href={href({ status: k })} active={status === k}>
-            {l} ({countOf(k)})
-          </Chip>
-        ))}
+        <SearchBox action="/ideias" q={text} keep={{ canal, status, formato }} placeholder="Buscar por título ou assunto" />
       </div>
 
-      {ideas.length === 0 ? (
-        <div className="card p-10 text-center text-zinc-400">
-          Nenhuma ideia aqui. Use o{" "}
-          <Link href="/gerador" className="text-red-400 hover:underline">
-            Gerador
-          </Link>
-          .
-        </div>
+      {pg.total === 0 ? (
+        <EmptyState
+          title={text ? `Nenhuma ideia com “${text}”` : "Nenhuma ideia aqui"}
+          action={
+            !text && (
+              <Link href="/gerador" className="btn-primary">
+                Abrir o Gerador
+              </Link>
+            )
+          }
+        >
+          {text ? "Tente outra palavra ou limpe a busca." : "As ideias que você gerar aparecem aqui."}
+        </EmptyState>
       ) : (
-        <div className="grid gap-3 md:grid-cols-2">
-          {ideas.map((i) => (
-            <IdeaCard key={i.id} idea={i} channelName={channels.length > 1 && i.myChannelId ? names.get(i.myChannelId) : null} repeats={repeats.get(i.id)} />
-          ))}
-        </div>
+        <>
+          <div className="grid items-start gap-3 md:grid-cols-2">
+            {pg.slice.map((i) => (
+              <IdeaCard key={i.id} idea={i} channelName={channels.length > 1 && i.myChannelId ? names.get(i.myChannelId) : null} repeats={repeats.get(i.id)} />
+            ))}
+          </div>
+          <Pagination page={pg.page} pages={pg.pages} total={pg.total} label="ideias" href={(n) => href({ page: String(n) })} />
+        </>
       )}
     </div>
   );

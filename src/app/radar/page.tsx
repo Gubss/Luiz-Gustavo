@@ -6,6 +6,9 @@ import { RadarCard } from "@/components/RadarCard";
 import { CollectButton } from "@/components/CollectControls";
 import { fmtCompact, fmtDateTime, fmtMult } from "@/lib/format";
 import { getSettings } from "@/lib/settings";
+import { EmptyState, FilterChip as Chip, PageHeader, Pagination, Tabs, paginate } from "@/components/ui";
+
+const PER_PAGE = 24;
 
 type SP = Record<string, string | string[] | undefined>;
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
@@ -26,19 +29,6 @@ function parseFilters(sp: SP, defaults: { days: number; mult: number }): RadarFi
   };
 }
 
-function Chip({ href, active, children }: { href: string; active: boolean; children: React.ReactNode }) {
-  return (
-    <Link
-      href={href}
-      className={`rounded-full border px-3 py-1 text-sm ${
-        active ? "border-red-500 bg-red-600/20 text-white" : "border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-white"
-      }`}
-    >
-      {children}
-    </Link>
-  );
-}
-
 export default async function RadarPage({ searchParams }: PageProps<"/radar">) {
   const sp = await searchParams;
   const niches = await prisma.niche.findMany({ orderBy: { createdAt: "asc" }, select: { id: true, name: true } });
@@ -57,60 +47,53 @@ export default async function RadarPage({ searchParams }: PageProps<"/radar">) {
       small: f.onlySmall ? "1" : undefined,
       rising: f.onlyRising ? "1" : undefined,
       all: f.includeAll ? "1" : undefined,
+      page: undefined,
       ...patch,
     };
     for (const [k, v] of Object.entries(cur)) if (v !== undefined && v !== "") q.set(k, String(v));
     return `/radar?${q}`;
   };
 
+  const pg = paginate(items, one(sp.page), PER_PAGE);
+
   return (
     <div className="mx-auto max-w-7xl space-y-5">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold">Radar de outliers</h1>
-          <p className="text-sm text-zinc-400">
-            {items.length} de {totalInWindow} {f.format === "short" ? "Shorts" : "vídeos longos"} dos últimos {f.days} dias ·{" "}
-            {channelCount} canais · última coleta: {last ? `${fmtDateTime(last.startedAt)} (${last.status})` : "nunca"}
-          </p>
-        </div>
-        <CollectButton />
-      </header>
+      <PageHeader
+        title="Radar de outliers"
+        subtitle={
+          <>
+            {items.length} de {totalInWindow} {f.format === "short" ? "Shorts" : "vídeos longos"} dos últimos {f.days} dias passaram do mínimo · {channelCount} canais
+            <span className="text-zinc-500"> · última coleta {last ? `${fmtDateTime(last.startedAt)}${last.status !== "ok" ? ` (${last.status})` : ""}` : "nunca"}</span>
+          </>
+        }
+        actions={<CollectButton />}
+      />
 
-      {/* Abas Shorts / Longos */}
-      <div className="flex gap-1 border-b border-zinc-800">
-        {(["short", "long"] as const).map((fm) => (
-          <Link
-            key={fm}
-            href={href({ format: fm })}
-            className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium ${
-              f.format === fm ? "border-red-500 text-white" : "border-transparent text-zinc-400 hover:text-white"
-            }`}
-          >
-            {fm === "short" ? "Shorts" : "Vídeos longos"}
-          </Link>
-        ))}
-      </div>
+      <Tabs
+        items={(["short", "long"] as const).map((fm) => ({ href: href({ format: fm }), label: fm === "short" ? "Shorts" : "Vídeos longos", active: f.format === fm }))}
+      />
 
       {/* Filtros */}
-      <div className="card flex flex-wrap items-center gap-x-6 gap-y-3 p-4">
-        <form action="/radar" className="flex items-center gap-2">
-          {Object.entries({ format: f.format, days: f.days, mult: f.minMult, sort: f.sort }).map(([k, v]) => (
-            <input key={k} type="hidden" name={k} value={v} />
-          ))}
-          <span className="label mb-0">Nicho</span>
-          <select name="niche" defaultValue={f.nicheId ?? ""} className="input w-auto py-1">
-            <option value="">Todos</option>
-            {niches.map((n) => (
-              <option key={n.id} value={n.id}>
-                {n.name}
-              </option>
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2.5">
+        {niches.length > 1 && (
+          <form action="/radar" className="flex items-center gap-2">
+            {Object.entries({ format: f.format, days: f.days, mult: f.minMult, sort: f.sort }).map(([k, v]) => (
+              <input key={k} type="hidden" name={k} value={v} />
             ))}
-          </select>
-          <button className="btn-ghost px-2 py-1">Filtrar</button>
-        </form>
+            <select name="niche" defaultValue={f.nicheId ?? ""} className="input w-auto py-1" aria-label="Nicho">
+              <option value="">Todos os nichos</option>
+              {niches.map((n) => (
+                <option key={n.id} value={n.id}>
+                  {n.name}
+                </option>
+              ))}
+            </select>
+            <button className="btn-ghost btn-sm">Filtrar</button>
+          </form>
+        )}
 
-        <div className="flex items-center gap-2">
-          <span className="label mb-0">Janela</span>
+        <div className="flex items-center gap-1.5">
+          <span className="mr-1 text-xs text-zinc-500">Publicados em</span>
           {[7, 14, 30].map((d) => (
             <Chip key={d} href={href({ days: d })} active={f.days === d}>
               {d} dias
@@ -118,8 +101,8 @@ export default async function RadarPage({ searchParams }: PageProps<"/radar">) {
           ))}
         </div>
 
-        <div className="flex items-center gap-2">
-          <span className="label mb-0">Mínimo</span>
+        <div className="flex items-center gap-1.5" title="Quantas vezes o vídeo passou a mediana do próprio canal">
+          <span className="mr-1 text-xs text-zinc-500">Mínimo</span>
           {[3, 5, 10, 20].map((m) => (
             <Chip key={m} href={href({ mult: m })} active={f.minMult === m}>
               {m}x
@@ -127,13 +110,13 @@ export default async function RadarPage({ searchParams }: PageProps<"/radar">) {
           ))}
         </div>
 
-        <div className="flex items-center gap-2">
-          <span className="label mb-0">Ordenar</span>
+        <div className="flex items-center gap-1.5">
+          <span className="mr-1 text-xs text-zinc-500">Ordenar</span>
           {(
             [
               ["mult", "x média"],
               ["subs", "x inscritos"],
-              ["vpd", "Velocidade"],
+              ["vpd", "Views por dia"],
               ["views", "Views"],
             ] as const
           ).map(([k, l]) => (
@@ -143,7 +126,7 @@ export default async function RadarPage({ searchParams }: PageProps<"/radar">) {
           ))}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <Chip href={href({ small: f.onlySmall ? undefined : "1" })} active={!!f.onlySmall}>
             Só canal pequeno
           </Chip>
@@ -157,9 +140,14 @@ export default async function RadarPage({ searchParams }: PageProps<"/radar">) {
       </div>
 
       {channelCount === 0 ? (
-        <div className="card p-10 text-center text-zinc-400">
-          Nenhum canal monitorado ainda. <Link href="/nichos" className="text-red-400 hover:underline">Adicione canais a um nicho</Link>.
-        </div>
+        <EmptyState
+          title="Nenhum canal monitorado ainda"
+          action={
+            <Link href="/nichos" className="btn-primary">
+              Adicionar canais a um nicho
+            </Link>
+          }
+        />
       ) : items.length === 0 ? (
         <EmptyExplanation
           format={f.format}
@@ -177,11 +165,14 @@ export default async function RadarPage({ searchParams }: PageProps<"/radar">) {
           lowerMultHref={f.minMult > 3 ? href({ mult: 3 }) : undefined}
         />
       ) : (
-        <div className={`grid gap-4 ${f.format === "short" ? "sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" : "md:grid-cols-2 xl:grid-cols-3"}`}>
-          {items.map((it) => (
-            <RadarCard key={it.video.id} item={it} />
-          ))}
-        </div>
+        <>
+          <div className={`grid gap-3 ${f.format === "short" ? "sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5" : "md:grid-cols-2 xl:grid-cols-3"}`}>
+            {pg.slice.map((it) => (
+              <RadarCard key={it.video.id} item={it} />
+            ))}
+          </div>
+          <Pagination page={pg.page} pages={pg.pages} total={pg.total} label="vídeos" href={(n) => href({ page: n })} />
+        </>
       )}
     </div>
   );
@@ -247,7 +238,7 @@ function EmptyExplanation(p: {
         </p>
       </div>
       <table className="w-full text-left">
-        <thead className="text-xs uppercase text-zinc-500">
+        <thead className="text-xs text-zinc-500">
           <tr>
             <th className="py-1 font-medium">Canal</th>
             <th className="py-1 font-medium">{p.format === "short" ? "Shorts" : "Longos"} na janela</th>
@@ -257,7 +248,7 @@ function EmptyExplanation(p: {
         </thead>
         <tbody>
           {rows.map((d) => (
-            <tr key={d.channelId} className="border-t border-zinc-800 align-top">
+            <tr key={d.channelId} className="border-t border-line align-top">
               <td className="py-2 pr-3 text-zinc-200">{d.title}</td>
               <td className="py-2 pr-3">{d.inWindow}</td>
               <td className="py-2 pr-3">

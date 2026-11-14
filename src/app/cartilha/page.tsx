@@ -21,6 +21,8 @@ import { ActionButton } from "@/app/video/[id]/forms";
 import { generatePlaybookAction } from "./actions";
 import { runningJobsFor } from "@/lib/jobs";
 import { RunningNote } from "@/components/RunningNote";
+import { Chevron, Collapsible, EmptyState, FilterChip, PageHeader } from "@/components/ui";
+import { ClampText } from "@/components/ui-client";
 
 type SP = Record<string, string | string[] | undefined>;
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
@@ -40,23 +42,12 @@ function parse<T>(json: string | null | undefined): T | null {
   }
 }
 
-function Chip({ href, active, children }: { href: string; active: boolean; children: React.ReactNode }) {
-  return (
-    <Link
-      href={href}
-      className={`rounded-full border px-3 py-1 text-sm ${
-        active ? "border-red-500 bg-red-600/20 text-white" : "border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-white"
-      }`}
-    >
-      {children}
-    </Link>
-  );
-}
+const Chip = FilterChip;
 
 function Tile({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-3">
-      <div className="text-[10px] uppercase tracking-wide text-zinc-500">{label}</div>
+    <div className="card-raised p-3">
+      <div className="text-xs text-zinc-500">{label}</div>
       <div className="text-lg font-semibold tabular-nums">{value}</div>
       {hint && <div className="mt-0.5 text-[11px] leading-tight text-zinc-500">{hint}</div>}
     </div>
@@ -64,7 +55,7 @@ function Tile({ label, value, hint }: { label: string; value: string; hint?: str
 }
 
 function H3({ children }: { children: React.ReactNode }) {
-  return <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-zinc-400">{children}</h3>;
+  return <h3 className="mb-2 text-sm font-semibold text-zinc-300">{children}</h3>;
 }
 
 const range = (m: Med, unit = "", f: (n: number | null) => string = num) =>
@@ -95,6 +86,7 @@ function StatsPanel({ st }: { st: PlaybookStats }) {
         <Tile label="Algo novo a cada" value={st.beatInterval.value != null ? `${num(st.beatInterval.value)}s` : "—"} hint={range(st.beatInterval, "s")} />
         <Tile label="Maior buraco" value={st.maxGap.value != null ? `${num(st.maxGap.value)}s` : "—"} hint={range(st.maxGap, "s")} />
       </div>
+      <Collapsible title={<span className="text-sm">Ver todas as medidas (título, abertura, gatilhos, esqueleto)</span>} bodyClassName="mt-4 space-y-4">
       <div className="grid gap-4 text-sm md:grid-cols-3">
         <div>
           <H3>Título</H3>
@@ -168,6 +160,7 @@ function StatsPanel({ st }: { st: PlaybookStats }) {
           </p>
         </div>
       )}
+      </Collapsible>
     </div>
   );
 }
@@ -198,157 +191,201 @@ function Refs({ ids, studyIds, titles, total }: { ids: number[]; studyIds: strin
   );
 }
 
+function Item({ head, children }: { head: React.ReactNode; children?: React.ReactNode }) {
+  if (!children) return <li className="rounded-lg border border-line px-3 py-2">{head}</li>;
+  return (
+    <li className="rounded-lg border border-line">
+      <details className="group">
+        <summary className="flex items-start gap-2 px-3 py-2 hover:bg-raised">
+          <span className="mt-1">
+            <Chevron />
+          </span>
+          <span className="min-w-0 flex-1">{head}</span>
+        </summary>
+        <div className="space-y-1 px-3 pt-1 pb-3 pl-8">{children}</div>
+      </details>
+    </li>
+  );
+}
+
 function PlaybookView({ c, studyIds, titles, total }: { c: PlaybookContent; studyIds: string[]; titles: Map<string, { title: string; channel: string }>; total: number }) {
   const R = (ids: number[]) => <Refs ids={ids} studyIds={studyIds} titles={titles} total={total} />;
+  const box = "rounded-lg border border-line p-4";
   return (
-    <div className="space-y-6 text-sm">
-      <p className="text-base text-zinc-200">{c.resumo}</p>
+    <div className="space-y-4 text-sm">
+      <ClampText lines={4} className="text-[15px] leading-relaxed text-zinc-200">
+        {c.resumo}
+      </ClampText>
 
-      <div>
-        <H3>Ganchos</H3>
-        <ul className="space-y-2">
-          {c.ganchos.map((g, i) => (
-            <li key={i} className="rounded-lg border border-zinc-800 p-3">
-              <div className="font-medium text-zinc-100">
-                {g.padrao}
-                {R(g.estudos)}
-              </div>
-              <p className="mt-1 text-zinc-300">{g.comoFazer}</p>
-              {g.exemplos.map((e, j) => (
-                <blockquote key={j} className="mt-1 border-l-2 border-red-500 pl-2 italic text-zinc-400">
-                  {e}
-                </blockquote>
-              ))}
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      <div>
-        <H3>Fórmulas de título</H3>
-        <ul className="space-y-2">
-          {c.formulasDeTitulo.map((f, i) => (
-            <li key={i} className="rounded-lg border border-zinc-800 p-3">
-              <div>
-                <span className="rounded bg-zinc-950 px-2 py-1 font-mono text-xs text-amber-300">{f.formula}</span>
-                {R(f.estudos)}
-              </div>
-              <p className="mt-2 text-zinc-300">{f.porqueFunciona}</p>
-              {f.exemplos.length > 0 && <p className="mt-1 text-xs text-zinc-500">Ex.: {f.exemplos.join(" · ")}</p>}
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2">
         <div>
-          <H3>Estrutura</H3>
-          <p className="mb-2 text-zinc-300">{c.estrutura.resumo}</p>
-          <ol className="space-y-1">
-            {c.estrutura.partes.map((p, i) => (
-              <li key={i} className="flex gap-3">
-                <span className="w-36 shrink-0 text-zinc-500">
-                  {p.parte} <span className="text-xs">({p.quando})</span>
-                </span>
-                <span className="text-zinc-200">{p.oQueFazer}</span>
-              </li>
-            ))}
-          </ol>
-        </div>
-        <div className="space-y-4">
-          <div>
-            <H3>Ritmo</H3>
-            <p className="text-zinc-300">{c.ritmo.resumo}</p>
-            <ul className="mt-1 list-disc space-y-1 pl-5 text-zinc-200">
-              {c.ritmo.regras.map((x, i) => (
-                <li key={i}>{x}</li>
-              ))}
-            </ul>
-          </div>
-          <div>
-            <H3>Fecho</H3>
-            <p className="text-zinc-300">{c.fecho.resumo}</p>
-            <ul className="mt-1 list-disc space-y-1 pl-5 text-zinc-200">
-              {c.fecho.regras.map((x, i) => (
-                <li key={i}>{x}</li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-3">
-        {c.thumbnail.length > 0 && (
-          <div>
-            <H3>Thumbnail</H3>
-            <ul className="space-y-1 text-zinc-200">
-              {c.thumbnail.map((t, i) => (
-                <li key={i}>
-                  {t.padrao}
-                  {R(t.estudos)}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-        {c.temasQueFuncionam.length > 0 && (
-          <div>
-            <H3>Temas que funcionam</H3>
-            <ul className="space-y-1 text-zinc-200">
-              {c.temasQueFuncionam.map((t, i) => (
-                <li key={i}>
-                  {t.tema}
-                  {R(t.estudos)}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-        {c.evitar.length > 0 && (
-          <div>
-            <H3>Evitar</H3>
-            <ul className="space-y-1 text-zinc-200">
-              {c.evitar.map((t, i) => (
-                <li key={i}>
-                  {t.erro}
-                  {R(t.estudos)}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-3">
-        <div>
-          <H3>Checklist antes de gravar</H3>
-          <ul className="space-y-1 text-zinc-200">
-            {c.checklist.map((x, i) => (
-              <li key={i}>☐ {x}</li>
+          <H3>Ganchos ({c.ganchos.length})</H3>
+          <ul className="space-y-1.5">
+            {c.ganchos.map((g, i) => (
+              <Item
+                key={i}
+                head={
+                  <span className="font-medium text-zinc-100">
+                    {g.padrao}
+                    {R(g.estudos)}
+                  </span>
+                }
+              >
+                <p className="text-zinc-300">{g.comoFazer}</p>
+                {g.exemplos.map((e, j) => (
+                  <blockquote key={j} className="border-l-2 border-red-500/70 pl-2 text-zinc-400 italic">
+                    {e}
+                  </blockquote>
+                ))}
+              </Item>
             ))}
           </ul>
         </div>
-        {c.publicoPede.length > 0 && (
-          <div>
-            <H3>O público pede</H3>
-            <ul className="list-disc space-y-1 pl-5 text-zinc-200">
-              {c.publicoPede.map((x, i) => (
-                <li key={i}>{x}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-        {c.lacunas.length > 0 && (
-          <div>
-            <H3>O que ainda falta saber</H3>
-            <ul className="list-disc space-y-1 pl-5 text-amber-200/90">
-              {c.lacunas.map((x, i) => (
-                <li key={i}>{x}</li>
-              ))}
-            </ul>
-          </div>
-        )}
+        <div>
+          <H3>Fórmulas de título ({c.formulasDeTitulo.length})</H3>
+          <ul className="space-y-1.5">
+            {c.formulasDeTitulo.map((f, i) => (
+              <Item
+                key={i}
+                head={
+                  <span>
+                    <span className="font-mono text-xs leading-relaxed text-amber-200">{f.formula}</span>
+                    {R(f.estudos)}
+                  </span>
+                }
+              >
+                <p className="text-zinc-300">{f.porqueFunciona}</p>
+                {f.exemplos.length > 0 && <p className="text-xs text-zinc-500">Ex.: {f.exemplos.join(" · ")}</p>}
+              </Item>
+            ))}
+          </ul>
+        </div>
       </div>
+
+      {c.checklist.length > 0 && (
+        <Collapsible title={`Checklist antes de gravar (${c.checklist.length})`} className={box}>
+          <ul className="space-y-1 text-zinc-200">
+            {c.checklist.map((x, i) => (
+              <li key={i} className="flex gap-2">
+                <span className="text-zinc-500">☐</span>
+                {x}
+              </li>
+            ))}
+          </ul>
+        </Collapsible>
+      )}
+
+      <Collapsible title="Estrutura, ritmo e fecho" meta={`${c.estrutura.partes.length} partes`} className={box}>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div>
+            <H3>Estrutura</H3>
+            <p className="mb-2 text-zinc-300">{c.estrutura.resumo}</p>
+            <ol className="space-y-1">
+              {c.estrutura.partes.map((p, i) => (
+                <li key={i} className="flex gap-3">
+                  <span className="w-36 shrink-0 text-zinc-500">
+                    {p.parte} <span className="text-xs">({p.quando})</span>
+                  </span>
+                  <span className="text-zinc-200">{p.oQueFazer}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+          <div className="space-y-4">
+            <div>
+              <H3>Ritmo</H3>
+              <p className="text-zinc-300">{c.ritmo.resumo}</p>
+              <ul className="mt-1 list-disc space-y-1 pl-5 text-zinc-200">
+                {c.ritmo.regras.map((x, i) => (
+                  <li key={i}>{x}</li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <H3>Fecho</H3>
+              <p className="text-zinc-300">{c.fecho.resumo}</p>
+              <ul className="mt-1 list-disc space-y-1 pl-5 text-zinc-200">
+                {c.fecho.regras.map((x, i) => (
+                  <li key={i}>{x}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+      </Collapsible>
+
+      {(c.thumbnail.length > 0 || c.temasQueFuncionam.length > 0 || c.evitar.length > 0) && (
+        <Collapsible title="Thumbnail, temas que funcionam e o que evitar" className={box}>
+          <div className="grid gap-4 md:grid-cols-3">
+            {c.thumbnail.length > 0 && (
+              <div>
+                <H3>Thumbnail</H3>
+                <ul className="space-y-1 text-zinc-200">
+                  {c.thumbnail.map((t, i) => (
+                    <li key={i}>
+                      {t.padrao}
+                      {R(t.estudos)}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {c.temasQueFuncionam.length > 0 && (
+              <div>
+                <H3>Temas que funcionam</H3>
+                <ul className="space-y-1 text-zinc-200">
+                  {c.temasQueFuncionam.map((t, i) => (
+                    <li key={i}>
+                      {t.tema}
+                      {R(t.estudos)}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {c.evitar.length > 0 && (
+              <div>
+                <H3>Evitar</H3>
+                <ul className="space-y-1 text-zinc-200">
+                  {c.evitar.map((t, i) => (
+                    <li key={i}>
+                      {t.erro}
+                      {R(t.estudos)}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        </Collapsible>
+      )}
+
+      {(c.publicoPede.length > 0 || c.lacunas.length > 0) && (
+        <Collapsible title="O que o público pede e o que ainda falta saber" className={box}>
+          <div className="grid gap-4 md:grid-cols-2">
+            {c.publicoPede.length > 0 && (
+              <div>
+                <H3>O público pede</H3>
+                <ul className="list-disc space-y-1 pl-5 text-zinc-200">
+                  {c.publicoPede.map((x, i) => (
+                    <li key={i}>{x}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {c.lacunas.length > 0 && (
+              <div>
+                <H3>O que ainda falta saber</H3>
+                <ul className="list-disc space-y-1 pl-5 text-amber-200/90">
+                  {c.lacunas.map((x, i) => (
+                    <li key={i}>{x}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        </Collapsible>
+      )}
     </div>
   );
 }
@@ -359,15 +396,18 @@ export default async function PlaybookPage({ searchParams }: PageProps<"/cartilh
 
   if (niches.length === 0)
     return (
-      <div className="mx-auto max-w-3xl space-y-3">
-        <h1 className="text-2xl font-bold">Cartilha do nicho</h1>
-        <p className="text-zinc-400">
-          Crie um nicho primeiro em{" "}
-          <Link href="/nichos" className="text-red-400 hover:underline">
-            Nichos e canais
-          </Link>{" "}
-          e estude alguns vídeos dele.
-        </p>
+      <div className="mx-auto max-w-3xl space-y-4">
+        <PageHeader title="Cartilha do nicho" />
+        <EmptyState
+          title="Crie um nicho primeiro"
+          action={
+            <Link href="/nichos" className="btn-primary">
+              Ir para Nichos e canais
+            </Link>
+          }
+        >
+          Depois estude alguns vídeos dele.
+        </EmptyState>
       </div>
     );
 
@@ -413,92 +453,40 @@ export default async function PlaybookPage({ searchParams }: PageProps<"/cartilh
   };
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
-      <header>
-        <h1 className="text-2xl font-bold">Cartilha do nicho</h1>
-        <p className="text-sm text-zinc-400">
-          Junta os vídeos que você estudou no nicho e mostra o que se repete: ganchos, fórmulas de título, estrutura e ritmo. Shorts e vídeos
-          longos têm cartilhas separadas.
-        </p>
-      </header>
+    <div className="mx-auto max-w-6xl space-y-5">
+      <PageHeader
+        title="Cartilha do nicho"
+        subtitle="O que se repete nos vídeos que você estudou: ganchos, títulos, estrutura e ritmo."
+        help={
+          <p>
+            Junta os estudos do nicho (Estudos de vídeo) e o Claude resume o padrão. Shorts e vídeos longos têm cartilhas separadas. As medidas
+            (duração, ritmo, título) são calculadas direto dos estudos, sem custo. As marcas &ldquo;visto em X de Y&rdquo; mostram em quantos estudos
+            cada padrão apareceu; clique no #número para abrir o estudo.
+          </p>
+        }
+      />
 
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm text-zinc-500">Nicho:</span>
-        {niches.map((n) => (
-          <Chip key={n.id} href={`/cartilha?niche=${n.id}`} active={n.id === niche.id}>
-            {n.name}
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+        {niches.length > 1 && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="mr-1 text-xs text-zinc-500">Nicho</span>
+            {niches.map((n) => (
+              <Chip key={n.id} href={`/cartilha?niche=${n.id}`} active={n.id === niche.id}>
+                {n.name}
+              </Chip>
+            ))}
+          </div>
+        )}
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="mr-1 text-xs text-zinc-500">Formato</span>
+          <Chip href={href({ format: "short", v: undefined })} active={format === "short"}>
+            Shorts <span className="text-zinc-500">{counts.short.ready}</span>
           </Chip>
-        ))}
+          <Chip href={href({ format: "long", v: undefined })} active={format === "long"}>
+            Vídeos longos <span className="text-zinc-500">{counts.long.ready}</span>
+          </Chip>
+        </div>
       </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm text-zinc-500">Formato:</span>
-        <Chip href={href({ format: "short", v: undefined })} active={format === "short"}>
-          Shorts ({counts.short.ready})
-        </Chip>
-        <Chip href={href({ format: "long", v: undefined })} active={format === "long"}>
-          Vídeos longos ({counts.long.ready})
-        </Chip>
-      </div>
-
-      {/* Base de estudos */}
-      <section className="card space-y-4 p-5">
-        <header className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-lg font-semibold">
-            Base: {studies.length} {studies.length === 1 ? "estudo" : "estudos"} de {formatLabel(format, true)}
-          </h2>
-          <span className={`rounded px-2 py-0.5 text-xs ${LEVEL_STYLE[level.key]}`}>confiança {level.label}</span>
-        </header>
-        <p className="text-sm text-zinc-400">{level.hint}</p>
-        {pending > 0 && (
-          <p className="text-sm text-amber-300">
-            {pending} {pending === 1 ? "vídeo tem" : "vídeos têm"} transcrição mas ainda não tem diagnóstico — só entram na cartilha depois do diagnóstico.
-          </p>
-        )}
-        {studies.length === 0 ? (
-          <p className="text-sm text-zinc-400">
-            Como começar: no{" "}
-            <Link href="/radar" className="text-red-400 hover:underline">
-              radar
-            </Link>
-            , clique em “Estudar” num {formatLabel(format)} que estourou e gere o diagnóstico. Vídeo estudado por link (fora do radar)? Na página
-            dele, escolha o nicho em “Entra na cartilha de”.
-          </p>
-        ) : (
-          <details className="rounded-lg border border-zinc-800" open={studies.length <= 4}>
-            <summary className="cursor-pointer px-3 py-2 text-sm text-zinc-300">Estudos usados</summary>
-            <ol className="divide-y divide-zinc-800">
-              {studies.map((st, i) => (
-                <li key={st.id}>
-                  <Link href={`/video/${st.id}`} className="flex items-center gap-3 px-3 py-2 hover:bg-zinc-900">
-                    <span className="w-6 shrink-0 text-xs text-zinc-500">#{i + 1}</span>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={st.thumbnailUrl ?? `https://i.ytimg.com/vi/${st.externalId}/mqdefault.jpg`} alt="" className="h-9 w-16 shrink-0 rounded object-cover" />
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm">{st.title}</div>
-                      <div className="text-xs text-zinc-500">
-                        {st.channelTitle} · {fmtCompact(st.viewCount)} views
-                        {st.metrics?.channel?.multAvg != null && ` · ${fmtMult(st.metrics.channel.multAvg)} a média do canal`}
-                        {!st.hasTranscript && " · sem transcrição"}
-                        {!st.content && " · importado (só texto)"}
-                        {st.comments && " · com comentários"}
-                      </div>
-                    </div>
-                  </Link>
-                </li>
-              ))}
-            </ol>
-          </details>
-        )}
-      </section>
-
-      {/* Medidas */}
-      {studies.length > 0 && (
-        <section className="card space-y-3 p-5">
-          <h2 className="text-lg font-semibold">Medidas dos estudos</h2>
-          <p className="text-xs text-zinc-500">Calculadas direto dos estudos (sem custo). Mediana de todos; passe o olho no “de … a …” para ver se variam muito.</p>
-          <StatsPanel st={stats} />
-        </section>
-      )}
 
       {/* Cartilha */}
       <section className="card space-y-4 p-5">
@@ -533,7 +521,7 @@ export default async function PlaybookPage({ searchParams }: PageProps<"/cartilh
           <>
             <PlaybookView c={content} studyIds={pbStudyIds} titles={titles} total={playbook!.diagnosisCount} />
             {playbook?.markdown && (
-              <details className="rounded-lg border border-zinc-800">
+              <details className="rounded-lg border border-line">
                 <summary className="cursor-pointer px-3 py-2 text-sm text-zinc-400">Texto para copiar (Markdown)</summary>
                 <textarea readOnly rows={16} className="input m-3 w-[calc(100%-1.5rem)] font-mono text-xs" defaultValue={playbook.markdown} />
               </details>
@@ -546,7 +534,7 @@ export default async function PlaybookPage({ searchParams }: PageProps<"/cartilh
         )}
 
         {est && (
-          <div className={content ? "border-t border-zinc-800 pt-4" : ""}>
+          <div className={content ? "border-t border-line pt-4" : ""}>
             {!s.anthropicApiKey && (
               <p className="mb-3 text-sm text-amber-300">
                 Falta a chave da Anthropic: cole a chave em <Link href="/configuracoes#chaves" className="underline">Configurações</Link> (não precisa reiniciar).
@@ -573,12 +561,12 @@ export default async function PlaybookPage({ searchParams }: PageProps<"/cartilh
         )}
 
         {versions.length > 1 && (
-          <details className="rounded-lg border border-zinc-800">
+          <details className="rounded-lg border border-line">
             <summary className="cursor-pointer px-3 py-2 text-sm text-zinc-400">Versões anteriores ({versions.length - 1})</summary>
-            <ul className="divide-y divide-zinc-800 text-sm">
+            <ul className="divide-y divide-line text-sm">
               {versions.map((v, i) => (
                 <li key={v.id}>
-                  <Link href={href({ v: i === 0 ? undefined : v.id })} className={`flex justify-between px-3 py-2 hover:bg-zinc-900 ${v.id === playbook?.id ? "text-white" : "text-zinc-400"}`}>
+                  <Link href={href({ v: i === 0 ? undefined : v.id })} className={`flex justify-between px-3 py-2 hover:bg-raised ${v.id === playbook?.id ? "text-white" : "text-zinc-400"}`}>
                     <span>
                       {fmtDateTime(v.createdAt)} · {v.diagnosisCount} {v.diagnosisCount === 1 ? "estudo" : "estudos"}
                       {i === 0 && " · mais recente"}
@@ -591,6 +579,70 @@ export default async function PlaybookPage({ searchParams }: PageProps<"/cartilh
           </details>
         )}
       </section>
+
+      {/* Base de estudos */}
+      <section className="card space-y-3 p-5">
+        <Collapsible
+          title={
+            <span className="text-base">
+              Base: {studies.length} {studies.length === 1 ? "estudo" : "estudos"} de {formatLabel(format, true)}
+            </span>
+          }
+          meta={<span className={`badge ${LEVEL_STYLE[level.key]}`}>confiança {level.label}</span>}
+          open={studies.length === 0}
+          bodyClassName="mt-3 space-y-3"
+        >
+        <p className="text-sm text-zinc-400">{level.hint}</p>
+        {pending > 0 && (
+          <p className="text-sm text-amber-300">
+            {pending} {pending === 1 ? "vídeo tem" : "vídeos têm"} transcrição mas ainda não tem diagnóstico — só entram na cartilha depois do diagnóstico.
+          </p>
+        )}
+        {studies.length === 0 ? (
+          <p className="text-sm text-zinc-400">
+            Como começar: no{" "}
+            <Link href="/radar" className="text-red-400 hover:underline">
+              radar
+            </Link>
+            , clique em “Estudar” num {formatLabel(format)} que estourou e gere o diagnóstico. Vídeo estudado por link (fora do radar)? Na página
+            dele, escolha o nicho em “Entra na cartilha de”.
+          </p>
+        ) : (
+          <ol className="divide-y divide-line rounded-lg border border-line">
+              {studies.map((st, i) => (
+                <li key={st.id}>
+                  <Link href={`/video/${st.id}`} className="flex items-center gap-3 px-3 py-2 hover:bg-raised">
+                    <span className="w-6 shrink-0 text-xs text-zinc-500">#{i + 1}</span>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={st.thumbnailUrl ?? `https://i.ytimg.com/vi/${st.externalId}/mqdefault.jpg`} alt="" className="h-9 w-16 shrink-0 rounded object-cover" />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm">{st.title}</div>
+                      <div className="text-xs text-zinc-500">
+                        {st.channelTitle} · {fmtCompact(st.viewCount)} views
+                        {st.metrics?.channel?.multAvg != null && ` · ${fmtMult(st.metrics.channel.multAvg)} a média do canal`}
+                        {!st.hasTranscript && " · sem transcrição"}
+                        {!st.content && " · importado (só texto)"}
+                        {st.comments && " · com comentários"}
+                      </div>
+                    </div>
+                  </Link>
+                </li>
+              ))}
+            </ol>
+        )}
+        </Collapsible>
+      </section>
+
+      {/* Medidas */}
+      {studies.length > 0 && (
+        <section className="card space-y-3 p-5">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="text-base font-semibold">Medidas dos estudos</h2>
+            <span className="text-xs text-zinc-500">calculadas sem custo · mediana de todos</span>
+          </div>
+          <StatsPanel st={stats} />
+        </section>
+      )}
     </div>
   );
 }

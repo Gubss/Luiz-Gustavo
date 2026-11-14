@@ -7,6 +7,8 @@ import type { IdeaData } from "@/lib/generator";
 import { IDEA_STATUS } from "@/lib/idea-status";
 import { fmtDateTime } from "@/lib/format";
 import type { OwnMatch } from "@/lib/my-catalog";
+import { Collapsible } from "@/components/ui";
+import { ClampText, Menu } from "@/components/ui-client";
 
 function parse<T>(json: string | null | undefined): T | null {
   if (!json) return null;
@@ -26,7 +28,7 @@ const STATUS_STYLE: Record<string, string> = {
 };
 
 export function StatusBadge({ status }: { status: string }) {
-  return <span className={`rounded px-2 py-0.5 text-[11px] ${STATUS_STYLE[status] ?? STATUS_STYLE.IDEA}`}>{IDEA_STATUS[status] ?? status}</span>;
+  return <span className={`badge shrink-0 ${STATUS_STYLE[status] ?? STATUS_STYLE.IDEA}`}>{IDEA_STATUS[status] ?? status}</span>;
 }
 
 /** "Virou o vídeo X" (ideia ligada a um vídeo publicado do canal). */
@@ -71,7 +73,7 @@ export function RepeatWarning({ repeats }: { repeats: OwnMatch[] }) {
   );
 }
 
-/** Cartão de uma ideia (gerador e banco de ideias). */
+/** Cartão de uma ideia (gerador e banco de ideias): o essencial à vista, o resto em "Ver detalhes". */
 export function IdeaCard({
   idea,
   channelName,
@@ -83,58 +85,87 @@ export function IdeaCard({
 }) {
   const d = parse<IdeaData>(idea.ideaData);
   const titles = parse<string[]>(idea.titles) ?? [];
+  const title = idea.chosenTitle || titles[0] || idea.theme;
+  const otherTitles = d ? d.titulos.filter((t) => t.titulo !== title) : titles.filter((t) => t !== title).map((t) => ({ titulo: t, formula: "" }));
   return (
-    <div className="card space-y-3 p-4">
-      <div className="flex flex-wrap items-start justify-between gap-2">
+    <article className="card flex flex-col gap-3 p-4">
+      <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <Link href={`/ideias/${idea.id}`} className="text-base font-semibold hover:text-red-400">
-            {idea.chosenTitle || titles[0] || idea.theme}
+          <Link href={`/ideias/${idea.id}`} className="text-[15px] leading-snug font-semibold hover:text-red-300">
+            {title}
           </Link>
-          <div className="text-xs text-zinc-500">
-            {idea.theme}
-            {channelName ? ` · ${channelName}` : ""} · {idea.format === "long" ? "vídeo longo" : "Short"} · {fmtDateTime(idea.createdAt)}
+          <div className="mt-0.5 text-xs text-zinc-500">
+            {idea.format === "long" ? "Vídeo longo" : "Short"}
+            {channelName ? ` · ${channelName}` : ""} · {fmtDateTime(idea.createdAt)}
           </div>
         </div>
         <StatusBadge status={idea.status} />
       </div>
       {idea.publishedVideo && <PublishedNote v={idea.publishedVideo} />}
-      {!idea.publishedVideo && <RepeatWarning repeats={repeats} />}
+      {!idea.publishedVideo && repeats.length > 0 && (
+        <p className="text-xs text-amber-300" title={repeats.map((m) => m.title).join("\n")}>
+          ⚠ Parecida com {repeats.length} coisa{repeats.length === 1 ? "" : "s"} que seu canal já fez (veja em detalhes)
+        </p>
+      )}
       {d ? (
-        <>
-          <p className="text-sm text-zinc-200">{d.premissa}</p>
-          <blockquote className="border-l-2 border-red-500 pl-2 text-sm italic text-zinc-300">
-            {d.gancho} <span className="not-italic text-xs text-zinc-500">· gancho: {d.ganchoPadrao}</span>
+        <ClampText lines={3} className="text-sm leading-relaxed text-zinc-300">
+          {d.premissa}
+        </ClampText>
+      ) : (
+        idea.justification && (
+          <ClampText lines={3} className="text-sm leading-relaxed text-zinc-300">
+            {idea.justification}
+          </ClampText>
+        )
+      )}
+      {d && (
+        <Collapsible title={<span className="text-xs">Ver detalhes</span>} bodyClassName="mt-3 space-y-3">
+          <RepeatWarning repeats={repeats} />
+          <blockquote className="border-l-2 border-red-500/70 pl-2 text-sm text-zinc-300 italic">
+            {d.gancho}
+            <span className="block text-xs text-zinc-500 not-italic">Gancho: {d.ganchoPadrao}</span>
           </blockquote>
           <div className="grid gap-2 text-xs md:grid-cols-2">
-            <div className="rounded bg-zinc-950/60 p-2">
-              <span className="text-zinc-500">Da cartilha: </span>
-              <span className="text-zinc-300">{d.adaptacao.daCartilha}</span>
+            <div className="rounded-lg bg-ink/70 p-2">
+              <div className="mb-0.5 text-zinc-500">Da cartilha</div>
+              <div className="text-zinc-300">{d.adaptacao.daCartilha}</div>
             </div>
-            <div className="rounded bg-zinc-950/60 p-2">
-              <span className="text-zinc-500">Do seu canal: </span>
-              <span className="text-zinc-300">{d.adaptacao.doCanal}</span>
+            <div className="rounded-lg bg-ink/70 p-2">
+              <div className="mb-0.5 text-zinc-500">Do seu canal</div>
+              <div className="text-zinc-300">{d.adaptacao.doCanal}</div>
             </div>
           </div>
-          <ul className="space-y-0.5 text-sm">
-            {d.titulos.map((t, i) => (
-              <li key={i} className="text-zinc-300">
-                {i === 0 ? "★ " : "· "}
-                {t.titulo} <span className="text-xs text-zinc-500">({t.formula})</span>
-              </li>
-            ))}
-          </ul>
-          {d.risco && <p className="text-xs text-amber-300/90">Risco: {d.risco}</p>}
-        </>
-      ) : (
-        idea.justification && <p className="text-sm text-zinc-300">{idea.justification}</p>
+          {otherTitles.length > 0 && (
+            <div>
+              <div className="mb-1 text-xs text-zinc-500">Outros títulos</div>
+              <ul className="space-y-0.5 text-sm text-zinc-300">
+                {otherTitles.map((t, i) => (
+                  <li key={i}>
+                    {t.titulo} {t.formula && <span className="text-xs text-zinc-500">({t.formula})</span>}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {d.risco && (
+            <p className="rounded-lg bg-amber-500/10 p-2 text-xs text-amber-200/90">
+              <span className="font-medium">Atenção:</span> {d.risco}
+            </p>
+          )}
+        </Collapsible>
       )}
-      <div className="flex flex-wrap items-center gap-2">
-        <Link href={`/ideias/${idea.id}`} className={idea.script ? "btn-secondary" : "btn-primary"}>
-          {idea.script ? "Ver roteiro" : "Escrever roteiro →"}
+      <div className="mt-auto flex items-center gap-2 pt-1">
+        <Link href={`/ideias/${idea.id}`} className={idea.script ? "btn-secondary btn-sm" : "btn-primary btn-sm"}>
+          {idea.script ? "Ver roteiro" : "Escrever roteiro"}
         </Link>
         <span className="flex-1" />
-        <DeleteIdeaButton action={deleteIdeaInline.bind(null, idea.id)} />
+        <Menu>
+          <Link href={`/ideias/${idea.id}`} className="menu-item">
+            Abrir a ideia completa
+          </Link>
+          <DeleteIdeaButton action={deleteIdeaInline.bind(null, idea.id)} label="Apagar ideia" className="menu-item text-red-300" />
+        </Menu>
       </div>
-    </div>
+    </article>
   );
 }

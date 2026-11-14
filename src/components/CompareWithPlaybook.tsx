@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Collapsible } from "./ui";
 import type { StudyMetrics } from "@/lib/study-metrics";
 import type { Med, PlaybookStats, Share } from "@/lib/playbook";
 
@@ -63,8 +64,15 @@ export function CompareWithPlaybook({
     { label: "Título fala com “você”", mine: yn(m.title.secondPerson), ref: share(st.title.secondPerson), flag: majority(m.title.secondPerson, st.title.secondPerson) },
   ];
   const off = rows.filter((r) => r.flag === "off");
+  const ok = rows.filter((r) => r.flag === "ok");
   return (
     <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <span className="badge bg-emerald-600/20 text-emerald-200">✓ {ok.length} dentro do padrão</span>
+        {off.length > 0 && <span className="badge bg-amber-500/15 text-amber-200">⚠ {off.length} fora</span>}
+        {off.length > 0 && <span className="text-zinc-300">Fora do padrão: {off.map((r) => r.label.toLowerCase()).join(", ")}.</span>}
+      </div>
+      <Collapsible title={<span className="text-sm">Ver a comparação medida por medida</span>} bodyClassName="mt-3 space-y-3">
       <p className="text-sm text-zinc-400">
         {own ? "Seu vídeo" : "Este vídeo"} comparado com a{" "}
         <Link href={href} className="text-red-400 hover:underline">
@@ -82,7 +90,7 @@ export function CompareWithPlaybook({
         </thead>
         <tbody>
           {rows.map((r) => (
-            <tr key={r.label} className="border-t border-zinc-800">
+            <tr key={r.label} className="border-t border-line">
               <td className="py-1 text-zinc-400">{r.label}</td>
               <td className={`py-1 tabular-nums ${r.flag === "off" ? "text-amber-300" : r.flag === "ok" ? "text-emerald-300" : "text-zinc-200"}`}>
                 {r.mine} {r.flag === "off" ? "⚠" : r.flag === "ok" ? "✓" : ""}
@@ -93,9 +101,9 @@ export function CompareWithPlaybook({
         </tbody>
       </table>
       <p className="text-xs text-zinc-500">
-        ✓ dentro da faixa dos estudos · ⚠ fora · sem marca quando a cartilha tem menos de 2 estudos com o dado.{" "}
-        {off.length ? `Fora do padrão: ${off.map((r) => r.label.toLowerCase()).join(", ")}.` : ""}
+        ✓ dentro da faixa dos estudos · ⚠ fora · sem marca quando a cartilha tem menos de 2 estudos com o dado.
       </p>
+      </Collapsible>
     </div>
   );
 }

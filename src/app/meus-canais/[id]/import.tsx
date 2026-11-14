@@ -100,8 +100,8 @@ export function ProfileImport({
       </div>
 
       {parsed && (
-        <div className="space-y-3 rounded-lg border border-zinc-800 p-3 text-sm">
-          <div className="text-xs uppercase tracking-wide text-zinc-500">Prévia: é isso que vai entrar no perfil</div>
+        <div className="space-y-3 rounded-lg border border-line p-3 text-sm">
+          <div className="text-xs text-zinc-500">Prévia: é isso que vai entrar no perfil</div>
           {parsed.warnings.length > 0 && (
             <ul className="list-disc space-y-0.5 pl-5 text-xs text-amber-300">
               {parsed.warnings.map((w, i) => (
@@ -112,7 +112,7 @@ export function ProfileImport({
           <table className="w-full">
             <tbody>
               {(Object.keys(LABELS) as (keyof ProfileFields)[]).map((k) => (
-                <tr key={k} className="border-t border-zinc-800 align-top">
+                <tr key={k} className="border-t border-line align-top">
                   <td className="w-44 py-1 pr-3 text-xs text-zinc-500">{LABELS[k]}</td>
                   <td className="whitespace-pre-line py-1 text-zinc-200">
                     {parsed.fields[k] != null ? String(parsed.fields[k]) : <span className="text-zinc-600">vazio (mantém o que já está no perfil)</span>}

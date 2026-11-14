@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { Collapsible } from "@/components/ui";
+import { ClampText } from "@/components/ui-client";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { fmtDateTime } from "@/lib/format";
@@ -32,7 +34,7 @@ const num = (n: number | null | undefined) => (n == null ? "—" : String(n).rep
 const mmss = (s: number) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`;
 
 function H3({ children }: { children: React.ReactNode }) {
-  return <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-zinc-400">{children}</h3>;
+  return <h3 className="mb-2 text-sm font-semibold text-zinc-400">{children}</h3>;
 }
 
 const PART_STYLE: Record<string, string> = {
@@ -84,7 +86,7 @@ function MetricsVsPlaybook({ m, st }: { m: ScriptMetrics; st: PlaybookStats | nu
         </thead>
         <tbody>
           {rows.map((r) => (
-            <tr key={r.label} className="border-t border-zinc-800">
+            <tr key={r.label} className="border-t border-line">
               <td className="py-1 text-zinc-400">{r.label}</td>
               <td className={`py-1 tabular-nums ${r.warn ? "text-amber-300" : "text-zinc-100"}`}>
                 {r.mine} {r.warn && "⚠"}
@@ -105,8 +107,10 @@ function MetricsVsPlaybook({ m, st }: { m: ScriptMetrics; st: PlaybookStats | nu
 function ScriptView({ c }: { c: ScriptContent }) {
   const scenes = [...c.cenas].sort((a, b) => a.inicio - b.inicio);
   return (
-    <div className="space-y-6 text-sm">
-      <p className="text-base text-zinc-200">{c.resumo}</p>
+    <div className="space-y-4 text-sm">
+      <ClampText lines={3} className="text-[15px] leading-relaxed text-zinc-200">
+        {c.resumo}
+      </ClampText>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
@@ -118,7 +122,7 @@ function ScriptView({ c }: { c: ScriptContent }) {
           </thead>
           <tbody>
             {scenes.map((s, i) => (
-              <tr key={i} className="border-t border-zinc-800 align-top">
+              <tr key={i} className="border-t border-line align-top">
                 <td className="py-2 pr-2 text-xs tabular-nums text-zinc-500">
                   {mmss(s.inicio)}–{mmss(s.fim)}
                   <div className={PART_STYLE[s.parte] ?? ""}>{s.parte}</div>
@@ -143,6 +147,11 @@ function ScriptView({ c }: { c: ScriptContent }) {
         </table>
       </div>
 
+      <Collapsible
+        title="Checklist, fatos para conferir e como a cartilha virou cena"
+        meta={`${c.checklist.filter((x) => x.ok).length} de ${c.checklist.length} itens ok${c.conferirFatos.length ? ` · ${c.conferirFatos.length} fatos para conferir` : ""}`}
+        className="rounded-lg border border-line p-4"
+      >
       <div className="grid gap-4 md:grid-cols-2">
         <div>
           <H3>Checklist da cartilha</H3>
@@ -173,6 +182,9 @@ function ScriptView({ c }: { c: ScriptContent }) {
         </div>
       </div>
 
+      </Collapsible>
+
+      <Collapsible title="Capa, descrição e dicas de produção" className="rounded-lg border border-line p-4">
       <div className="grid gap-4 md:grid-cols-3">
         <div>
           <H3>Capa</H3>
@@ -192,7 +204,8 @@ function ScriptView({ c }: { c: ScriptContent }) {
           </ul>
         </div>
       </div>
-      {c.titulosAlternativos.length > 0 && <p className="text-xs text-zinc-500">Títulos alternativos: {c.titulosAlternativos.join(" · ")}</p>}
+      {c.titulosAlternativos.length > 0 && <p className="mt-3 text-xs text-zinc-500">Títulos alternativos: {c.titulosAlternativos.join(" · ")}</p>}
+      </Collapsible>
     </div>
   );
 }
@@ -219,130 +232,7 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
   const cands = idea.publishedVideo ? null : await publishedCandidates(idea);
   const pbStats = parse<PlaybookStats>(playbook?.stats);
   const allTitles = [...new Set([...(idea.chosenTitle ? [idea.chosenTitle] : []), ...titles])];
-
-  return (
-    <div className="mx-auto max-w-6xl space-y-6">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <Link href={idea.myChannelId ? `/ideias?canal=${idea.myChannelId}` : "/ideias"} className="text-xs text-zinc-500 hover:text-zinc-300">
-            ← Banco de ideias
-          </Link>
-          <h1 className="text-2xl font-bold">{idea.chosenTitle || titles[0] || idea.theme}</h1>
-          <p className="text-sm text-zinc-400">
-            {idea.theme} · {idea.myChannel ? <Link href={`/meus-canais/${idea.myChannel.id}`} className="hover:underline">{idea.myChannel.name}</Link> : "sem canal"} ·{" "}
-            {idea.format === "long" ? "vídeo longo" : "Short"} · criada {fmtDateTime(idea.createdAt)}
-            {idea.niche && ` · cartilha de ${idea.niche.name}`}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <StatusBadge status={idea.status} />
-          <IdeaStatusSelect action={setIdeaStatus.bind(null, idea.id)} value={idea.status} />
-        </div>
-      </header>
-
-      {/* A ideia */}
-      <section className="card space-y-4 p-5 text-sm">
-        <h2 className="text-lg font-semibold">A ideia</h2>
-        {!idea.publishedVideo && <RepeatWarning repeats={repeats} />}
-        {d ? (
-          <>
-            <p className="text-base text-zinc-200">{d.premissa}</p>
-            <div className="text-xs text-zinc-500">Formato de história: {d.formatoDeHistoria}</div>
-            <blockquote className="border-l-2 border-red-500 pl-2 italic text-zinc-300">
-              {d.gancho} <span className="not-italic text-xs text-zinc-500">· gancho: {d.ganchoPadrao}</span>
-            </blockquote>
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="rounded bg-zinc-950/60 p-3">
-                <div className="text-xs text-zinc-500">Vem da cartilha / referência</div>
-                <div className="text-zinc-200">{d.adaptacao.daCartilha}</div>
-              </div>
-              <div className="rounded bg-zinc-950/60 p-3">
-                <div className="text-xs text-zinc-500">É do seu canal</div>
-                <div className="text-zinc-200">{d.adaptacao.doCanal}</div>
-              </div>
-            </div>
-            <p className="text-zinc-300">
-              <span className="text-zinc-500">Por que pode funcionar: </span>
-              {d.porQueVaiFuncionar}
-            </p>
-            {d.risco && <p className="text-amber-300/90">Risco: {d.risco}</p>}
-            {d.ponto && <p className="text-xs text-zinc-500">Ponto de partida pedido: {d.ponto}</p>}
-          </>
-        ) : (
-          <p className="text-zinc-300">{idea.justification ?? "—"}</p>
-        )}
-        {refs.length > 0 && (
-          <p className="text-xs text-zinc-500">
-            Referência:{" "}
-            {refs.map((r) => (
-              <Link key={r.id} href={`/video/${r.id}`} className="text-red-400 hover:underline">
-                {r.title} ({r.channel.title})
-              </Link>
-            ))}
-          </p>
-        )}
-        <div>
-          <H3>Já foi feito? (títulos parecidos nos canais monitorados)</H3>
-          {similar.length === 0 ? (
-            <p className="text-xs text-zinc-500">Nada parecido no catálogo dos canais do nicho (checagem por palavras, grátis).</p>
-          ) : (
-            <ul className="space-y-0.5 text-xs">
-              {similar.map((m) => (
-                <li key={m.externalId}>
-                  <a href={`https://www.youtube.com/watch?v=${m.externalId}`} target="_blank" rel="noreferrer" className="text-zinc-300 hover:text-red-400">
-                    {m.title}
-                  </a>{" "}
-                  <span className="text-zinc-500">
-                    · {m.channelTitle} · em comum: {m.shared.join(", ")}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </section>
-
-      {/* Roteiro */}
-      <section className="card space-y-4 p-5">
-        <header className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-lg font-semibold">Roteiro</h2>
-          {idea.script && (
-            <span className="text-xs text-zinc-500">
-              {modelLabel(idea.scriptModel)} · custo acumulado {usd(idea.scriptCostUsd)}
-            </span>
-          )}
-        </header>
-
-        {sd ? (
-          <>
-            <div className="flex flex-wrap items-center gap-3">
-              <a href={`/api/ideias/${idea.id}/roteiro`} download className="btn-secondary">
-                Baixar roteiro (.md) para o Maestri
-              </a>
-              <span className="text-xs text-zinc-500">Vai o roteiro cena a cena + personagens, estilo visual e tom do canal.</span>
-            </div>
-            {sd.metrics && (
-              <div className="rounded-lg border border-zinc-800 p-4">
-                <H3>Medidas do roteiro × cartilha</H3>
-                <MetricsVsPlaybook m={sd.metrics} st={pbStats} />
-              </div>
-            )}
-            <ScriptView c={sd} />
-            {idea.script && (
-              <details className="rounded-lg border border-zinc-800">
-                <summary className="cursor-pointer px-3 py-2 text-sm text-zinc-400">Texto para copiar</summary>
-                <textarea readOnly rows={18} className="input m-3 w-[calc(100%-1.5rem)] font-mono text-xs" defaultValue={idea.script} />
-              </details>
-            )}
-          </>
-        ) : (
-          <p className="text-sm text-zinc-400">Ainda sem roteiro.</p>
-        )}
-
-        {scriptJob ? (
-          <RunningNote job={scriptJob} what="Roteiro" />
-        ) : est ? (
-          <div className={sd ? "border-t border-zinc-800 pt-4" : ""}>
+  const scriptForm = est ? (
             <StateForm
               action={generateScriptAction.bind(null, idea.id)}
               label={sd ? "Escrever de novo" : "Escrever roteiro"}
@@ -367,6 +257,143 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
                 <textarea name="extra" rows={2} className="input" placeholder="Ex.: mais curto, até 35s · coloca a irmã no final · fala do pai mais engraçada" />
               </div>
             </StateForm>
+  ) : null;
+
+  return (
+    <div className="mx-auto max-w-6xl space-y-6">
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <Link href={idea.myChannelId ? `/ideias?canal=${idea.myChannelId}` : "/ideias"} className="text-xs text-zinc-500 hover:text-zinc-300">
+            ← Banco de ideias
+          </Link>
+          <h1 className="text-2xl font-semibold tracking-tight">{idea.chosenTitle || titles[0] || idea.theme}</h1>
+          <p className="text-sm text-zinc-400">
+            {idea.theme} · {idea.myChannel ? <Link href={`/meus-canais/${idea.myChannel.id}`} className="hover:underline">{idea.myChannel.name}</Link> : "sem canal"} ·{" "}
+            {idea.format === "long" ? "vídeo longo" : "Short"} · criada {fmtDateTime(idea.createdAt)}
+            {idea.niche && ` · cartilha de ${idea.niche.name}`}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <StatusBadge status={idea.status} />
+          <IdeaStatusSelect action={setIdeaStatus.bind(null, idea.id)} value={idea.status} />
+        </div>
+      </header>
+
+      {/* A ideia */}
+      <section className="card space-y-4 p-5 text-sm">
+        <h2 className="text-lg font-semibold">A ideia</h2>
+        {!idea.publishedVideo && <RepeatWarning repeats={repeats} />}
+        {d ? (
+          <>
+            <ClampText lines={3} className="text-[15px] leading-relaxed text-zinc-200">
+              {d.premissa}
+            </ClampText>
+            <blockquote className="border-l-2 border-red-500/70 pl-2 text-zinc-300 italic">
+              {d.gancho} <span className="block text-xs text-zinc-500 not-italic">Gancho: {d.ganchoPadrao}</span>
+            </blockquote>
+            <Collapsible title="De onde veio, por que pode funcionar e riscos" className="rounded-lg border border-line p-4" bodyClassName="mt-3 space-y-3">
+            <div className="text-xs text-zinc-500">Formato de história: {d.formatoDeHistoria}</div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="rounded bg-ink/60 p-3">
+                <div className="text-xs text-zinc-500">Vem da cartilha / referência</div>
+                <div className="text-zinc-200">{d.adaptacao.daCartilha}</div>
+              </div>
+              <div className="rounded bg-ink/60 p-3">
+                <div className="text-xs text-zinc-500">É do seu canal</div>
+                <div className="text-zinc-200">{d.adaptacao.doCanal}</div>
+              </div>
+            </div>
+            <p className="text-zinc-300">
+              <span className="text-zinc-500">Por que pode funcionar: </span>
+              {d.porQueVaiFuncionar}
+            </p>
+            {d.risco && <p className="text-amber-300/90">Risco: {d.risco}</p>}
+            {d.ponto && <p className="text-xs text-zinc-500">Ponto de partida pedido: {d.ponto}</p>}
+            </Collapsible>
+          </>
+        ) : (
+          <p className="text-zinc-300">{idea.justification ?? "—"}</p>
+        )}
+        {refs.length > 0 && (
+          <p className="text-xs text-zinc-500">
+            Referência:{" "}
+            {refs.map((r) => (
+              <Link key={r.id} href={`/video/${r.id}`} className="text-red-400 hover:underline">
+                {r.title} ({r.channel.title})
+              </Link>
+            ))}
+          </p>
+        )}
+        <Collapsible
+          title={<span className="text-sm">Já foi feito? Títulos parecidos nos canais monitorados</span>}
+          meta={similar.length ? `${similar.length} parecido${similar.length === 1 ? "" : "s"}` : "nada parecido"}
+        >
+          {similar.length === 0 ? (
+            <p className="text-xs text-zinc-500">Nada parecido no catálogo dos canais do nicho (checagem por palavras, grátis).</p>
+          ) : (
+            <ul className="space-y-0.5 text-xs">
+              {similar.map((m) => (
+                <li key={m.externalId}>
+                  <a href={`https://www.youtube.com/watch?v=${m.externalId}`} target="_blank" rel="noreferrer" className="text-zinc-300 hover:text-red-400">
+                    {m.title}
+                  </a>{" "}
+                  <span className="text-zinc-500">
+                    · {m.channelTitle} · em comum: {m.shared.join(", ")}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Collapsible>
+      </section>
+
+      {/* Roteiro */}
+      <section className="card space-y-4 p-5">
+        <header className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-lg font-semibold">Roteiro</h2>
+          {idea.script && (
+            <span className="text-xs text-zinc-500">
+              {modelLabel(idea.scriptModel)} · custo acumulado {usd(idea.scriptCostUsd)}
+            </span>
+          )}
+        </header>
+
+        {sd ? (
+          <>
+            <div className="flex flex-wrap items-center gap-3">
+              <a href={`/api/ideias/${idea.id}/roteiro`} download className="btn-secondary">
+                Baixar roteiro (.md) para o Maestri
+              </a>
+              <span className="text-xs text-zinc-500">Vai o roteiro cena a cena + personagens, estilo visual e tom do canal.</span>
+            </div>
+            <ScriptView c={sd} />
+            {sd.metrics && (
+              <Collapsible title="Medidas do roteiro × cartilha" className="rounded-lg border border-line p-4">
+                <MetricsVsPlaybook m={sd.metrics} st={pbStats} />
+              </Collapsible>
+            )}
+            {idea.script && (
+              <details className="rounded-lg border border-line">
+                <summary className="cursor-pointer px-3 py-2 text-sm text-zinc-400">Texto para copiar</summary>
+                <textarea readOnly rows={18} className="input m-3 w-[calc(100%-1.5rem)] font-mono text-xs" defaultValue={idea.script} />
+              </details>
+            )}
+          </>
+        ) : (
+          <p className="text-sm text-zinc-400">Ainda sem roteiro.</p>
+        )}
+
+        {scriptJob ? (
+          <RunningNote job={scriptJob} what="Roteiro" />
+        ) : est ? (
+          <div className={sd ? "border-t border-line pt-4" : ""}>
+            {sd ? (
+              <Collapsible title={<span className="text-sm">Escrever o roteiro de novo</span>}>
+                {scriptForm}
+              </Collapsible>
+            ) : (
+              scriptForm
+            )}
           </div>
         ) : (
           <p className="text-sm text-amber-300">Essa ideia não está ligada a um canal seu, então não dá para escrever o roteiro.</p>
@@ -375,7 +402,7 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
 
       {/* Virou vídeo? */}
       <section className="card space-y-3 p-5">
-        <h2 className="text-lg font-semibold">Virou vídeo no seu canal?</h2>
+        <h2 className="text-base font-semibold">Virou vídeo no seu canal?</h2>
         {idea.publishedVideo ? (
           <div className="flex flex-wrap items-center gap-3">
             <PublishedNote v={idea.publishedVideo} />
@@ -437,7 +464,7 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
       </section>
 
       <section className="card space-y-3 p-5">
-        <h2 className="text-lg font-semibold">Anotações</h2>
+        <h2 className="text-base font-semibold">Anotações</h2>
         <StateForm action={saveIdeaNotes.bind(null, idea.id)} label="Salvar" className="btn-secondary">
           <textarea name="notes" rows={3} className="input" defaultValue={idea.notes ?? ""} placeholder="O que mudar, quando gravar, link do vídeo publicado…" />
         </StateForm>

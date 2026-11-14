@@ -16,7 +16,7 @@ export default async function NichesPage() {
     <div className="mx-auto max-w-6xl">
       <header className="mb-6 flex items-end justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Nichos e canais</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Nichos e canais</h1>
           <p className="text-sm text-zinc-400">
             {niches.length} nicho{niches.length === 1 ? "" : "s"} · {totalChannels} canal
             {totalChannels === 1 ? "" : "is"} monitorado{totalChannels === 1 ? "" : "s"}

@@ -108,7 +108,7 @@ export function JobsWatcher() {
       ))}
       {running.length > 0 && (
         <div className="rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm shadow-xl">
-          <div className="mb-2 text-xs uppercase tracking-wide text-zinc-500">Rodando em segundo plano · pode usar o app normalmente</div>
+          <div className="mb-2 text-xs text-zinc-500">Rodando em segundo plano · pode usar o app normalmente</div>
           <ul className="space-y-2">
             {running.map((j) => {
               const pct = percent(j, now);
