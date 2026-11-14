@@ -14,7 +14,7 @@ const NAV: { href: string; label: string; step?: number; sub?: boolean; soon?: b
   { href: "/cartilha", label: "Cartilha do nicho", step: 6, hint: "O que se repete nos estudos" },
   { href: "/gerador", label: "Gerador", step: 7, hint: "Ideias e roteiros no seu formato" },
   { href: "/ideias", label: "Banco de ideias", step: 8, hint: "O que já foi gerado e usado" },
-  { href: "/meus-videos", label: "Meus vídeos", soon: true },
+  { href: "/meus-videos", label: "Meus vídeos", step: 9, hint: "Por que meus vídeos foram bem ou mal" },
   { href: "/configuracoes", label: "Configurações", soon: true },
 ];
 

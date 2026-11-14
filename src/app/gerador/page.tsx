@@ -147,8 +147,16 @@ export default async function GeneratorPage({ searchParams }: PageProps<"/gerado
           ) : (
             <div className="text-amber-300">Leia os vídeos do seu canal no perfil para o gerador não repetir temas que você já fez.</div>
           )}
+          <div className={ctx.learnings ? "text-emerald-300" : "text-zinc-500"}>
+            {ctx.learnings
+              ? `${ctx.learnings} ${ctx.learnings === 1 ? "lição" : "lições"} dos seus vídeos publicados entram no pedido.`
+              : "Ainda sem lições dos seus vídeos (faça um diagnóstico em Meus vídeos)."}
+          </div>
           <Link href={`/meus-canais/${channel.id}`} className="text-xs text-red-400 hover:underline">
             Editar perfil
+          </Link>
+          <Link href={`/meus-videos?canal=${channel.id}`} className="ml-3 text-xs text-red-400 hover:underline">
+            Meus vídeos
           </Link>
         </div>
         <div className="card space-y-1 p-4 text-sm">

@@ -7,6 +7,10 @@ import { StateForm } from "@/components/StateForm";
 import { ConfirmDelete } from "@/app/nichos/[id]/forms";
 import { applyProfileImport, deleteMyChannelFromProfile, deleteScript, previewProfileImport, saveProfile, saveScript, syncMyVideosAction } from "../actions";
 import { ProfileImport } from "./import";
+import { estimateHint } from "@/app/meus-videos/ui";
+import { applyProfileDraftAction, discardProfileDraftAction, profileFromChannelAction } from "@/app/meus-videos/actions";
+import { estimateProfileFromChannel, profileDraft } from "@/lib/profile-from-channel";
+import { parseProfileMd } from "@/lib/profile-md";
 import { ActionButton } from "@/app/video/[id]/forms";
 import { RunningNote } from "@/components/RunningNote";
 import { runningJobsFor } from "@/lib/jobs";
@@ -62,6 +66,12 @@ export default async function MyChannelProfilePage({ params }: PageProps<"/meus-
     runningJobsFor([c.id]).then((js) => js.find((j) => j.kind === "my-videos")),
   ]);
   const gaps = profileGaps(c, c.scripts.length);
+  const [draft, profileJob, google] = await Promise.all([
+    profileDraft(c.id),
+    runningJobsFor([c.id]).then((js) => js.find((j) => j.kind === "profile-from-channel")),
+    c.externalId ? prisma.googleAuth.findUnique({ where: { channelExternalId: c.externalId } }) : null,
+  ]);
+  const profileEst = (await prisma.myVideo.count({ where: { myChannelId: c.id } })) ? await estimateProfileFromChannel(c.id) : null;
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -91,9 +101,58 @@ export default async function MyChannelProfilePage({ params }: PageProps<"/meus-
         </p>
       )}
 
+      <section id="do-canal" className="card space-y-4 p-5">
+        <div>
+          <h2 className="text-lg font-semibold">Preencher a partir do meu canal</h2>
+          <p className="text-sm text-zinc-400">
+            O Radar lê os seus vídeos (títulos, descrições, legendas, views e, com o login do Google, retenção e % visto) e o Claude escreve o
+            rascunho do perfil e dos roteiros publicados. Você vê a prévia e só salva se quiser. Lê em detalhe os 6 vídeos que mais deram view e os 6
+            mais recentes.
+            {google?.status === "ok" ? " Login do Google: conectado." : " Sem login do Google ainda: funciona só com os números públicos."}
+          </p>
+        </div>
+        {profileJob ? (
+          <RunningNote job={profileJob} what={`Perfil pelos vídeos do canal${profileJob.step ? ` · ${profileJob.step}` : ""}`} />
+        ) : !c.externalId && !c.url ? (
+          <p className="text-sm text-amber-300">Coloque a URL do canal no perfil abaixo (ou entre com o Google em Meus vídeos) primeiro.</p>
+        ) : (
+          <ActionButton
+            action={profileFromChannelAction.bind(null, c.id)}
+            label={draft ? "Gerar o rascunho de novo" : "Gerar perfil a partir do meu canal"}
+            busy="Começando…"
+            hint={profileEst ? `${estimateHint(profileEst)} · legendas grátis` : "Lê os vídeos do canal primeiro (grátis, poucas unidades de cota)"}
+            className={draft ? "btn-secondary" : "btn-primary"}
+          />
+        )}
+        {draft && (
+          <div className="space-y-2 rounded-lg border border-emerald-800/60 bg-emerald-950/10 p-3">
+            <p className="text-sm text-emerald-300">
+              Rascunho de {fmtDate(new Date(draft.at))}. Confira a prévia e clique em “Importar e salvar no perfil”. Campos que o rascunho deixar vazios mantêm o
+              que já está.
+            </p>
+            {draft.avisos.length > 0 && (
+              <ul className="list-disc space-y-0.5 pl-5 text-xs text-amber-300">
+                {draft.avisos.map((w, i) => (
+                  <li key={i}>{w}</li>
+                ))}
+              </ul>
+            )}
+            <ProfileImport
+              preview={previewProfileImport}
+              apply={applyProfileDraftAction.bind(null, c.id)}
+              initialText={draft.md}
+              initialParsed={parseProfileMd(draft.md)}
+            />
+            <form action={discardProfileDraftAction.bind(null, c.id)}>
+              <button className="btn-ghost px-2 py-1 text-xs">Descartar rascunho</button>
+            </form>
+          </div>
+        )}
+      </section>
+
       <section className="card space-y-4 p-5">
         <div>
-          <h2 className="text-lg font-semibold">Preencher pelo GPT (Maestri)</h2>
+          <h2 className="text-lg font-semibold">Ou: preencher pelo GPT (Maestri)</h2>
           <p className="text-sm text-zinc-400">
             Em vez de preencher à mão: <b>1.</b> baixe o pedido, <b>2.</b> cole no GPT do Maestri que conhece este canal, <b>3.</b> salve a resposta
             como .md (ou copie) e importe aqui. Você vê a prévia antes de salvar.

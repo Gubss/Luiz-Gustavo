@@ -22,6 +22,7 @@ import {
   type PlaybookStats,
 } from "./playbook";
 import { channelStopwords, findOwnRepeats, ownItems, type OwnMatch } from "./my-catalog";
+import { learningsBlock } from "./my-diagnosis";
 
 function parse<T>(json: string | null | undefined): T | null {
   if (!json) return null;
@@ -129,6 +130,8 @@ export type GeneratorContext = {
   /** Estudos usados quando ainda não há cartilha. */
   fallbackStudies: number;
   reference: { id: string; title: string; channelTitle: string } | null;
+  /** Quantas lições dos meus vídeos (etapa 7) entraram no pedido. */
+  learnings: number;
   block: string;
 };
 
@@ -147,6 +150,9 @@ export async function loadContext(opts: {
   const niche = nicheId ? await prisma.niche.findUnique({ where: { id: nicheId } }) : null;
 
   const parts: string[] = [profileBlock(channel, format)];
+  // Etapa 7: o que os números dos MEUS vídeos mostraram (vale mais que a cartilha quando conflita).
+  const learned = await learningsBlock(channel.id);
+  if (learned.block) parts.push("", learned.block);
   let playbook: GeneratorContext["playbook"] = null;
   let playbookStats: PlaybookStats | null = null;
   let fallbackStudies = 0;
@@ -202,7 +208,7 @@ export async function loadContext(opts: {
     }
   }
 
-  return { channel, nicheId: niche?.id ?? null, nicheName: niche?.name ?? null, format, playbook, playbookStats, fallbackStudies, reference, block: parts.join("\n") };
+  return { channel, nicheId: niche?.id ?? null, nicheName: niche?.name ?? null, format, playbook, playbookStats, fallbackStudies, reference, learnings: learned.count, block: parts.join("\n") };
 }
 
 // ---------- Regras comuns ----------

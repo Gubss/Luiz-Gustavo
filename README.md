@@ -11,7 +11,7 @@ outliers, estuda título/thumbnail/roteiro com o Claude e gera temas e roteiros.
 - [x] **Etapa 4** — descoberta de canais (busca por palavra-chave, canais indicados, raio-x do canal)
 - [x] **Etapa 5** — cartilha do nicho (por formato: Shorts e longos separados)
 - [x] **Etapa 6** — perfil do meu canal, gerador de temas, títulos e roteiros adaptados ao formato do canal; banco de ideias
-- [ ] Etapa 7 — meus vídeos publicados (marcos 1h/3h/24h/48h) e cruzamento com referências
+- [x] **Etapa 7** — meus vídeos: acompanhamento em 1h/3h/24h/48h/3d/7d, YouTube Analytics (login do Google, só leitura), diagnóstico de cada vídeo e do canal, lições indo para o gerador
 - [ ] Etapa 8 — configurações e controle de cota
 
 ## Como rodar no Windows
@@ -168,13 +168,19 @@ títulos parecidos já feitos pelos canais monitorados (checagem grátis no cat�
 publicado (lista do canal, com os mais parecidos primeiro, ou pelo link): a ideia fica "Publicado", mostra as views e o
 gerador não repete o tema.
 
-**Perfil pelo GPT do Maestri (.md):** no perfil, *Baixar o pedido para o GPT (.md)* gera o arquivo
+**Perfil a partir do meu canal (recomendado):** no perfil, *Gerar perfil a partir do meu canal* (custo no botão, ≈ US$ 0,15–0,30).
+O Radar lê os vídeos do canal (títulos, descrições, legendas grátis, views e, com o login do Google, retenção e % visto), lê
+em detalhe os 6 que mais deram view e os 6 mais recentes, e o Claude escreve o rascunho do perfil e dos roteiros publicados
+(reconstruídos das legendas, com "o que funcionou"). Abre a mesma prévia da importação: nada é salvo sem você clicar em
+*Importar e salvar no perfil*.
+
+**Alternativa — perfil pelo GPT do Maestri (.md):** no perfil, *Baixar o pedido para o GPT (.md)* gera o arquivo
 [`docs/prompt-perfil-canal.md`](docs/prompt-perfil-canal.md) com o nome e a URL do canal. Cole no GPT do Maestri que conhece
 o canal; ele devolve o perfil num modelo fixo (títulos `##` que o app procura, roteiros publicados em `### Roteiro:` e,
 se tiver, os números do YouTube Studio/TikTok). Salve a resposta como .md (ou copie) e use *Importar*: o app mostra a
 **prévia** (campo a campo, roteiros e avisos de títulos que não reconheceu) e só grava quando você confirma. Campo vazio
 ou `-` mantém o que já estava; roteiro com o mesmo título é atualizado. O campo **Números do canal** guarda os analytics
-colados com a data (o gerador lê). Atualizar esses números sozinho precisa do acesso ao Studio (etapa 7).
+colados com a data (o gerador lê). Com o login do Google (etapa 7, *Meus vídeos*) os números de cada vídeo vêm sozinhos do YouTube Analytics.
 
 **Roteiro para o Maestri:** na página da ideia, *Baixar roteiro (.md) para o Maestri* baixa o roteiro cena a cena com
 um bloco de referência do canal (personagens, estilo visual, tom, sempre/nunca).
@@ -182,7 +188,95 @@ um bloco de referência do canal (personagens, estilo visual, tom, sempre/nunca)
 ## Ordem do menu
 
 O menu é numerado na ordem de uso: 1 Meus canais → 2 Nichos e canais → 3 Descobrir canais → 4 Radar (e Favoritos) →
-5 Estudos de vídeo → 6 Cartilha → 7 Gerador → 8 Banco de ideias.
+5 Estudos de vídeo → 6 Cartilha → 7 Gerador → 8 Banco de ideias → 9 Meus vídeos.
+
+## Meus vídeos (etapa 7)
+
+Menu **Meus vídeos**. Para cada canal seu (cadastrado em *Meus canais*):
+
+1. **Ligar ao YouTube** — cole o link do canal (ou entre com o Google, que liga sozinho). Na primeira vez o app lê todos os
+   vídeos do canal (até 500; 1 unidade de cota a cada 50). Vídeo novo também entra na lista de vídeos do canal que o
+   gerador usa para não repetir tema.
+2. **Acompanhamento** — com o app aberto, a cada 5 minutos ele confere o que está na hora: vídeo novo (lista de uploads a cada
+   20 min), vídeos com menos de 12h a cada 15 min, até 4 dias de hora em hora, até 30 dias a cada 6h. Guarda os números em
+   **marcos**: 1h, 3h, 6h, 12h, 24h, 48h, 3 dias, 7 dias, 14 dias e 28 dias (vale a medição mais perto da idade, dentro de ±25%;
+   a tabela mostra a idade real). Cada marco é comparado com a **mediana dos seus outros vídeos do mesmo formato na mesma idade**.
+   Custo: ~2 unidades a cada 20 min por canal (≈ 150 por dia, de 10.000).
+3. **YouTube Analytics** (com o login do Google) — % médio visto, duração média, curva de retenção (com as 3 maiores quedas e o que
+   estava sendo dito naquele segundo), compartilhamentos, inscritos ganhos, de onde vieram as views e views por dia. Atualiza a cada 6h
+   para vídeos de até 60 dias. **O Analytics do YouTube atrasa 1 a 2 dias**: nas primeiras horas só há os números públicos (views,
+   likes, comentários). "Continuaram assistindo" (Shorts) e CTR não vêm pela API: cole do Studio no marco.
+4. **Diagnóstico do vídeo** — botão *Atualizar agora e diagnosticar* (custo no botão, ≈ US$ 0,10–0,25): atualiza os números e o
+   Claude Opus 5.5 explica por que o vídeo está acima/abaixo do normal: gancho (com uma versão melhor), quedas de retenção, título e capa,
+   o que seguiu ou não da cartilha, comparação com seus outros vídeos e **lições para os próximos roteiros**. Cada diagnóstico fica
+   guardado com a idade do vídeo: dá para ver a leitura mudar de 24h para 3 dias.
+5. **Roteiro** — ligue o vídeo à ideia do Gerador (ela vira "Publicado") ou cole o roteiro; ou busque a legenda do vídeo (melhor: tem
+   os segundos exatos).
+6. **Diagnóstico do canal** — o que os vídeos que foram bem têm em comum, o que os que foram mal têm em comum, o que da cartilha
+   se confirmou no seu canal e as lições que o gerador vai seguir.
+7. **Diagnóstico automático** (caixinha, desligado por padrão) — faz sozinho o diagnóstico de cada vídeo novo com 24h, 3 dias e 7 dias,
+   e o do canal 1 vez por semana. No máximo 6 por dia.
+8. **Sem login do Google** — cole os números do Studio em cada marco, escreva anotações no vídeo ou cole/importe um arquivo `.md`/`.txt`
+   com os números do canal (ex.: o relatório que o GPT do Maestri gera) em *Números colados do canal* (é o mesmo campo
+   "Números do canal" do perfil). Os diagnósticos leem tudo isso.
+
+**O ciclo:** estudos → cartilha → gerador → vídeo publicado → diagnóstico → lições. O gerador lê as lições do último diagnóstico do
+canal e dos diagnósticos de vídeo feitos depois dele ("Aprendizados dos meus vídeos"), e elas valem mais que a cartilha quando as duas
+discordam.
+
+### Como criar o login do Google (uma vez só, ~10 min)
+
+O app nunca vê sua senha: o login acontece na tela do próprio Google e a permissão é só de **leitura**
+(não posta, não apaga, não muda nada). Faça logado na conta Google **dona do canal**.
+
+**A. Ligar a API do Analytics**
+1. Abra https://console.cloud.google.com/apis/library/youtubeanalytics.googleapis.com
+2. No topo, confira se está no **mesmo projeto** da chave do YouTube (o nome aparece ao lado do logo; clique para trocar).
+3. Clique em **Ativar** (se aparecer "Gerenciar", já está ativa).
+
+**B. Tela de permissão (aparece uma vez só)**
+4. Abra https://console.cloud.google.com/auth/overview e clique em **Vamos começar** (ou "Get started").
+5. Nome do app: `YouTube Radar` · E-mail de suporte: o seu → **Próxima**.
+6. Público: **Externo** → **Próxima**.
+7. Dados de contato: o seu e-mail → **Próxima** → marque "Concordo" → **Continuar** → **Criar**.
+8. Menu da esquerda → **Público-alvo** (Audience) → botão **Publicar app** → **Confirmar**.
+   (Assim o login não vence a cada 7 dias. Não precisa mandar para verificação.)
+
+**C. Criar a "chave" do login**
+9. Menu da esquerda → **Clientes** (Clients) → **+ Criar cliente**.
+10. Tipo de aplicativo: **Aplicativo da Web** · Nome: `YouTube Radar`.
+11. Em **URIs de redirecionamento autorizados** → **+ Adicionar URI** → cole exatamente:
+    `http://localhost:3000/api/google/callback`
+12. **Criar**. Aparece uma janela com **ID do cliente** e **Chave secreta do cliente** (copie as duas agora;
+    a chave secreta só aparece inteira nessa hora, ou baixe o JSON).
+
+**D. Colar no app**
+13. No PowerShell, na pasta do app: `notepad .env` e acrescente no fim (com os seus valores):
+    ```
+    GOOGLE_CLIENT_ID="cole-o-id-aqui.apps.googleusercontent.com"
+    GOOGLE_CLIENT_SECRET="cole-a-chave-aqui"
+    ```
+    Salve e feche.
+14. Reinicie o app: no PowerShell onde ele roda, **Ctrl+C**, depois `npm run dev`.
+
+**E. Entrar**
+15. Abra http://localhost:3000/meus-videos → **Entrar com Google** → escolha a conta. Se o canal for de marca, escolha o canal na lista.
+16. Vai aparecer "O Google não verificou este app": clique em **Avançado** → **Acessar YouTube Radar (não seguro)**. É o seu próprio app.
+17. Deixe as caixinhas marcadas → **Continuar**. Você volta para o app com "✓ Conectado".
+18. Clique em **Atualizar agora**. Pronto: retenção, % visto e de onde vêm as views passam a vir direto do YouTube.
+
+Se der erro: "redirect_uri_mismatch" = o endereço do passo 11 não está igual (sem barra no fim, com `http`, porta 3000).
+"access_denied"/"app em teste" = faltou o passo 8 (Publicar app).
+
+Os números medidos pelo app e pelo login do Google **sempre valem mais** que números colados ou importados de outra
+ferramenta (ex.: o .md do Maestri): esses são uma foto de um dia, e o diagnóstico é avisado da data.
+
+### Acompanhar com o app fechado
+
+No Agendador de Tarefas do Windows, crie outra tarefa como a da coleta diária, mas com disparador **de hora em hora**
+(*Diariamente* → em *Avançado*, "Repetir a tarefa a cada 1 hora") e argumentos:
+`/c cd /d C:\caminho\luiz-gustavo && npm run track >> track.log 2>&1`.
+Ele atualiza números, marcos e Analytics; os diagnósticos automáticos rodam quando o app estiver aberto.
 
 ## Tarefas em segundo plano
 
@@ -204,7 +298,7 @@ próprio canal na lista. Formato automático (o do link) ou escolhido. Custo: ~5
 
 `npm test` roda os testes de cálculo e uma coleta completa com a API do YouTube simulada
 (usa `prisma/test.db`, nunca o seu banco). O estudo do vídeo é testado com YouTube e Anthropic simulados
-(`prisma/test-study.db`, sem custo). A descoberta de canais é testada com a API simulada (`prisma/test-discover.db`). A cartilha é testada com a Anthropic simulada (`prisma/test-playbook.db`). O gerador também (`prisma/test-generator.db`).
+(`prisma/test-study.db`, sem custo). A descoberta de canais é testada com a API simulada (`prisma/test-discover.db`). A cartilha é testada com a Anthropic simulada (`prisma/test-playbook.db`). O gerador também (`prisma/test-generator.db`). Meus vídeos: YouTube, Google (login e Analytics) e Anthropic simulados (`prisma/test-myvideos.db`).
 
 ## Stack
 
@@ -216,4 +310,4 @@ Next.js 16 (App Router) + TypeScript + Tailwind 4, Prisma 6 + SQLite, SDK oficia
 - Cada chamada à API registra seu custo em `QuotaLog`; o dia de cota segue o fuso do Pacífico.
 - Dados de canais são atualizados em lote (50 canais = 1 unidade).
 - Campo `platform` em canais e vídeos prepara o suporte futuro a TikTok.
-- Colunas de CTR/impressões/retenção existem em `MyVideo`, vazias até a versão com OAuth.
+- Login do Google só com escopos de leitura (`youtube.readonly`, `yt-analytics.readonly`); o token fica só no banco local (`GoogleAuth`), "Sair" apaga.
