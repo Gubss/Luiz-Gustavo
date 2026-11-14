@@ -10,7 +10,7 @@ outliers, estuda título/thumbnail/roteiro com o Claude e gera temas e roteiros.
 - [x] **Etapa 3** — estudo do vídeo: transcrição, diagnóstico medido, comentários, esqueleto de roteiro
 - [x] **Etapa 4** — descoberta de canais (busca por palavra-chave, canais indicados, raio-x do canal)
 - [x] **Etapa 5** — cartilha do nicho (por formato: Shorts e longos separados)
-- [ ] Etapa 6 — gerador de temas, títulos e roteiros; banco de ideias
+- [x] **Etapa 6** — perfil do meu canal, gerador de temas, títulos e roteiros adaptados ao formato do canal; banco de ideias
 - [ ] Etapa 7 — meus vídeos publicados (marcos 1h/3h/24h/48h) e cruzamento com referências
 - [ ] Etapa 8 — configurações e controle de cota
 
@@ -134,11 +134,31 @@ têm cartilhas separadas.
   *Versões anteriores*. Quando há estudo novo ou refeito, a tela avisa para gerar de novo.
   `latestPlaybook(nicheId, format)` em `src/lib/playbook.ts` fica pronto para a etapa 6.
 
+## Gerador de roteiros (etapa 6)
+
+1. **Meus canais → Perfil** — preencha do que o canal trata, personagens, formatos de história que se repetem
+   (ex.: "o menino afirma algo errado e o pai corrige"), estilo visual, tom, público, sempre/nunca, duração alvo e
+   cole os roteiros que você já publicou (com views, se souber). O gerador lê até 5 deles para copiar a voz do canal.
+2. **Gerador** — escolha o canal, a cartilha (nicho + formato) e, se quiser, um vídeo estudado para adaptar.
+   Escreva um ponto de partida (ex.: "mitos sobre dinossauros") ou deixe vazio. **Sugerir ideias** (Claude Opus 5.5,
+   ≈ US$ 0,10–0,25 para 5 ideias, custo no botão) devolve para cada ideia: a cena no formato do canal, o gancho
+   falado pelo personagem, 3–5 títulos com a fórmula da cartilha, o que veio da cartilha × o que é do canal e o risco.
+3. **Ideia → Escrever roteiro** (≈ US$ 0,10–0,25 num Short) — roteiro cena a cena (tempo, quem fala, fala exata,
+   o que aparece na animação, texto na tela), checklist da cartilha conferido, fatos para conferir, capa, descrição
+   e hashtags. As **medidas do roteiro** (duração, palavras/s, tamanho das cenas, onde o gancho termina) são
+   calculadas em código e comparadas com a mediana da cartilha.
+
+A regra central do gerador: da cartilha e da referência ele usa só o **como** (tipo de gancho, fórmula de título,
+ritmo, virada, fecho); o **o quê** (personagens, cenário, tom, formato de história) vem sempre do perfil do canal.
+Sem cartilha ainda, usa até 5 estudos direto; sem nicho, usa só o perfil.
+O **Banco de ideias** guarda tudo com status (ideia, roteiro pronto, produzido, publicado, descartada) e mostra
+títulos parecidos já feitos pelos canais monitorados (checagem grátis no catálogo).
+
 ## Testes
 
 `npm test` roda os testes de cálculo e uma coleta completa com a API do YouTube simulada
 (usa `prisma/test.db`, nunca o seu banco). O estudo do vídeo é testado com YouTube e Anthropic simulados
-(`prisma/test-study.db`, sem custo). A descoberta de canais é testada com a API simulada (`prisma/test-discover.db`). A cartilha é testada com a Anthropic simulada (`prisma/test-playbook.db`).
+(`prisma/test-study.db`, sem custo). A descoberta de canais é testada com a API simulada (`prisma/test-discover.db`). A cartilha é testada com a Anthropic simulada (`prisma/test-playbook.db`). O gerador também (`prisma/test-generator.db`).
 
 ## Stack
 

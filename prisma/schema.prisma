@@ -145,12 +145,41 @@ model MyChannel {
   notes      String?
   // Preparado para OAuth (versão futura)
   oauthConnected Boolean  @default(false)
+  // Perfil do canal (etapa 6): o gerador adapta a cartilha a este formato.
+  format       String   @default("short") // formato principal: "short" | "long"
+  platforms    String? // ex.: "YouTube Shorts, TikTok"
+  concept      String? // premissa / do que o canal trata
+  characters   String? // personagens recorrentes (nome, idade, jeito, como fala)
+  visualStyle  String? // estilo visual (ex.: animação 3D estilo Pixar, casa da família)
+  tone         String? // tom e linguagem
+  storyFormats String? // formatos de história que se repetem (ex.: "menino fala algo errado e o pai corrige")
+  audience     String? // público
+  rules        String? // sempre / nunca
+  durationSec  Int? // duração alvo
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  niche    Niche?    @relation(fields: [nicheId], references: [id], onDelete: SetNull)
+  niche    Niche?           @relation(fields: [nicheId], references: [id], onDelete: SetNull)
   videos   MyVideo[]
   ideas    Idea[]
+  scripts  MyChannelScript[]
+}
+
+/// Roteiros que o canal já publicou (ou escreveu): exemplos da voz e do formato do canal para o gerador.
+model MyChannelScript {
+  id          String   @id @default(cuid())
+  myChannelId String
+  title       String
+  url         String?
+  script      String
+  views       Int?
+  notes       String? // o que funcionou / o que não funcionou
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  myChannel MyChannel @relation(fields: [myChannelId], references: [id], onDelete: Cascade)
+
+  @@index([myChannelId])
 }
 
 // ---------- Descoberta de canais (etapa 4) ----------
@@ -391,6 +420,12 @@ model Idea {
   referenceIds  String? // JSON array de Video.id usados como referência
   structureIds  String? // JSON array de ScriptStructure.id usados no roteiro
   notes         String?
+  // Etapa 6
+  playbookId    String? // NichePlaybook usada (versão da cartilha)
+  ideaData      String? // JSON do Claude: premissa no formato do canal, gancho, adaptação, títulos com fórmula
+  scriptData    String? // JSON do roteiro: cenas, falas, texto na tela, checklist conferido
+  ideaCostUsd   Float?
+  scriptCostUsd Float?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

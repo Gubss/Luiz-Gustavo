@@ -1,0 +1,59 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { prisma } from "@/lib/db";
+import { usdToBrl } from "@/lib/claude";
+import { generateIdeas, generateScript, IDEA_STATUS, type IdeasRequest } from "@/lib/generator";
+import type { FormState } from "@/app/video/actions";
+
+const money = (usd: number) =>
+  `US$ ${usd.toFixed(usd < 0.1 ? 3 : 2).replace(".", ",")} (≈ R$ ${(usd * usdToBrl()).toFixed(2).replace(".", ",")})`;
+const errMsg = (e: unknown) => (e instanceof Error ? e.message : "Erro inesperado.");
+
+function refresh(ideaId?: string) {
+  revalidatePath("/gerador");
+  revalidatePath("/ideias");
+  if (ideaId) revalidatePath(`/ideias/${ideaId}`);
+}
+
+export async function generateIdeasAction(req: Omit<IdeasRequest, "ponto">, _prev: FormState, fd: FormData): Promise<FormState> {
+  try {
+    const r = await generateIdeas({ ...req, ponto: String(fd.get("ponto") ?? "") });
+    refresh();
+    return { ok: `${r.ideas.length} ideias novas logo abaixo (e no Banco de ideias). Custo: ${money(r.costUsd)}.` };
+  } catch (e) {
+    return { error: errMsg(e) };
+  }
+}
+
+export async function generateScriptAction(ideaId: string, _prev: FormState, fd: FormData): Promise<FormState> {
+  const picked = String(fd.get("title") ?? "");
+  const custom = String(fd.get("customTitle") ?? "").trim();
+  try {
+    const r = await generateScript(ideaId, { title: custom || (picked === "__custom" ? "" : picked), extra: String(fd.get("extra") ?? "") });
+    refresh(ideaId);
+    return { ok: `Roteiro pronto (${r.metrics.scenes} cenas, ~${r.metrics.durationSec}s). Custo: ${money(r.costUsd)}.` };
+  } catch (e) {
+    return { error: errMsg(e) };
+  }
+}
+
+export async function setIdeaStatus(ideaId: string, fd: FormData) {
+  const status = String(fd.get("status") ?? "");
+  if (!(status in IDEA_STATUS)) return;
+  await prisma.idea.update({ where: { id: ideaId }, data: { status } });
+  refresh(ideaId);
+}
+
+export async function saveIdeaNotes(ideaId: string, _prev: FormState, fd: FormData): Promise<FormState> {
+  await prisma.idea.update({ where: { id: ideaId }, data: { notes: String(fd.get("notes") ?? "").trim() || null } });
+  refresh(ideaId);
+  return { ok: "Anotação salva." };
+}
+
+export async function deleteIdea(ideaId: string) {
+  await prisma.idea.delete({ where: { id: ideaId } });
+  refresh();
+  redirect("/ideias");
+}

@@ -308,7 +308,7 @@ e use "lacunas" para dizer quantos e quais tipos de vídeo estudar a seguir para
 const pct = (s: Share) => (s.n ? `${s.yes} de ${s.n}` : "—");
 const medTxt = (m: Med, unit = "") => (m.value == null ? "—" : `${String(m.value)}${unit}${m.n > 1 ? ` (de ${m.min} a ${m.max}, ${m.n} estudos)` : ""}`);
 
-function statsBlock(st: PlaybookStats) {
+export function statsBlock(st: PlaybookStats) {
   const lines = [
     `# Medidas calculadas em código (${st.studies} estudos de ${formatLabel(st.format, true)})`,
     `Views (mediana): ${medTxt(st.views)} · x média do canal: ${medTxt(st.multAvg, "x")} · x inscritos: ${medTxt(st.multSubs, "x")}`,
@@ -328,7 +328,7 @@ function statsBlock(st: PlaybookStats) {
 
 const ts = (s: number) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`;
 
-function studyBlock(s: NicheStudy, i: number) {
+export function studyBlock(s: NicheStudy, i: number) {
   const c = s.content;
   const m = s.metrics;
   const head = [

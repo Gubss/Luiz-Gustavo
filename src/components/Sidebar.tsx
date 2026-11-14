@@ -6,12 +6,13 @@ import { usePathname } from "next/navigation";
 const NAV: { href: string; label: string; soon?: boolean }[] = [
   { href: "/radar", label: "Radar de outliers" },
   { href: "/nichos", label: "Nichos e canais" },
+  { href: "/meus-canais", label: "Meus canais" },
   { href: "/favoritos", label: "Favoritos" },
   { href: "/estudos", label: "Estudos de vídeo" },
   { href: "/descobrir", label: "Descobrir canais" },
   { href: "/cartilha", label: "Cartilha do nicho" },
-  { href: "/gerador", label: "Gerador", soon: true },
-  { href: "/ideias", label: "Banco de ideias", soon: true },
+  { href: "/gerador", label: "Gerador" },
+  { href: "/ideias", label: "Banco de ideias" },
   { href: "/meus-videos", label: "Meus vídeos", soon: true },
   { href: "/configuracoes", label: "Configurações", soon: true },
 ];

@@ -204,7 +204,13 @@ export default async function NichePage({ params, searchParams }: PageProps<"/ni
           {niche.myChannels.map((m) => (
             <div key={m.id} className="flex flex-wrap items-center gap-4 px-5 py-3">
               <div className="min-w-0 flex-1">
-                <div className="font-medium">{m.name}</div>
+                <Link href={`/meus-canais/${m.id}`} className="font-medium hover:text-red-400">
+                  {m.name}
+                </Link>
+                <span className="ml-2 text-xs text-zinc-500">
+                  <Link href={`/meus-canais/${m.id}`} className="hover:underline">perfil</Link> ·{" "}
+                  <Link href={`/gerador?canal=${m.id}`} className="hover:underline">gerar ideias</Link>
+                </span>
                 {m.url && (
                   <a href={m.url} target="_blank" rel="noreferrer" className="text-xs text-zinc-500 hover:underline">
                     {m.url}
