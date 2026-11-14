@@ -570,7 +570,7 @@ model MyVideoCheckpoint {
   avgViewDuration Float? // segundos
   ctr             Float? // taxa de cliques da miniatura (%), colada do Studio
   impressions     Int?
-  source          String   @default("api") // api | manual | mixed
+  source          String   @default("api") // api | manual | mixed | analytics (views por dia do Analytics)
   notes           String?
   updatedAt       DateTime @updatedAt
 

@@ -244,7 +244,7 @@ async function buildContext(v: Loaded) {
     `Título: ${v.title ?? "—"}`,
     `Canal: ${v.myChannel.name} · ${formatLabel(format)}${v.durationSec ? ` · ${v.durationSec}s` : ""}`,
     `Publicado: ${v.publishedAt?.toISOString().slice(0, 16).replace("T", " ") ?? "—"} (UTC) · idade agora: ${fmtAge(age)}`,
-    `Agora: ${fmt(v.viewCount)} views · ${fmt(v.likeCount)} likes · ${fmt(v.commentCount)} comentários`,
+    `Agora (contador público do YouTube): ${fmt(v.viewCount)} views · ${fmt(v.likeCount)} likes · ${fmt(v.commentCount)} comentários`,
     peers.baseMedian
       ? `Normal do canal: mediana de ${fmt(peers.baseMedian)} views nos últimos ${peers.baseCount} ${formatLabel(format, true)} com 7+ dias → este está em ${inputs.multBase}x${age < 7 * 24 ? " (mas ainda não fez 7 dias; compare pelos marcos abaixo)" : ""}`
       : `Normal do canal: ainda sem vídeos suficientes com 7+ dias para comparar.`,
@@ -496,9 +496,17 @@ async function reportPrompt(myChannelId: string) {
       const ret = summarizeRetention(parse<RetentionPoint[]>(v.retention) ?? [], v.durationSec);
       const tr = parse<TrafficPoint[]>(v.trafficSources) ?? [];
       const d = parse<MyDiagnosisContent>(v.diagnoses[0]?.content);
-      const cp24 = v.checkpoints.find((x) => x.ageHours === 24)?.viewCount;
+      const curve = [...v.checkpoints]
+        .filter((x) => x.viewCount != null)
+        .sort((a, b) => a.ageHours - b.ageHours)
+        .map((x) => {
+          const med = peers.byCheckpoint[x.ageHours]?.median;
+          return `${checkpointLabel(x.ageHours)} ${fmt(x.viewCount)}${med ? ` (${(x.viewCount! / med).toFixed(1)}x)` : ""}`;
+        })
+        .join(", ");
+      const an = parse<VideoAnalytics>(v.analytics);
       L.push(
-        `- "${v.title}" · ${v.publishedAt?.toISOString().slice(0, 10)} · ${fmtAge(age)} · ${fmt(v.viewCount)} views${peers.baseMedian && v.viewCount != null ? ` (${(v.viewCount / peers.baseMedian).toFixed(1)}x)` : ""}${cp24 != null ? ` · em 24h: ${fmt(cp24)}` : ""}${v.durationSec ? ` · ${v.durationSec}s` : ""}${v.avgViewPercent != null ? ` · ${fmt(v.avgViewPercent, 1)}% visto` : ""}${ret ? ` · retenção aos 3s ${pctTxt(ret.at3s)}, fim ${pctTxt(ret.end)}` : ""}${tr[0] ? ` · fonte principal: ${TRAFFIC_LABEL[tr[0].source] ?? tr[0].source}` : ""}`,
+        `- "${v.title}" · ${v.publishedAt?.toISOString().slice(0, 10)} · ${fmtAge(age)} · ${fmt(v.viewCount)} views (contador público)${peers.baseMedian && v.viewCount != null ? ` (${(v.viewCount / peers.baseMedian).toFixed(1)}x)` : ""}${an?.views != null ? ` · Analytics: ${fmt(an.views)} views até ${an.throughDay ?? "?"}${an.shares != null ? `, ${fmt(an.shares)} compart.` : ""}${an.subsGained != null ? `, +${fmt(an.subsGained)} inscritos` : ""}` : ""}${curve ? ` · ao longo do tempo: ${curve}` : ""}${v.durationSec ? ` · ${v.durationSec}s` : ""}${v.avgViewPercent != null ? ` · ${fmt(v.avgViewPercent, 1)}% visto` : ""}${ret ? ` · retenção aos 3s ${pctTxt(ret.at3s)}, fim ${pctTxt(ret.end)}` : ""}${tr[0] ? ` · fonte principal: ${TRAFFIC_LABEL[tr[0].source] ?? tr[0].source}` : ""}`,
       );
       if (d) L.push(`  diagnóstico (${fmtAge(v.diagnoses[0].ageHours)}): ${d.veredito} — ${cut(d.resumo, 300)} | lições: ${d.licoes.slice(0, 3).join("; ")}`);
     }

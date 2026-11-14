@@ -208,7 +208,16 @@ export default async function MyVideoPage({ params }: { params: Promise<{ id: st
             {v.durationSec ? ` · ${mmss(v.durationSec)}` : ""} · publicado {fmtDateTime(v.publishedAt)} · <b className="text-zinc-200">{fmtAge(age)} de vida</b>
           </div>
           <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-            <Tile label="Views" value={fmtInt(v.viewCount)} hint={v.statsFetchedAt ? `medido ${fmtDateTime(v.statsFetchedAt)}` : undefined} />
+            <Tile
+              label="Views (contador público)"
+              value={fmtInt(v.viewCount)}
+              hint={[
+                v.statsFetchedAt ? `medido ${fmtDateTime(v.statsFetchedAt)}` : null,
+                analytics?.views != null ? `Analytics: ${fmtInt(analytics.views)}${analytics.throughDay ? ` até ${analytics.throughDay.split("-").reverse().slice(0, 2).join("/")}` : ""}` : null,
+              ]
+                .filter(Boolean)
+                .join(" · ") || undefined}
+            />
             <Tile
               label="× normal do canal"
               value={ratio != null ? `${ratio.toFixed(1)}x` : "—"}
@@ -291,8 +300,9 @@ export default async function MyVideoPage({ params }: { params: Promise<{ id: st
         <div>
           <h2 className="text-lg font-semibold">Ao longo do tempo</h2>
           <p className="text-sm text-zinc-400">
-            Números medidos pelo app em cada idade, comparados com a mediana dos seus outros {v.isShort ? "Shorts" : "vídeos longos"} na mesma idade. Os números do Studio
-            (continuaram assistindo, % visto, CTR) você cola abaixo.
+            Números medidos pelo app em cada idade, comparados com a mediana dos seus outros {v.isShort ? "Shorts" : "vídeos longos"} na mesma idade. Para vídeos que
+            saíram antes do app acompanhar, os marcos de 24h em diante vêm das views por dia do Analytics. 1h, 3h, 6h e 12h só existem para vídeos acompanhados
+            desde a publicação, porque o YouTube não guarda views por hora. Os números do Studio (continuaram assistindo, % visto, CTR) você cola abaixo.
           </p>
         </div>
         <div className="overflow-x-auto">
@@ -319,7 +329,7 @@ export default async function MyVideoPage({ params }: { params: Promise<{ id: st
                 return (
                   <tr key={h} className="border-t border-zinc-800">
                     <td className="py-1.5 font-medium">{checkpointLabel(h)}</td>
-                    <td className="py-1.5 pr-3 text-right text-xs text-zinc-500">{c?.measuredAgeMin != null ? fmtAge(c.measuredAgeMin / 60) : c ? "Studio" : "—"}</td>
+                    <td className="py-1.5 pr-3 text-right text-xs text-zinc-500">{c?.source === "analytics" ? `fim do dia (${fmtAge((c.measuredAgeMin ?? 0) / 60)}) · Analytics` : c?.measuredAgeMin != null ? fmtAge(c.measuredAgeMin / 60) : c ? "Studio" : "—"}</td>
                     <td className={`py-1.5 pr-3 text-right tabular-nums ${ratioClass(r)}`}>
                       {fmtInt(c?.viewCount)}
                       {r != null && <span className="ml-1 text-xs">({r.toFixed(1)}x)</span>}
@@ -434,7 +444,11 @@ export default async function MyVideoPage({ params }: { params: Promise<{ id: st
                 hint={peers.avgViewPctMedian != null ? `normal do canal: ${peers.avgViewPctMedian.toFixed(1)}%` : undefined}
               />
               <Tile label="Duração média" value={analytics.avgViewDuration != null ? mmss(analytics.avgViewDuration) : "—"} hint={v.durationSec ? `de ${mmss(v.durationSec)}` : undefined} />
-              <Tile label="Views (Analytics)" value={fmtInt(analytics.views)} />
+              <Tile
+                label="Views (Analytics)"
+                value={fmtInt(analytics.views)}
+                hint={analytics.throughDay ? `dados até ${analytics.throughDay.split("-").reverse().slice(0, 2).join("/")} (atrasa 1–2 dias)` : undefined}
+              />
               <Tile label="Compartilhamentos" value={fmtInt(analytics.shares)} />
               <Tile label="Inscritos ganhos" value={fmtInt(analytics.subsGained)} hint={analytics.subsLost ? `perdidos: ${fmtInt(analytics.subsLost)}` : undefined} />
               <Tile label="Horas assistidas" value={analytics.minutesWatched != null ? fmtInt(analytics.minutesWatched / 60) : "—"} />

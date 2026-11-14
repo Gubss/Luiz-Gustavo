@@ -117,11 +117,11 @@ export async function saveCheckpointAction(myVideoId: string, _prev: FormState, 
   if (!Object.keys(filled).length) return { error: "Preencha pelo menos um número." };
   const prev = await prisma.myVideoCheckpoint.findUnique({ where: { myVideoId_ageHours: { myVideoId, ageHours } } });
   // as views da API não são sobrescritas por uma digitada sem querer; só preenchem se estiver vazio
-  if (prev?.viewCount != null && prev.source !== "manual") delete filled.viewCount;
+  if (prev?.viewCount != null && (prev.source === "api" || prev.source === "mixed")) delete filled.viewCount;
   await prisma.myVideoCheckpoint.upsert({
     where: { myVideoId_ageHours: { myVideoId, ageHours } },
     create: { myVideoId, ageHours, ...filled, source: "manual" },
-    update: { ...filled, source: prev && prev.source === "api" ? "mixed" : (prev?.source ?? "manual") },
+    update: { ...filled, source: prev && prev.source === "api" ? "mixed" : prev?.source === "mixed" ? "mixed" : "manual" },
   });
   refresh(undefined, myVideoId);
   return { ok: "Números do Studio salvos." };

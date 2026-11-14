@@ -50,7 +50,7 @@ export async function startRefreshVideoJob(myVideoId: string) {
 export async function startRefreshChannelJob(myChannelId: string, full = false) {
   const c = await prisma.myChannel.findUniqueOrThrow({ where: { id: myChannelId }, select: { name: true } });
   return startJob(
-    { kind: "my-channel-refresh", targetId: myChannelId, label: `Atualizando vídeos de ${c.name}`, href: `/meus-videos?canal=${myChannelId}`, expectedSec: full ? 60 : 25 },
+    { kind: "my-channel-refresh", targetId: myChannelId, label: `Atualizando vídeos de ${c.name}`, href: `/meus-videos?canal=${myChannelId}`, expectedSec: full ? 120 : 60 },
     async () => `${await refreshChannelNow(myChannelId, { full })}.`,
   );
 }
@@ -58,10 +58,17 @@ export async function startRefreshChannelJob(myChannelId: string, full = false) 
 export async function startChannelReportJob(myChannelId: string, trigger: "auto" | "manual" = "manual") {
   const c = await prisma.myChannel.findUniqueOrThrow({ where: { id: myChannelId }, select: { name: true } });
   return startJob(
-    { kind: "my-channel-report", targetId: myChannelId, label: `Diagnóstico do canal ${c.name}`, href: `/meus-videos?canal=${myChannelId}#canal`, expectedSec: 75 },
+    { kind: "my-channel-report", targetId: myChannelId, label: `Diagnóstico do canal ${c.name}`, href: `/meus-videos?canal=${myChannelId}#canal`, expectedSec: 150 },
     async () => {
+      // Antes de analisar, puxa os números de agora de todos os vídeos (públicos + Analytics, com login).
+      let refreshNote = "";
+      try {
+        refreshNote = await refreshChannelNow(myChannelId);
+      } catch (e) {
+        refreshNote = `não deu para atualizar os números antes (${e instanceof Error ? e.message : String(e)})`;
+      }
       const r = await runChannelReport(myChannelId, trigger);
-      return `${r.report.videoCount} vídeos analisados. As lições já valem no Gerador. Custo: ${money(r.costUsd)}.`;
+      return `${r.report.videoCount} vídeos analisados. As lições já valem no Gerador. Custo: ${money(r.costUsd)}. Números: ${refreshNote}.`;
     },
     ["my-channel-refresh"],
   );

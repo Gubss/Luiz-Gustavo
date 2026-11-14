@@ -316,3 +316,34 @@ test("meus vídeos: lê o canal, acompanha marcos, Analytics, diagnóstico e li�
   const unchanged = await prisma.myChannel.findUniqueOrThrow({ where: { id: ch.id } });
   assert.equal(unchanged.concept, "Animação 3D de curiosidades.", "nada é salvo sem confirmar");
 });
+
+test("marcos de vídeos antigos vêm das views por dia do Analytics (sem passar por cima do que o app mediu)", async () => {
+  const { prisma } = await import("../src/lib/db");
+  const mv = await import("../src/lib/my-videos");
+  // Dia do Analytics = fuso do Pacífico. Em novembro (PST), 12/11 termina às 08:00 UTC de 13/11.
+  assert.equal(mv.pacificEndOfDay("2026-11-12").toISOString(), "2026-11-13T08:00:00.000Z");
+  assert.equal(mv.pacificEndOfDay("2026-07-01").toISOString(), "2026-07-02T07:00:00.000Z", "no horário de verão é 07:00 UTC");
+  const ch = await prisma.myChannel.create({ data: { name: "Canal antigo" } });
+  const v = await prisma.myVideo.create({
+    data: { myChannelId: ch.id, externalId: "old1", url: "https://www.youtube.com/shorts/old1", publishedAt: new Date("2026-10-01T11:00:00Z") },
+  });
+  // já medido pelo app em 48h: não pode ser trocado
+  await prisma.myVideoCheckpoint.create({ data: { myVideoId: v.id, ageHours: 48, viewCount: 7777, measuredAgeMin: 48 * 60, source: "api" } });
+  const daily = Array.from({ length: 10 }, (_, i) => ({ day: `2026-10-${String(i + 1).padStart(2, "0")}`, views: 1000 * (i + 1) }));
+  const n = await mv.backfillCheckpointsFromDaily(v, daily);
+  const cps = await prisma.myVideoCheckpoint.findMany({ where: { myVideoId: v.id }, orderBy: { ageHours: "asc" } });
+  const by = Object.fromEntries(cps.map((c) => [c.ageHours, c]));
+  // 01/10 termina 02/10 07:00 UTC = 20h de vida (vale para 24h, janela 18–30h)
+  assert.equal(by[24].viewCount, 1000);
+  assert.equal(by[24].source, "analytics");
+  assert.equal(by[48].viewCount, 7777, "o número medido pelo app fica");
+  assert.equal(by[72].viewCount, 1000 + 2000 + 3000, "3 dias = soma até 03/10 (68h de vida)");
+  assert.equal(by[168].viewCount, 28000, "7 dias = soma até 07/10 (164h)");
+  assert.equal(by[1], undefined, "1h não dá para saber pelo Analytics");
+  assert.equal(n, 3);
+  // o app medindo depois troca o número do Analytics
+  await mv.recordCheckpoints(v, new Date(v.publishedAt!.getTime() + 72 * 3_600_000), { views: 6500, likes: 1, comments: 1 });
+  const c72 = await prisma.myVideoCheckpoint.findUniqueOrThrow({ where: { myVideoId_ageHours: { myVideoId: v.id, ageHours: 72 } } });
+  assert.equal(c72.viewCount, 6500);
+  assert.equal(c72.source, "api");
+});

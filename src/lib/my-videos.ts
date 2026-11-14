@@ -135,12 +135,12 @@ export async function recordCheckpoints(v: Pick<MyVideo, "id" | "publishedAt">, 
     if (Math.abs(age - h) > checkpointTolerance(h)) continue;
     const prev = await prisma.myVideoCheckpoint.findUnique({ where: { myVideoId_ageHours: { myVideoId: v.id, ageHours: h } } });
     const measuredAgeMin = Math.round(age * 60);
-    if (prev?.measuredAgeMin != null && Math.abs(prev.measuredAgeMin - h * 60) <= Math.abs(measuredAgeMin - h * 60)) continue;
+    if (prev?.source !== "analytics" && prev?.measuredAgeMin != null && Math.abs(prev.measuredAgeMin - h * 60) <= Math.abs(measuredAgeMin - h * 60)) continue;
     const data = { measuredAgeMin, viewCount: s.views, likeCount: s.likes, commentCount: s.comments };
     await prisma.myVideoCheckpoint.upsert({
       where: { myVideoId_ageHours: { myVideoId: v.id, ageHours: h } },
       create: { myVideoId: v.id, ageHours: h, ...data, source: "api" },
-      update: { ...data, source: prev && prev.source !== "api" ? "mixed" : "api" },
+      update: { ...data, source: prev && prev.source !== "api" && prev.source !== "analytics" ? "mixed" : "api" },
     });
     filled.push(h);
   }
@@ -229,11 +229,60 @@ export async function refreshAnalytics(v: MyVideo & { myChannel: { externalId: s
         analyticsError: null,
       },
     });
+    await backfillCheckpointsFromDaily(v, a.daily);
     return true;
   } catch (e) {
     await prisma.myVideo.update({ where: { id: v.id }, data: { analyticsError: e instanceof Error ? e.message : String(e) } });
     throw e;
   }
+}
+
+/** Meia-noite (fim do dia) no horário do Pacífico, que é o fuso dos dias do YouTube Analytics. */
+export function pacificEndOfDay(day: string) {
+  const [y, m, d] = day.split("-").map(Number);
+  const guess = new Date(Date.UTC(y, m - 1, d + 1, 8)); // 00:00 PST = 08:00 UTC
+  const off = new Intl.DateTimeFormat("en-US", { timeZone: "America/Los_Angeles", timeZoneName: "shortOffset" })
+    .formatToParts(guess)
+    .find((p) => p.type === "timeZoneName")?.value;
+  const h = off === "GMT-7" ? 7 : 8;
+  return new Date(Date.UTC(y, m - 1, d + 1, h));
+}
+
+/**
+ * Preenche os marcos de 24h em diante com as views por dia do Analytics (soma acumulada até o fim de cada dia).
+ * Serve para os vídeos que saíram antes do app começar a acompanhar. 1h/3h/6h/12h não dá: o Analytics não tem
+ * views por hora. Nunca passa por cima de um número medido pelo app ou colado do Studio.
+ */
+export async function backfillCheckpointsFromDaily(v: Pick<MyVideo, "id" | "publishedAt">, daily: { day: string; views: number }[]) {
+  if (!v.publishedAt || !daily.length) return 0;
+  const sorted = [...daily].sort((a, b) => a.day.localeCompare(b.day));
+  const lastWithData = sorted.filter((d) => d.views > 0).at(-1)?.day;
+  let cum = 0;
+  const points: { age: number; views: number }[] = [];
+  for (const d of sorted) {
+    cum += d.views;
+    if (lastWithData && d.day > lastWithData) break;
+    const age = (pacificEndOfDay(d.day).getTime() - v.publishedAt.getTime()) / HOUR;
+    if (age > 0) points.push({ age, views: cum });
+  }
+  let filled = 0;
+  for (const h of CHECKPOINTS) {
+    if (h < 24) continue;
+    const best = points
+      .filter((p) => Math.abs(p.age - h) <= checkpointTolerance(h))
+      .sort((a, b) => Math.abs(a.age - h) - Math.abs(b.age - h))[0];
+    if (!best) continue;
+    const prev = await prisma.myVideoCheckpoint.findUnique({ where: { myVideoId_ageHours: { myVideoId: v.id, ageHours: h } } });
+    if (prev && prev.source !== "analytics") continue;
+    const data = { measuredAgeMin: Math.round(best.age * 60), viewCount: best.views, source: "analytics" };
+    await prisma.myVideoCheckpoint.upsert({
+      where: { myVideoId_ageHours: { myVideoId: v.id, ageHours: h } },
+      create: { myVideoId: v.id, ageHours: h, ...data },
+      update: data,
+    });
+    filled++;
+  }
+  return filled;
 }
 
 export async function channelHasGoogle(externalId: string | null) {
@@ -243,8 +292,11 @@ export async function channelHasGoogle(externalId: string | null) {
 
 // ---------- "Atualizar agora" ----------
 
-/** Atualiza um canal inteiro: uploads novos, números de todos os vídeos e Analytics dos recentes. */
-export async function refreshChannelNow(myChannelId: string, opts: { full?: boolean; analyticsDays?: number } = {}) {
+/**
+ * Atualiza um canal inteiro: uploads novos, números públicos de todos os vídeos e o Analytics de TODOS os vídeos
+ * (pula os que foram lidos nas últimas `analyticsFreshHours` horas, para o botão ficar rápido se clicar de novo).
+ */
+export async function refreshChannelNow(myChannelId: string, opts: { full?: boolean; analyticsFreshHours?: number; analyticsMax?: number } = {}) {
   const sync = await syncUploads(myChannelId, { full: opts.full });
   const c = await prisma.myChannel.findUniqueOrThrow({ where: { id: myChannelId } });
   const videos = await prisma.myVideo.findMany({ where: { myChannelId }, orderBy: { publishedAt: "desc" } });
@@ -252,15 +304,22 @@ export async function refreshChannelNow(myChannelId: string, opts: { full?: bool
   const notes = [`${sync.added} vídeo(s) novo(s)`, `${st.updated} com números atualizados`];
   const g = await channelHasGoogle(c.externalId);
   if (g) {
-    const since = Date.now() - (opts.analyticsDays ?? 60) * DAY;
-    const recent = (await prisma.myVideo.findMany({ where: { myChannelId, publishedAt: { gte: new Date(since) } }, include: { myChannel: true } })).slice(0, 40);
+    const fresh = Date.now() - (opts.analyticsFreshHours ?? 6) * HOUR;
+    const all = await prisma.myVideo.findMany({ where: { myChannelId }, orderBy: { publishedAt: "desc" }, include: { myChannel: true } });
+    const due = all.filter((v) => !v.analyticsFetchedAt || v.analyticsFetchedAt.getTime() < fresh).slice(0, opts.analyticsMax ?? 300);
     let ok = 0;
-    try {
-      for (const v of recent) if (await refreshAnalytics(v)) ok++;
-      notes.push(`Analytics de ${ok} vídeo(s)`);
-    } catch (e) {
-      notes.push(`Analytics: ${e instanceof Error ? e.message : String(e)}`);
+    const errors: string[] = [];
+    for (const v of due) {
+      try {
+        if (await refreshAnalytics(v)) ok++;
+      } catch (e) {
+        errors.push(e instanceof Error ? e.message : String(e));
+        // Login vencido ou API desligada: não adianta tentar os outros.
+        if (e instanceof GoogleAuthError || errors.length >= 3) break;
+      }
     }
+    notes.push(`Analytics de ${ok} vídeo(s)${all.length - due.length > 0 ? ` (${all.length - due.length} já estavam em dia)` : ""}`);
+    if (errors.length) notes.push(`Analytics: ${errors[0]}`);
   }
   return notes.join(" · ");
 }
