@@ -7,6 +7,7 @@ import { dataLevel, formatLabel, loadNicheStudies, type PlaybookFormat } from "@
 import { estimateIdeas, loadContext, profileGaps } from "@/lib/generator";
 import { StateForm } from "@/components/StateForm";
 import { IdeaCard } from "@/components/IdeaCard";
+import { repeatsForIdeas } from "@/lib/my-catalog";
 import { generateIdeasAction } from "./actions";
 import { runningJobsFor } from "@/lib/jobs";
 import { RunningNote } from "@/components/RunningNote";
@@ -71,6 +72,7 @@ export default async function GeneratorPage({ searchParams }: PageProps<"/gerado
   ]);
   const req = { myChannelId: channel.id, nicheId, format, referenceId: ctx.reference?.id ?? null, count };
   const est = await estimateIdeas(req);
+  const [repeats, ownCount] = await Promise.all([repeatsForIdeas(recent), prisma.myChannelVideo.count({ where: { myChannelId: channel.id } })]);
   const ideasJob = (await runningJobsFor([channel.id])).find((j) => j.kind === "ideas");
   const gaps = profileGaps(channel, channel._count.scripts);
 
@@ -139,6 +141,11 @@ export default async function GeneratorPage({ searchParams }: PageProps<"/gerado
             {channel._count.scripts} {channel._count.scripts === 1 ? "roteiro publicado" : "roteiros publicados"} cadastrados
           </div>
           {gaps.length ? <div className="text-amber-300">Falta: {gaps.join(", ")}.</div> : <div className="text-emerald-300">Perfil completo.</div>}
+          {ownCount ? (
+            <div className="text-zinc-400">{ownCount} vídeos publicados lidos do YouTube: o gerador não repete esses temas.</div>
+          ) : (
+            <div className="text-amber-300">Leia os vídeos do seu canal no perfil para o gerador não repetir temas que você já fez.</div>
+          )}
           <Link href={`/meus-canais/${channel.id}`} className="text-xs text-red-400 hover:underline">
             Editar perfil
           </Link>
@@ -266,7 +273,7 @@ export default async function GeneratorPage({ searchParams }: PageProps<"/gerado
         ) : (
           <div className="grid gap-3 md:grid-cols-2">
             {recent.map((i) => (
-              <IdeaCard key={i.id} idea={i} />
+              <IdeaCard key={i.id} idea={i} repeats={repeats.get(i.id)} />
             ))}
           </div>
         )}

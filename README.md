@@ -148,6 +148,16 @@ têm cartilhas separadas.
    e hashtags. As **medidas do roteiro** (duração, palavras/s, tamanho das cenas, onde o gancho termina) são
    calculadas em código e comparadas com a mediana da cartilha.
 
+**O que o seu canal já fez:** no perfil, *Ler os vídeos do meu canal* lê do YouTube todos os vídeos publicados
+(pela URL do canal; ~1 unidade + 2 a cada 50 vídeos). O gerador recebe esses títulos, os roteiros cadastrados e as ideias
+do banco e não repete o tema, mesmo que o vídeo antigo seja de outro estilo (ex.: 2D). Além disso, cada ideia é conferida
+em código e ganha o aviso "⚠ Seu canal já fez algo parecido" com o vídeo/roteiro/ideia parecido. Repetir um tema que deu
+certo em outros canais pode; repetir o que o próprio canal já contou, não.
+
+**Seus vídeos × cartilha:** estude um vídeo seu pelo link (*Estudos de vídeo*) com *Estudar tudo*. A página do vídeo
+mostra "Comparado com a cartilha" (grátis, em código): duração, palavras/s, abertura, algo novo a cada X s, fecho e
+título, dentro ou fora da faixa dos estudos. Vídeos dos seus canais nunca entram na cartilha (ela é só das referências).
+
 A regra central do gerador: da cartilha e da referência ele usa só o **como** (tipo de gancho, fórmula de título,
 ritmo, virada, fecho); o **o quê** (personagens, cenário, tom, formato de história) vem sempre do perfil do canal.
 Sem cartilha ainda, usa até 5 estudos direto; sem nicho, usa só o perfil.

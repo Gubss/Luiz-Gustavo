@@ -21,6 +21,7 @@ import {
   type PlaybookFormat,
   type PlaybookStats,
 } from "./playbook";
+import { channelStopwords, findOwnRepeats, ownItems, type OwnMatch } from "./my-catalog";
 
 function parse<T>(json: string | null | undefined): T | null {
   if (!json) return null;
@@ -255,12 +256,14 @@ export const IdeasSchema = z.object({
   ),
 });
 export type IdeasContent = z.infer<typeof IdeasSchema>;
-export type IdeaData = IdeasContent["ideias"][number] & { leitura?: string; ponto?: string };
+export type IdeaData = IdeasContent["ideias"][number] & { leitura?: string; ponto?: string; jaFeito?: OwnMatch[] };
 
 const IDEAS_TASK = `TAREFA: sugerir ideias de vídeo para o meu canal.
 - Cada ideia precisa caber no formato do canal (personagens e formatos de história do perfil).
 - Varie: não faça todas as ideias com o mesmo formato de história nem o mesmo tipo de gancho, a não ser que a cartilha mostre que só um funciona.
-- Fuja dos temas que o canal já fez ou que já estão no banco de ideias (lista no fim).
+- NÃO repita temas que o MEU canal já publicou ou já tem guardados (lista no fim), mesmo que o vídeo antigo seja de outro estilo (ex.: 2D) ou tenha outro título: mesmo assunto/mesma pergunta = repetido.
+  Repetir um tema que deu certo em OUTROS canais pode; repetir o que o meu canal já contou, não.
+  Se o ponto de partida que eu der for um tema que o canal já fez, avise em "risco" e proponha um ângulo realmente novo.
 - Títulos seguem as fórmulas da cartilha, adaptados ao canal.`;
 
 const ideasOutput = (n: number) => 1500 + 650 * n;
@@ -273,18 +276,23 @@ function ideasPrompt(ctx: GeneratorContext, n: number, ponto: string, taken: str
     `Formato: ${formatLabel(ctx.format, true)}. Quantas ideias: ${n}.`,
     ponto.trim() ? `Ponto de partida que eu dei (tema, ideia ou pedido): ${ponto.trim()}` : "Sem ponto de partida: escolha temas a partir da cartilha (temas que funcionam, o que o público pede) e do perfil.",
     ctx.reference ? "Use o vídeo de referência como inspiração principal (tema e mecânica), traduzido para o meu canal." : "",
-    taken.length ? `\nTemas e títulos que o canal já fez ou já tem no banco (não repita):\n${taken.map((t) => `- ${t}`).join("\n")}` : "",
+    taken.length
+      ? `\n# O QUE O MEU CANAL JÁ FEZ (vídeos publicados, roteiros e ideias guardadas) — não repita esses temas\n${taken.map((t) => `- ${t}`).join("\n")}`
+      : "\n(O canal ainda não tem a lista de vídeos publicados no app.)",
   ]
     .filter((x) => x !== "")
     .join("\n");
 }
 
 async function takenThemes(myChannelId: string) {
-  const [ideas, scripts] = await Promise.all([
-    prisma.idea.findMany({ where: { myChannelId, status: { not: "DISCARDED" } }, select: { theme: true, chosenTitle: true }, orderBy: { createdAt: "desc" }, take: 60 }),
-    prisma.myChannelScript.findMany({ where: { myChannelId }, select: { title: true }, take: 60 }),
-  ]);
-  return [...scripts.map((s) => s.title), ...ideas.map((i) => i.chosenTitle || i.theme)];
+  const items = await ownItems(myChannelId);
+  // Vídeos publicados primeiro (até 300 títulos ≈ 5 mil tokens), depois roteiros e ideias.
+  const pick = [
+    ...items.filter((i) => i.source === "vídeo publicado").slice(0, 300),
+    ...items.filter((i) => i.source === "roteiro cadastrado").slice(0, 60),
+    ...items.filter((i) => i.source === "ideia no banco").slice(0, 80),
+  ];
+  return pick.map((i) => `${i.title} [${i.source}]`);
 }
 
 export type IdeasRequest = {
@@ -325,9 +333,13 @@ export async function generateIdeas(req: IdeasRequest) {
   if (!ideas.length) throw new GeneratorError("O Claude não devolveu nenhuma ideia. Tente de novo.");
 
   const each = r.costUsd / ideas.length;
+  const own = await ownItems(ctx.channel.id);
+  const stops = await channelStopwords(ctx.channel.id);
   const created = [];
   for (const idea of ideas) {
-    const data: IdeaData = { ...idea, leitura: r.data.leitura, ponto: ponto || undefined };
+    // Checagem em código, além da instrução no prompt: o tema já foi feito pelo canal?
+    const jaFeito = findOwnRepeats(`${idea.tema} ${idea.titulos.map((t) => t.titulo).join(" ")}`, own, 3, stops);
+    const data: IdeaData = { ...idea, leitura: r.data.leitura, ponto: ponto || undefined, jaFeito };
     created.push(
       await prisma.idea.create({
         data: {

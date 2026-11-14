@@ -2,6 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { IDEA_STATUS } from "@/lib/idea-status";
 import { IdeaCard } from "@/components/IdeaCard";
+import { repeatsForIdeas } from "@/lib/my-catalog";
 
 type SP = Record<string, string | string[] | undefined>;
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
@@ -35,6 +36,7 @@ export default async function IdeasPage({ searchParams }: PageProps<"/ideias">) 
     }),
     prisma.idea.groupBy({ by: ["status"], where: canal ? { myChannelId: canal } : {}, _count: true }),
   ]);
+  const repeats = await repeatsForIdeas(ideas);
   const names = new Map(channels.map((c) => [c.id, c.name]));
   const countOf = (s: string) => counts.find((c) => c.status === s)?._count ?? 0;
   const href = (patch: Record<string, string | undefined>) => {
@@ -91,7 +93,7 @@ export default async function IdeasPage({ searchParams }: PageProps<"/ideias">) 
       ) : (
         <div className="grid gap-3 md:grid-cols-2">
           {ideas.map((i) => (
-            <IdeaCard key={i.id} idea={i} channelName={channels.length > 1 && i.myChannelId ? names.get(i.myChannelId) : null} />
+            <IdeaCard key={i.id} idea={i} channelName={channels.length > 1 && i.myChannelId ? names.get(i.myChannelId) : null} repeats={repeats.get(i.id)} />
           ))}
         </div>
       )}

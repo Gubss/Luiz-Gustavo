@@ -3,6 +3,7 @@ import type { Idea } from "@prisma/client";
 import type { IdeaData } from "@/lib/generator";
 import { IDEA_STATUS } from "@/lib/idea-status";
 import { fmtDateTime } from "@/lib/format";
+import type { OwnMatch } from "@/lib/my-catalog";
 
 function parse<T>(json: string | null | undefined): T | null {
   if (!json) return null;
@@ -25,8 +26,34 @@ export function StatusBadge({ status }: { status: string }) {
   return <span className={`rounded px-2 py-0.5 text-[11px] ${STATUS_STYLE[status] ?? STATUS_STYLE.IDEA}`}>{IDEA_STATUS[status] ?? status}</span>;
 }
 
+/** Aviso "seu canal já fez algo parecido" (vídeo publicado, roteiro cadastrado ou outra ideia). */
+export function RepeatWarning({ repeats }: { repeats: OwnMatch[] }) {
+  if (!repeats.length) return null;
+  return (
+    <div className="rounded-lg border border-amber-700 bg-amber-950/40 p-2 text-xs text-amber-200">
+      <div className="font-medium">⚠ Seu canal já fez algo parecido:</div>
+      <ul className="mt-1 space-y-0.5">
+        {repeats.map((m, i) => (
+          <li key={i}>
+            {m.url ? (
+              <a href={m.url} target={m.url.startsWith("http") ? "_blank" : undefined} rel="noreferrer" className="underline-offset-2 hover:underline">
+                {m.title}
+              </a>
+            ) : (
+              m.title
+            )}{" "}
+            <span className="text-amber-200/60">
+              · {m.source} · em comum: {m.shared.join(", ")}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 /** Cartão de uma ideia (gerador e banco de ideias). */
-export function IdeaCard({ idea, channelName }: { idea: Idea; channelName?: string | null }) {
+export function IdeaCard({ idea, channelName, repeats = [] }: { idea: Idea; channelName?: string | null; repeats?: OwnMatch[] }) {
   const d = parse<IdeaData>(idea.ideaData);
   const titles = parse<string[]>(idea.titles) ?? [];
   return (
@@ -43,6 +70,7 @@ export function IdeaCard({ idea, channelName }: { idea: Idea; channelName?: stri
         </div>
         <StatusBadge status={idea.status} />
       </div>
+      <RepeatWarning repeats={repeats} />
       {d ? (
         <>
           <p className="text-sm text-zinc-200">{d.premissa}</p>

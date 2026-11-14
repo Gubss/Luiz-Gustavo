@@ -7,7 +7,8 @@ import { findSimilarTitles } from "@/lib/catalog";
 import { estimateScript, type IdeaData, type ScriptContent, type ScriptMetrics } from "@/lib/generator";
 import type { PlaybookStats } from "@/lib/playbook";
 import { StateForm } from "@/components/StateForm";
-import { StatusBadge } from "@/components/IdeaCard";
+import { RepeatWarning, StatusBadge } from "@/components/IdeaCard";
+import { repeatsForIdeas } from "@/lib/my-catalog";
 import { ConfirmDelete } from "@/app/nichos/[id]/forms";
 import { deleteIdea, generateScriptAction, saveIdeaNotes, setIdeaStatus } from "@/app/gerador/actions";
 import { IdeaStatusSelect } from "./forms";
@@ -213,6 +214,7 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
     runningJobsFor([idea.id]),
   ]);
   const scriptJob = jobs.find((j) => j.kind === "script");
+  const repeats = (await repeatsForIdeas([idea])).get(idea.id) ?? [];
   const pbStats = parse<PlaybookStats>(playbook?.stats);
   const allTitles = [...new Set([...(idea.chosenTitle ? [idea.chosenTitle] : []), ...titles])];
 
@@ -239,6 +241,7 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
       {/* A ideia */}
       <section className="card space-y-4 p-5 text-sm">
         <h2 className="text-lg font-semibold">A ideia</h2>
+        <RepeatWarning repeats={repeats} />
         {d ? (
           <>
             <p className="text-base text-zinc-200">{d.premissa}</p>

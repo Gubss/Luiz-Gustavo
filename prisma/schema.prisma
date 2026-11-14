@@ -156,6 +156,7 @@ model MyChannel {
   audience     String? // público
   rules        String? // sempre / nunca
   durationSec  Int? // duração alvo
+  catalogFetchedAt DateTime? // última leitura da lista de vídeos do canal no YouTube
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
@@ -163,6 +164,27 @@ model MyChannel {
   videos   MyVideo[]
   ideas    Idea[]
   scripts  MyChannelScript[]
+  catalog  MyChannelVideo[]
+}
+
+/// Todos os vídeos que o meu canal já publicou (lidos do YouTube): o gerador não repete esses temas,
+/// mesmo que o vídeo antigo tenha outro estilo (ex.: 2D).
+model MyChannelVideo {
+  id          String   @id @default(cuid())
+  myChannelId String
+  externalId  String
+  title       String
+  publishedAt DateTime
+  durationSec Int?
+  isShort     Boolean?
+  viewCount   Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  myChannel MyChannel @relation(fields: [myChannelId], references: [id], onDelete: Cascade)
+
+  @@unique([myChannelId, externalId])
+  @@index([myChannelId, publishedAt])
 }
 
 /// Roteiros que o canal já publicou (ou escreveu): exemplos da voz e do formato do canal para o gerador.
