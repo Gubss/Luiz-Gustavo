@@ -139,8 +139,16 @@ export default async function GeneratorPage({ searchParams }: PageProps<"/gerado
             {channel._count.scripts} {channel._count.scripts === 1 ? "roteiro publicado" : "roteiros publicados"} cadastrados
           </div>
           {gaps.length ? <div className="text-amber-300">Falta: {gaps.join(", ")}.</div> : <div className="text-emerald-300">Perfil completo.</div>}
+          <div className={ctx.learnings ? "text-emerald-300" : "text-zinc-500"}>
+            {ctx.learnings
+              ? `${ctx.learnings} ${ctx.learnings === 1 ? "lição" : "lições"} dos seus vídeos publicados entram no pedido.`
+              : "Ainda sem lições dos seus vídeos (faça um diagnóstico em Meus vídeos)."}
+          </div>
           <Link href={`/meus-canais/${channel.id}`} className="text-xs text-red-400 hover:underline">
             Editar perfil
+          </Link>
+          <Link href={`/meus-videos?canal=${channel.id}`} className="ml-3 text-xs text-red-400 hover:underline">
+            Meus vídeos
           </Link>
         </div>
         <div className="card space-y-1 p-4 text-sm">

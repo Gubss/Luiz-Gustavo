@@ -156,6 +156,14 @@ model MyChannel {
   audience     String? // público
   rules        String? // sempre / nunca
   durationSec  Int? // duração alvo
+  // Etapa 7: meus vídeos publicados
+  title             String? // nome do canal no YouTube
+  thumbnailUrl      String?
+  subscriberCount   Int?
+  uploadsPlaylistId String?
+  syncedAt          DateTime? // última leitura da lista de uploads
+  autoDiagnose      Boolean   @default(false) // diagnóstico automático em 24h, 3 dias e 7 dias
+  analyticsNotes    String? // números do canal colados (Studio, ou relatório .md do Maestri/GPT) — reserva sem login do Google
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
@@ -163,6 +171,7 @@ model MyChannel {
   videos   MyVideo[]
   ideas    Idea[]
   scripts  MyChannelScript[]
+  reports  MyChannelReport[]
 }
 
 /// Roteiros que o canal já publicou (ou escreveu): exemplos da voz e do formato do canal para o gerador.
@@ -474,6 +483,21 @@ model MyVideo {
   impressions      Int?
   avgViewDuration  Float?
   avgViewPercent   Float?
+  // Etapa 7
+  description        String?
+  shortSource        String? // "duration" | "url"
+  scriptText         String? // roteiro colado (quando não veio do gerador)
+  transcriptText     String?
+  transcriptSegments String? // JSON [{start, dur, text}]
+  transcriptSource   String? // "youtube" | "manual"
+  // YouTube Analytics (login com Google, só leitura). Os números chegam com 1–2 dias de atraso.
+  analytics          String? // JSON: views, minutos assistidos, duração média, % médio visto, likes, comentários, compartilhamentos, inscritos
+  retention          String? // JSON [{r, watch, rel}] — r = posição no vídeo (0–1)
+  trafficSources     String? // JSON [{source, views}]
+  dailyViews         String? // JSON [{day, views, minutes}]
+  analyticsFetchedAt DateTime?
+  analyticsError     String?
+  studioNotes        String? // texto livre colado do YouTube Studio
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
@@ -482,8 +506,10 @@ model MyVideo {
   inspiredIdea  Idea?               @relation(fields: [inspiredIdeaId], references: [id], onDelete: SetNull)
   snapshots     MyVideoSnapshot[]
   checkpoints   MyVideoCheckpoint[]
+  diagnoses     MyVideoDiagnosis[]
 
   @@unique([platform, externalId])
+  @@index([myChannelId, publishedAt])
 }
 
 /// Snapshots horários nas primeiras 72h, depois diários.
@@ -506,7 +532,7 @@ model MyVideoSnapshot {
 model MyVideoCheckpoint {
   id              String   @id @default(cuid())
   myVideoId       String
-  ageHours        Int // 1 | 3 | 24 | 48
+  ageHours        Int // 1 | 3 | 6 | 12 | 24 | 48 | 72 | 168 | 336 | 672
   measuredAgeMin  Int? // idade real em minutos quando a API mediu
   viewCount       Int?
   likeCount       Int?
@@ -514,6 +540,8 @@ model MyVideoCheckpoint {
   stayedPct       Float? // Shorts: "continuaram assistindo" (%)
   avgViewPct      Float? // % médio do vídeo visto
   avgViewDuration Float? // segundos
+  ctr             Float? // taxa de cliques da miniatura (%), colada do Studio
+  impressions     Int?
   source          String   @default("api") // api | manual | mixed
   notes           String?
   updatedAt       DateTime @updatedAt
@@ -521,6 +549,65 @@ model MyVideoCheckpoint {
   myVideo MyVideo @relation(fields: [myVideoId], references: [id], onDelete: Cascade)
 
   @@unique([myVideoId, ageHours])
+}
+
+/// Diagnóstico de um vídeo meu numa idade (ex.: 24h, 3 dias). Um vídeo pode ter vários: dá para ver a leitura mudar.
+/// `inputs` guarda os números usados (medidos em código); `content` é a leitura do Claude (hipóteses).
+model MyVideoDiagnosis {
+  id           String   @id @default(cuid())
+  myVideoId    String
+  ageHours     Float
+  milestone    Int? // 24 | 72 | 168 quando automático
+  trigger      String // "auto" | "manual"
+  model        String
+  inputs       String // JSON
+  content      String // JSON
+  markdown     String?
+  inputTokens  Int?
+  outputTokens Int?
+  costUsd      Float?
+  createdAt    DateTime @default(now())
+
+  myVideo MyVideo @relation(fields: [myVideoId], references: [id], onDelete: Cascade)
+
+  @@index([myVideoId, createdAt])
+}
+
+/// Diagnóstico do canal inteiro: o que funciona e o que não funciona nos MEUS vídeos.
+/// As lições vão para o gerador (aprendizados dos meus vídeos).
+model MyChannelReport {
+  id           String   @id @default(cuid())
+  myChannelId  String
+  trigger      String // "auto" | "manual"
+  model        String
+  inputs       String // JSON
+  content      String // JSON
+  markdown     String?
+  videoCount   Int
+  inputTokens  Int?
+  outputTokens Int?
+  costUsd      Float?
+  createdAt    DateTime @default(now())
+
+  myChannel MyChannel @relation(fields: [myChannelId], references: [id], onDelete: Cascade)
+
+  @@index([myChannelId, createdAt])
+}
+
+/// Login com Google (só leitura) de um canal do YouTube. Fica só no banco local.
+/// status: "ok" | "expired" (precisa entrar de novo)
+model GoogleAuth {
+  id                String   @id @default(cuid())
+  channelExternalId String   @unique
+  channelTitle      String
+  accessToken       String
+  refreshToken      String?
+  expiresAt         DateTime
+  scope             String
+  status            String   @default("ok")
+  lastError         String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 }
 
 // ---------- Tarefas em segundo plano ----------

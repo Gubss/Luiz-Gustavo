@@ -21,6 +21,7 @@ import {
   type PlaybookFormat,
   type PlaybookStats,
 } from "./playbook";
+import { learningsBlock, publishedTitles } from "./my-diagnosis";
 
 function parse<T>(json: string | null | undefined): T | null {
   if (!json) return null;
@@ -127,6 +128,8 @@ export type GeneratorContext = {
   /** Estudos usados quando ainda não há cartilha. */
   fallbackStudies: number;
   reference: { id: string; title: string; channelTitle: string } | null;
+  /** Quantas lições dos meus vídeos (etapa 7) entraram no pedido. */
+  learnings: number;
   block: string;
 };
 
@@ -145,6 +148,9 @@ export async function loadContext(opts: {
   const niche = nicheId ? await prisma.niche.findUnique({ where: { id: nicheId } }) : null;
 
   const parts: string[] = [profileBlock(channel, format)];
+  // Etapa 7: o que os números dos MEUS vídeos mostraram (vale mais que a cartilha quando conflita).
+  const learned = await learningsBlock(channel.id);
+  if (learned.block) parts.push("", learned.block);
   let playbook: GeneratorContext["playbook"] = null;
   let playbookStats: PlaybookStats | null = null;
   let fallbackStudies = 0;
@@ -200,7 +206,7 @@ export async function loadContext(opts: {
     }
   }
 
-  return { channel, nicheId: niche?.id ?? null, nicheName: niche?.name ?? null, format, playbook, playbookStats, fallbackStudies, reference, block: parts.join("\n") };
+  return { channel, nicheId: niche?.id ?? null, nicheName: niche?.name ?? null, format, playbook, playbookStats, fallbackStudies, reference, learnings: learned.count, block: parts.join("\n") };
 }
 
 // ---------- Regras comuns ----------
@@ -280,11 +286,13 @@ function ideasPrompt(ctx: GeneratorContext, n: number, ponto: string, taken: str
 }
 
 async function takenThemes(myChannelId: string) {
-  const [ideas, scripts] = await Promise.all([
+  const [ideas, scripts, published] = await Promise.all([
     prisma.idea.findMany({ where: { myChannelId, status: { not: "DISCARDED" } }, select: { theme: true, chosenTitle: true }, orderBy: { createdAt: "desc" }, take: 60 }),
     prisma.myChannelScript.findMany({ where: { myChannelId }, select: { title: true }, take: 60 }),
+    publishedTitles(myChannelId), // etapa 7: todos os vídeos que o canal já publicou
   ]);
-  return [...scripts.map((s) => s.title), ...ideas.map((i) => i.chosenTitle || i.theme)];
+  const all = [...published, ...scripts.map((s) => s.title), ...ideas.map((i) => i.chosenTitle || i.theme)];
+  return [...new Map(all.map((t) => [t.trim().toLowerCase(), t.trim()])).values()];
 }
 
 export type IdeasRequest = {

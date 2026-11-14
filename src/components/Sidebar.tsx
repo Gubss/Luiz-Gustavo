@@ -13,7 +13,7 @@ const NAV: { href: string; label: string; soon?: boolean }[] = [
   { href: "/cartilha", label: "Cartilha do nicho" },
   { href: "/gerador", label: "Gerador" },
   { href: "/ideias", label: "Banco de ideias" },
-  { href: "/meus-videos", label: "Meus vídeos", soon: true },
+  { href: "/meus-videos", label: "Meus vídeos" },
   { href: "/configuracoes", label: "Configurações", soon: true },
 ];
 
