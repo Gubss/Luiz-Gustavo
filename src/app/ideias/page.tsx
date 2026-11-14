@@ -31,6 +31,7 @@ export default async function IdeasPage({ searchParams }: PageProps<"/ideias">) 
         ...(canal ? { myChannelId: canal } : {}),
         ...(status ? { status } : { status: { not: "DISCARDED" } }),
       },
+      include: { publishedVideo: true },
       orderBy: { updatedAt: "desc" },
       take: 200,
     }),

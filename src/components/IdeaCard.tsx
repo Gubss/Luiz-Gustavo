@@ -1,5 +1,8 @@
 import Link from "next/link";
-import type { Idea } from "@prisma/client";
+import type { Idea, MyChannelVideo } from "@prisma/client";
+import { DeleteIdeaButton } from "@/app/ideias/[id]/forms";
+import { deleteIdeaInline } from "@/app/gerador/actions";
+import { fmtCompact, fmtDate } from "@/lib/format";
 import type { IdeaData } from "@/lib/generator";
 import { IDEA_STATUS } from "@/lib/idea-status";
 import { fmtDateTime } from "@/lib/format";
@@ -24,6 +27,22 @@ const STATUS_STYLE: Record<string, string> = {
 
 export function StatusBadge({ status }: { status: string }) {
   return <span className={`rounded px-2 py-0.5 text-[11px] ${STATUS_STYLE[status] ?? STATUS_STYLE.IDEA}`}>{IDEA_STATUS[status] ?? status}</span>;
+}
+
+/** "Virou o vídeo X" (ideia ligada a um vídeo publicado do canal). */
+export function PublishedNote({ v }: { v: MyChannelVideo }) {
+  return (
+    <div className="rounded-lg border border-emerald-800 bg-emerald-950/40 p-2 text-xs text-emerald-200">
+      ✓ Publicada:{" "}
+      <a href={`https://www.youtube.com/watch?v=${v.externalId}`} target="_blank" rel="noreferrer" className="hover:underline">
+        {v.title}
+      </a>{" "}
+      <span className="text-emerald-200/60">
+        · {fmtDate(v.publishedAt)}
+        {v.viewCount != null && ` · ${fmtCompact(v.viewCount)} views`}
+      </span>
+    </div>
+  );
 }
 
 /** Aviso "seu canal já fez algo parecido" (vídeo publicado, roteiro cadastrado ou outra ideia). */
@@ -53,7 +72,15 @@ export function RepeatWarning({ repeats }: { repeats: OwnMatch[] }) {
 }
 
 /** Cartão de uma ideia (gerador e banco de ideias). */
-export function IdeaCard({ idea, channelName, repeats = [] }: { idea: Idea; channelName?: string | null; repeats?: OwnMatch[] }) {
+export function IdeaCard({
+  idea,
+  channelName,
+  repeats = [],
+}: {
+  idea: Idea & { publishedVideo?: MyChannelVideo | null };
+  channelName?: string | null;
+  repeats?: OwnMatch[];
+}) {
   const d = parse<IdeaData>(idea.ideaData);
   const titles = parse<string[]>(idea.titles) ?? [];
   return (
@@ -70,7 +97,8 @@ export function IdeaCard({ idea, channelName, repeats = [] }: { idea: Idea; chan
         </div>
         <StatusBadge status={idea.status} />
       </div>
-      <RepeatWarning repeats={repeats} />
+      {idea.publishedVideo && <PublishedNote v={idea.publishedVideo} />}
+      {!idea.publishedVideo && <RepeatWarning repeats={repeats} />}
       {d ? (
         <>
           <p className="text-sm text-zinc-200">{d.premissa}</p>
@@ -100,10 +128,12 @@ export function IdeaCard({ idea, channelName, repeats = [] }: { idea: Idea; chan
       ) : (
         idea.justification && <p className="text-sm text-zinc-300">{idea.justification}</p>
       )}
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <Link href={`/ideias/${idea.id}`} className={idea.script ? "btn-secondary" : "btn-primary"}>
           {idea.script ? "Ver roteiro" : "Escrever roteiro →"}
         </Link>
+        <span className="flex-1" />
+        <DeleteIdeaButton action={deleteIdeaInline.bind(null, idea.id)} />
       </div>
     </div>
   );

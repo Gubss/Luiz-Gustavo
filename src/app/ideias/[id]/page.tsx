@@ -7,10 +7,11 @@ import { findSimilarTitles } from "@/lib/catalog";
 import { estimateScript, type IdeaData, type ScriptContent, type ScriptMetrics } from "@/lib/generator";
 import type { PlaybookStats } from "@/lib/playbook";
 import { StateForm } from "@/components/StateForm";
-import { RepeatWarning, StatusBadge } from "@/components/IdeaCard";
+import { PublishedNote, RepeatWarning, StatusBadge } from "@/components/IdeaCard";
 import { repeatsForIdeas } from "@/lib/my-catalog";
 import { ConfirmDelete } from "@/app/nichos/[id]/forms";
-import { deleteIdea, generateScriptAction, saveIdeaNotes, setIdeaStatus } from "@/app/gerador/actions";
+import { deleteIdea, generateScriptAction, linkPublishedAction, saveIdeaNotes, setIdeaStatus, unlinkPublishedAction } from "@/app/gerador/actions";
+import { publishedCandidates } from "@/lib/my-catalog";
 import { IdeaStatusSelect } from "./forms";
 import { runningJobsFor } from "@/lib/jobs";
 import { RunningNote } from "@/components/RunningNote";
@@ -198,7 +199,7 @@ function ScriptView({ c }: { c: ScriptContent }) {
 
 export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
   const { id } = await params;
-  const idea = await prisma.idea.findUnique({ where: { id }, include: { myChannel: true, niche: true } });
+  const idea = await prisma.idea.findUnique({ where: { id }, include: { myChannel: true, niche: true, publishedVideo: true } });
   if (!idea) notFound();
   const d = parse<IdeaData>(idea.ideaData);
   const titles = parse<string[]>(idea.titles) ?? [];
@@ -215,6 +216,7 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
   ]);
   const scriptJob = jobs.find((j) => j.kind === "script");
   const repeats = (await repeatsForIdeas([idea])).get(idea.id) ?? [];
+  const cands = idea.publishedVideo ? null : await publishedCandidates(idea);
   const pbStats = parse<PlaybookStats>(playbook?.stats);
   const allTitles = [...new Set([...(idea.chosenTitle ? [idea.chosenTitle] : []), ...titles])];
 
@@ -241,7 +243,7 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
       {/* A ideia */}
       <section className="card space-y-4 p-5 text-sm">
         <h2 className="text-lg font-semibold">A ideia</h2>
-        <RepeatWarning repeats={repeats} />
+        {!idea.publishedVideo && <RepeatWarning repeats={repeats} />}
         {d ? (
           <>
             <p className="text-base text-zinc-200">{d.premissa}</p>
@@ -365,6 +367,69 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
         )}
       </section>
 
+      {/* Virou vídeo? */}
+      <section className="card space-y-3 p-5">
+        <h2 className="text-lg font-semibold">Virou vídeo no seu canal?</h2>
+        {idea.publishedVideo ? (
+          <div className="flex flex-wrap items-center gap-3">
+            <PublishedNote v={idea.publishedVideo} />
+            <form action={unlinkPublishedAction.bind(null, idea.id)}>
+              <button className="btn-ghost px-2 py-1 text-xs">Desfazer</button>
+            </form>
+          </div>
+        ) : !idea.myChannelId ? (
+          <p className="text-sm text-zinc-500">Essa ideia não está ligada a um canal seu.</p>
+        ) : (
+          <StateForm action={linkPublishedAction.bind(null, idea.id)} label="Marcar como publicada" className="btn-secondary">
+            <p className="text-sm text-zinc-400">
+              Quando postar, ligue a ideia ao vídeo. Assim o banco mostra o que já foi usado, com as views, e o gerador não sugere esse tema de novo.
+            </p>
+            {cands && cands.recent.length > 0 ? (
+              <div className="grid gap-3 md:grid-cols-2">
+                <div>
+                  <label className="label">Vídeo do canal</label>
+                  <select name="videoId" className="input" defaultValue={cands.suggested[0]?.id ?? ""}>
+                    <option value="">— escolha —</option>
+                    {cands.suggested.length > 0 && (
+                      <optgroup label="Parecidos com esta ideia">
+                        {cands.suggested.map((v) => (
+                          <option key={`s${v.id}`} value={v.id}>
+                            {v.title}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                    <optgroup label="Mais recentes">
+                      {cands.recent.map((v) => (
+                        <option key={v.id} value={v.id}>
+                          {fmtDateTime(v.publishedAt).split(" ")[0]} · {v.title}
+                        </option>
+                      ))}
+                    </optgroup>
+                  </select>
+                </div>
+                <div>
+                  <label className="label">…ou cole o link</label>
+                  <input name="link" className="input" placeholder="https://youtube.com/shorts/…" />
+                </div>
+              </div>
+            ) : (
+              <div>
+                <label className="label">Link do vídeo</label>
+                <input name="link" className="input" placeholder="https://youtube.com/shorts/…" />
+                <p className="mt-1 text-xs text-amber-300">
+                  A lista de vídeos do canal ainda não foi lida.{" "}
+                  <Link href={`/meus-canais/${idea.myChannelId}`} className="underline">
+                    Leia no perfil do canal
+                  </Link>{" "}
+                  (o vídeo novo precisa estar lá).
+                </p>
+              </div>
+            )}
+          </StateForm>
+        )}
+      </section>
+
       <section className="card space-y-3 p-5">
         <h2 className="text-lg font-semibold">Anotações</h2>
         <StateForm action={saveIdeaNotes.bind(null, idea.id)} label="Salvar" className="btn-secondary">
@@ -373,7 +438,7 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
       </section>
 
       <div className="flex justify-end">
-        <ConfirmDelete action={deleteIdea.bind(null, idea.id)} label="Excluir ideia" message="Excluir esta ideia e o roteiro dela?" />
+        <ConfirmDelete action={deleteIdea.bind(null, idea.id)} label="Apagar ideia" message="Apagar esta ideia e o roteiro dela?" />
       </div>
     </div>
   );

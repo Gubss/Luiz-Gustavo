@@ -133,7 +133,9 @@ export async function channelStopwords(myChannelId: string) {
 }
 
 /** "Já feito?" de várias ideias de uma vez (grátis, para as listas). A própria ideia não conta. */
-export async function repeatsForIdeas(ideas: { id: string; myChannelId: string | null; theme: string; titles: string; chosenTitle: string | null }[]) {
+export async function repeatsForIdeas(
+  ideas: { id: string; myChannelId: string | null; theme: string; titles: string; chosenTitle: string | null; publishedVideo?: { externalId: string } | null }[],
+) {
   const byChannel = new Map<string, OwnItem[]>();
   const stops = new Map<string, Set<string>>();
   const out = new Map<string, OwnMatch[]>();
@@ -147,8 +149,29 @@ export async function repeatsForIdeas(ideas: { id: string; myChannelId: string |
     try {
       titles = JSON.parse(i.titles);
     } catch {}
-    const items = byChannel.get(i.myChannelId)!.filter((x) => x.url !== `/ideias/${i.id}`);
+    // A própria ideia e o vídeo em que ela virou não contam como "já feito".
+    const own = i.publishedVideo ? `https://www.youtube.com/watch?v=${i.publishedVideo.externalId}` : null;
+    const items = byChannel.get(i.myChannelId)!.filter((x) => x.url !== `/ideias/${i.id}` && x.url !== own);
     out.set(i.id, findOwnRepeats(`${i.theme} ${i.chosenTitle ?? ""} ${titles.join(" ")}`, items, 3, stops.get(i.myChannelId)));
   }
   return out;
+}
+
+/** Vídeos publicados do canal mais parecidos com a ideia (para sugerir "virou este vídeo?"). */
+export async function publishedCandidates(idea: { myChannelId: string | null; theme: string; chosenTitle: string | null; titles: string }) {
+  if (!idea.myChannelId) return null;
+  const videos = await prisma.myChannelVideo.findMany({ where: { myChannelId: idea.myChannelId }, orderBy: { publishedAt: "desc" } });
+  let titles: string[] = [];
+  try {
+    titles = JSON.parse(idea.titles);
+  } catch {}
+  const stops = await channelStopwords(idea.myChannelId);
+  const matches = findOwnRepeats(
+    `${idea.theme} ${idea.chosenTitle ?? ""} ${titles.join(" ")}`,
+    videos.map((v) => ({ title: v.title, source: "vídeo publicado" as const, url: v.id })),
+    3,
+    stops,
+  );
+  const byId = new Map(videos.map((v) => [v.id, v]));
+  return { suggested: matches.map((m) => byId.get(m.url!)!).filter(Boolean), recent: videos.slice(0, 60) };
 }

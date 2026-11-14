@@ -164,6 +164,15 @@ Sem cartilha ainda, usa até 5 estudos direto; sem nicho, usa só o perfil.
 O **Banco de ideias** guarda tudo com status (ideia, roteiro pronto, produzido, publicado, descartada) e mostra
 títulos parecidos já feitos pelos canais monitorados (checagem grátis no catálogo).
 
+**Banco de ideias:** cada cartão tem *Apagar*. Na página da ideia, *Virou vídeo no seu canal?* liga a ideia ao vídeo
+publicado (lista do canal, com os mais parecidos primeiro, ou pelo link): a ideia fica "Publicado", mostra as views e o
+gerador não repete o tema.
+
+## Ordem do menu
+
+O menu é numerado na ordem de uso: 1 Meus canais → 2 Nichos e canais → 3 Descobrir canais → 4 Radar (e Favoritos) →
+5 Estudos de vídeo → 6 Cartilha → 7 Gerador → 8 Banco de ideias.
+
 ## Tarefas em segundo plano
 
 Diagnóstico, comentários, "Estudar tudo", cartilha, ideias, roteiros, buscas do *Descobrir canais*, raio-x e

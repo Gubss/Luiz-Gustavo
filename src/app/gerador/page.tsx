@@ -66,6 +66,7 @@ export default async function GeneratorPage({ searchParams }: PageProps<"/gerado
     nicheId ? loadNicheStudies(nicheId, format) : Promise.resolve([]),
     prisma.idea.findMany({
       where: { myChannelId: channel.id, status: { in: ["IDEA", "SCRIPT"] } },
+      include: { publishedVideo: true },
       orderBy: { createdAt: "desc" },
       take: 12,
     }),

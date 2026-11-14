@@ -182,6 +182,7 @@ model MyChannelVideo {
   updatedAt   DateTime @updatedAt
 
   myChannel MyChannel @relation(fields: [myChannelId], references: [id], onDelete: Cascade)
+  ideas     Idea[]
 
   @@unique([myChannelId, externalId])
   @@index([myChannelId, publishedAt])
@@ -448,12 +449,15 @@ model Idea {
   scriptData    String? // JSON do roteiro: cenas, falas, texto na tela, checklist conferido
   ideaCostUsd   Float?
   scriptCostUsd Float?
+  // Vídeo do meu canal em que a ideia virou (publicada)
+  publishedVideoId String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
   niche     Niche?     @relation(fields: [nicheId], references: [id], onDelete: SetNull)
   myChannel MyChannel? @relation(fields: [myChannelId], references: [id], onDelete: SetNull)
   myVideos  MyVideo[]
+  publishedVideo MyChannelVideo? @relation(fields: [publishedVideoId], references: [id], onDelete: SetNull)
 }
 
 /// Registro bruto de cada chamada ao Claude (auditoria, reaproveitamento e controle de gasto).

@@ -3,16 +3,17 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-const NAV: { href: string; label: string; soon?: boolean }[] = [
-  { href: "/radar", label: "Radar de outliers" },
-  { href: "/nichos", label: "Nichos e canais" },
-  { href: "/meus-canais", label: "Meus canais" },
-  { href: "/favoritos", label: "Favoritos" },
-  { href: "/estudos", label: "Estudos de vídeo" },
-  { href: "/descobrir", label: "Descobrir canais" },
-  { href: "/cartilha", label: "Cartilha do nicho" },
-  { href: "/gerador", label: "Gerador" },
-  { href: "/ideias", label: "Banco de ideias" },
+/** Na ordem de uso: monte a base (1-3), ache e estude o que funciona (4-6), produza (7-8). */
+const NAV: { href: string; label: string; step?: number; sub?: boolean; soon?: boolean; hint?: string }[] = [
+  { href: "/meus-canais", label: "Meus canais", step: 1, hint: "Perfil do seu canal" },
+  { href: "/nichos", label: "Nichos e canais", step: 2, hint: "Canais de referência" },
+  { href: "/descobrir", label: "Descobrir canais", step: 3, hint: "Achar mais referências" },
+  { href: "/radar", label: "Radar de outliers", step: 4, hint: "Vídeos que estouraram" },
+  { href: "/favoritos", label: "Favoritos", sub: true },
+  { href: "/estudos", label: "Estudos de vídeo", step: 5, hint: "Por que cada vídeo funcionou" },
+  { href: "/cartilha", label: "Cartilha do nicho", step: 6, hint: "O que se repete nos estudos" },
+  { href: "/gerador", label: "Gerador", step: 7, hint: "Ideias e roteiros no seu formato" },
+  { href: "/ideias", label: "Banco de ideias", step: 8, hint: "O que já foi gerado e usado" },
   { href: "/meus-videos", label: "Meus vídeos", soon: true },
   { href: "/configuracoes", label: "Configurações", soon: true },
 ];
@@ -44,11 +45,24 @@ export function Sidebar({ quotaUsed, quotaLimit }: { quotaUsed: number; quotaLim
             <Link
               key={item.href}
               href={item.href}
-              className={`rounded-lg px-3 py-2 text-sm ${
+              title={item.hint}
+              className={`flex items-center gap-2 rounded-lg py-2 pr-3 text-sm ${item.sub ? "pl-10" : "pl-3"} ${
                 active ? "bg-zinc-800 font-medium text-white" : "text-zinc-400 hover:bg-zinc-900 hover:text-white"
               }`}
             >
-              {item.label}
+              {item.step != null && (
+                <span
+                  className={`grid h-5 w-5 shrink-0 place-items-center rounded-full text-[11px] font-semibold tabular-nums ${
+                    active ? "bg-red-600 text-white" : "bg-zinc-800 text-zinc-400"
+                  }`}
+                >
+                  {item.step}
+                </span>
+              )}
+              <span className="min-w-0">
+                {item.label}
+                {item.hint && <span className="block truncate text-[10px] font-normal leading-tight text-zinc-500">{item.hint}</span>}
+              </span>
             </Link>
           );
         })}

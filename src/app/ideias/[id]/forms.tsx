@@ -15,3 +15,17 @@ export function IdeaStatusSelect({ action, value }: { action: (fd: FormData) => 
     </form>
   );
 }
+
+/** Botão pequeno de apagar, com confirmação. */
+export function DeleteIdeaButton({ action, label = "Apagar" }: { action: () => Promise<void>; label?: string }) {
+  return (
+    <form
+      action={action}
+      onSubmit={(e) => {
+        if (!confirm("Apagar esta ideia (e o roteiro dela, se tiver)?")) e.preventDefault();
+      }}
+    >
+      <button className="btn-ghost px-2 py-1 text-xs text-zinc-500 hover:text-red-400">{label}</button>
+    </form>
+  );
+}
