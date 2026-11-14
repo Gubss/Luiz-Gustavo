@@ -32,6 +32,7 @@ function parse<T>(json: string | null | undefined): T | null {
 
 const fmt = (n: number | null | undefined, d = 0) => (n == null ? "—" : n.toLocaleString("pt-BR", { maximumFractionDigits: d }));
 const cut = (s: string, n: number) => (s.length > n ? s.slice(0, n) + "… (cortado)" : s);
+const pastedDate = (d: Date | null | undefined) => (d ? d.toISOString().slice(0, 10) : "data desconhecida");
 const mmss = (s: number) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`;
 
 // ---------- Retenção (medida em código) ----------
@@ -283,8 +284,15 @@ async function buildContext(v: Loaded) {
   }
   if (daily.length) L.push(``, `# VIEWS POR DIA (Analytics)`, daily.slice(-21).map((d) => `${d.day.slice(5)}: ${fmt(d.views)}`).join(" · "));
   if (v.studioNotes?.trim()) L.push(``, `# ANOTAÇÕES COLADAS DO YOUTUBE STUDIO`, cut(v.studioNotes.trim(), 2500));
-  if (v.myChannel.analytics?.trim())
-    L.push(``, `# NÚMEROS DO CANAL COLADOS (Studio ou relatório de outra ferramenta; procure este vídeo pelo título)`, cut(v.myChannel.analytics.trim(), 4000));
+  // Números colados/importados (ex.: .md do Maestri) são uma foto antiga. Com Analytics do próprio vídeo, não entram;
+  // sem ele, entram com a data e marcados como desatualizados.
+  if (v.myChannel.analytics?.trim() && !analytics)
+    L.push(
+      ``,
+      `# NÚMEROS DO CANAL COLADOS EM ${pastedDate(v.myChannel.analyticsAt)} (foto antiga; procure este vídeo pelo título)`,
+      `Atenção: quando estes números discordarem dos medidos pelo app acima (views, marcos), valem os do app, que são de agora.`,
+      cut(v.myChannel.analytics.trim(), 4000),
+    );
 
   L.push(``, `# ROTEIRO${script ? ` (${script.source}; [s] = segundo)` : ""}`, script ? script.prompt : "(sem roteiro nem legenda: analise pelo título, thumbnail e números, e diga que falta o roteiro)");
 
@@ -495,7 +503,13 @@ async function reportPrompt(myChannelId: string) {
       if (d) L.push(`  diagnóstico (${fmtAge(v.diagnoses[0].ageHours)}): ${d.veredito} — ${cut(d.resumo, 300)} | lições: ${d.licoes.slice(0, 3).join("; ")}`);
     }
   }
-  if (c.analytics?.trim()) L.push(``, `# NÚMEROS DO CANAL COLADOS (Studio ou relatório de outra ferramenta)`, cut(c.analytics.trim(), 8000));
+  if (c.analytics?.trim())
+    L.push(
+      ``,
+      `# NÚMEROS DO CANAL COLADOS EM ${pastedDate(c.analyticsAt)} (foto antiga, de outra ferramenta)`,
+      `Atenção: views e % visto acima foram medidos agora pelo app/YouTube Analytics e valem mais. Use os colados só para o que não existe acima (ex.: "continuaram assistindo", CTR).`,
+      cut(c.analytics.trim(), 8000),
+    );
   if (c.nicheId) {
     const pb = await latestPlaybook(c.nicheId, format);
     if (pb) L.push(``, `# CARTILHA DO NICHO (${pb.diagnosisCount} estudos)`, cut(pb.markdown ?? pb.content, 5000));

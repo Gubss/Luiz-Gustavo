@@ -218,29 +218,52 @@ Menu **Meus vídeos**. Para cada canal seu (cadastrado em *Meus canais*):
 canal e dos diagnósticos de vídeo feitos depois dele ("Aprendizados dos meus vídeos"), e elas valem mais que a cartilha quando as duas
 discordam.
 
-### Como criar o login do Google (uma vez, ~10 min)
+### Como criar o login do Google (uma vez só, ~10 min)
 
-O app nunca vê sua senha: o login acontece na tela do próprio Google, e a permissão é só de **leitura** (não posta, não apaga, não muda nada).
-Use o mesmo projeto do Google Cloud da chave do YouTube.
+O app nunca vê sua senha: o login acontece na tela do próprio Google e a permissão é só de **leitura**
+(não posta, não apaga, não muda nada). Faça logado na conta Google **dona do canal**.
 
-1. console.cloud.google.com → escolha o projeto → *APIs e serviços → Biblioteca* → ative **YouTube Analytics API**
-   (a "YouTube Data API v3" já está ativa).
-2. *APIs e serviços → Tela de consentimento OAuth* (ou "Google Auth Platform") → **Externo** → nome "YouTube Radar", seu e-mail
-   nos campos de contato → salvar. Em **Público-alvo / Usuários de teste**, adicione o seu e-mail do Google (o do canal).
-3. *Credenciais → Criar credenciais → ID do cliente OAuth* → tipo **Aplicativo da Web** → em **URIs de redirecionamento autorizados**
-   adicione exatamente `http://localhost:3000/api/google/callback` → criar.
-4. Copie o **ID do cliente** e a **Chave secreta** para o `.env`:
-   ```
-   GOOGLE_CLIENT_ID="....apps.googleusercontent.com"
-   GOOGLE_CLIENT_SECRET="GOCSPX-..."
-   ```
-   e reinicie o app (Ctrl+C no PowerShell e `npm run dev` de novo).
-5. Em *Meus vídeos*, clique em **Entrar com Google**, escolha a conta e, se o canal for "de marca", escolha o canal. O Google avisa
-   "o Google não verificou este app": é o seu próprio app; clique em *Avançado → Acessar YouTube Radar*. Deixe as caixinhas marcadas.
+**A. Ligar a API do Analytics**
+1. Abra https://console.cloud.google.com/apis/library/youtubeanalytics.googleapis.com
+2. No topo, confira se está no **mesmo projeto** da chave do YouTube (o nome aparece ao lado do logo; clique para trocar).
+3. Clique em **Ativar** (se aparecer "Gerenciar", já está ativa).
 
-Enquanto o app estiver "Em teste" no Google, o login vence a cada 7 dias (o app avisa e é só entrar de novo). Para não vencer, na
-tela de consentimento clique em **Publicar app** (fica "Em produção" sem precisar de verificação para uso próprio; o aviso de
-"não verificado" continua aparecendo só no login).
+**B. Tela de permissão (aparece uma vez só)**
+4. Abra https://console.cloud.google.com/auth/overview e clique em **Vamos começar** (ou "Get started").
+5. Nome do app: `YouTube Radar` · E-mail de suporte: o seu → **Próxima**.
+6. Público: **Externo** → **Próxima**.
+7. Dados de contato: o seu e-mail → **Próxima** → marque "Concordo" → **Continuar** → **Criar**.
+8. Menu da esquerda → **Público-alvo** (Audience) → botão **Publicar app** → **Confirmar**.
+   (Assim o login não vence a cada 7 dias. Não precisa mandar para verificação.)
+
+**C. Criar a "chave" do login**
+9. Menu da esquerda → **Clientes** (Clients) → **+ Criar cliente**.
+10. Tipo de aplicativo: **Aplicativo da Web** · Nome: `YouTube Radar`.
+11. Em **URIs de redirecionamento autorizados** → **+ Adicionar URI** → cole exatamente:
+    `http://localhost:3000/api/google/callback`
+12. **Criar**. Aparece uma janela com **ID do cliente** e **Chave secreta do cliente** (copie as duas agora;
+    a chave secreta só aparece inteira nessa hora, ou baixe o JSON).
+
+**D. Colar no app**
+13. No PowerShell, na pasta do app: `notepad .env` e acrescente no fim (com os seus valores):
+    ```
+    GOOGLE_CLIENT_ID="cole-o-id-aqui.apps.googleusercontent.com"
+    GOOGLE_CLIENT_SECRET="cole-a-chave-aqui"
+    ```
+    Salve e feche.
+14. Reinicie o app: no PowerShell onde ele roda, **Ctrl+C**, depois `npm run dev`.
+
+**E. Entrar**
+15. Abra http://localhost:3000/meus-videos → **Entrar com Google** → escolha a conta. Se o canal for de marca, escolha o canal na lista.
+16. Vai aparecer "O Google não verificou este app": clique em **Avançado** → **Acessar YouTube Radar (não seguro)**. É o seu próprio app.
+17. Deixe as caixinhas marcadas → **Continuar**. Você volta para o app com "✓ Conectado".
+18. Clique em **Atualizar agora**. Pronto: retenção, % visto e de onde vêm as views passam a vir direto do YouTube.
+
+Se der erro: "redirect_uri_mismatch" = o endereço do passo 11 não está igual (sem barra no fim, com `http`, porta 3000).
+"access_denied"/"app em teste" = faltou o passo 8 (Publicar app).
+
+Os números medidos pelo app e pelo login do Google **sempre valem mais** que números colados ou importados de outra
+ferramenta (ex.: o .md do Maestri): esses são uma foto de um dia, e o diagnóstico é avisado da data.
 
 ### Acompanhar com o app fechado
 
