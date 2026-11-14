@@ -8,7 +8,7 @@ outliers, estuda título/thumbnail/roteiro com o Claude e gera temas e roteiros.
 - [x] **Etapa 1** — estrutura, banco (schema completo da v1), nichos, canais monitorados, meus canais, resolução de canal pela API, controle de cota
 - [x] **Etapa 2** — coleta de vídeos, snapshots diários, base do canal, velocidade, outliers, "Canal pequeno estourou", catálogo de títulos ("esse tema já foi feito?"), radar e favoritos
 - [x] **Etapa 3** — estudo do vídeo: transcrição, diagnóstico medido, comentários, esqueleto de roteiro
-- [ ] Etapa 4 — descoberta de canais
+- [x] **Etapa 4** — descoberta de canais (busca por palavra-chave, canais indicados, raio-x do canal)
 - [ ] Etapa 5 — cartilha do nicho
 - [ ] Etapa 6 — gerador de temas, títulos e roteiros; banco de ideias
 - [ ] Etapa 7 — meus vídeos publicados (marcos 1h/3h/24h/48h) e cruzamento com referências
@@ -23,7 +23,6 @@ No PowerShell:
 ```powershell
 git clone https://github.com/gubss/luiz-gustavo.git
 cd luiz-gustavo
-git checkout claude/project-thread-ifnkok
 npm install
 copy .env.example .env
 notepad .env          # cole suas chaves
@@ -92,11 +91,34 @@ deve fazer `upsert` por `importKey`: rodar de novo atualiza em vez de duplicar. 
 `ensureVideo(link)` de `src/lib/videos.ts` (grava o canal sem nicho, fora da coleta diária). Um diagnóstico
 importado pode ter só `markdown` (o texto do estudo), sem o JSON estruturado.
 
+## Descobrir canais (etapa 4)
+
+Menu **Descobrir canais** (ou o botão *Descobrir canais parecidos* na página do nicho). Escolha o nicho e:
+
+1. **Buscar por palavra-chave** — escreva até 5 palavras-chave (uma por linha) ou clique nas sugestões, que saem
+   dos títulos que mais deram view no nicho. Escolha **Shorts** ou **Vídeos longos**: a busca pede ao YouTube só
+   vídeos de até 4 min (Shorts) ou de 4–20 min / 20 min+ (longos), e depois o app confere cada vídeo como na coleta
+   (duração e URL `/shorts/`) e descarta o formato errado e as lives. Os canais que publicaram esses vídeos entram na
+   lista; os que você já monitora no nicho não entram (aparecem só como contagem).
+   **Custo: ~102 unidades por palavra-chave** (100 da busca do YouTube + 1 lote de vídeos + 1 lote de canais).
+   O custo aparece antes de buscar; se a cota restante não der, o botão fica bloqueado, e há um aviso quando a busca
+   comeria a reserva da coleta diária (~4 unidades por canal monitorado).
+2. **Canais indicados** — lê a seção "Canais" da página de cada canal monitorado do nicho (1 unidade por canal).
+3. **Raio-x** (2 unidades) — lê os últimos 50 vídeos de um canal encontrado: quantos são Shorts e longos, mediana
+   de views de cada formato, ritmo de postagem, último vídeo e outliers (3x+ a mediana do próprio formato).
+4. **Monitorar** (1 unidade) põe o canal no nicho; ele entra no radar na próxima coleta. **Ignorar** tira o canal da
+   lista para sempre (dá para voltar na aba *Ignorados*).
+
+"Mais promissores" ordena por: views do melhor vídeo encontrado × quantas vezes ele passou os inscritos × quantas vezes
+o canal apareceu × bônus para canal com menos de 1 ano. As abas Shorts/Longos usam os vídeos encontrados e, depois do
+raio-x, a proporção real de Shorts do canal. Tudo fica salvo (`DiscoveredChannel`, `DiscoverySearch`): reabrir a tela
+não gasta cota.
+
 ## Testes
 
 `npm test` roda os testes de cálculo e uma coleta completa com a API do YouTube simulada
 (usa `prisma/test.db`, nunca o seu banco). O estudo do vídeo é testado com YouTube e Anthropic simulados
-(`prisma/test-study.db`, sem custo).
+(`prisma/test-study.db`, sem custo). A descoberta de canais é testada com a API simulada (`prisma/test-discover.db`).
 
 ## Stack
 

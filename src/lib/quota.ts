@@ -16,6 +16,7 @@ export const QUOTA_COST = {
   "videos.list": 1,
   "playlistItems.list": 1,
   "commentThreads.list": 1,
+  "channelSections.list": 1,
   "search.list": 100,
 } as const;
 

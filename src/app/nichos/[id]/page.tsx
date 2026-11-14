@@ -83,7 +83,12 @@ export default async function NichePage({ params, searchParams }: PageProps<"/ni
           <h2 className="text-xl font-semibold">
             Canais monitorados <span className="text-zinc-500">({channels.length})</span>
           </h2>
-          {channels.length > 0 && <RefreshButton action={refreshNicheChannels.bind(null, niche.id)} />}
+          <div className="flex flex-wrap items-center gap-3">
+            <Link href={`/descobrir?niche=${niche.id}`} className="btn-secondary">
+              Descobrir canais parecidos
+            </Link>
+            {channels.length > 0 && <RefreshButton action={refreshNicheChannels.bind(null, niche.id)} />}
+          </div>
         </div>
 
         <div className="card p-5">
