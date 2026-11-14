@@ -16,6 +16,7 @@ import {
   diagnoseAction,
   fetchTranscriptAction,
   pasteTranscriptAction,
+  setStudyNicheAction,
 } from "../actions";
 import { ActionButton, PasteTranscriptForm } from "./forms";
 
@@ -326,8 +327,13 @@ function CommentsView({ c }: { c: CommentsAnalysis }) {
 
 export default async function VideoStudyPage({ params }: PageProps<"/video/[id]">) {
   const { id } = await params;
-  const v = await prisma.video.findUnique({ where: { id }, include: { channel: true, transcript: true, diagnosis: true } });
+  const v = await prisma.video.findUnique({
+    where: { id },
+    include: { channel: { include: { niches: { include: { niche: { select: { id: true, name: true } } } } } }, transcript: true, diagnosis: true },
+  });
   if (!v) notFound();
+  const channelNiches = v.channel.niches.map((nc) => nc.niche);
+  const allNiches = channelNiches.length ? [] : await prisma.niche.findMany({ orderBy: { createdAt: "asc" }, select: { id: true, name: true } });
   const s = await getSettings();
 
   const segs = readSegments(v.transcript?.segments);
@@ -381,6 +387,36 @@ export default async function VideoStudyPage({ params }: PageProps<"/video/[id]"
             <a href={url} target="_blank" rel="noreferrer" className="btn-secondary">
               Abrir no YouTube ↗
             </a>
+          </div>
+          <div className="text-sm text-zinc-400">
+            {channelNiches.length ? (
+              <>
+                Entra na cartilha de:{" "}
+                {channelNiches.map((n, i) => (
+                  <span key={n.id}>
+                    {i > 0 && ", "}
+                    <Link href={`/cartilha?niche=${n.id}&format=${v.isShort ? "short" : "long"}`} className="text-red-400 hover:underline">
+                      {n.name}
+                    </Link>
+                  </span>
+                ))}{" "}
+                <span className="text-xs text-zinc-500">({v.isShort ? "Shorts" : "vídeos longos"}, pelo nicho do canal)</span>
+              </>
+            ) : allNiches.length ? (
+              <form action={setStudyNicheAction.bind(null, v.id)} className="flex flex-wrap items-center gap-2">
+                <label htmlFor="studyNiche">Entra na cartilha de:</label>
+                <select id="studyNiche" name="nicheId" defaultValue={v.studyNicheId ?? ""} className="input w-auto py-1">
+                  <option value="">nenhum nicho</option>
+                  {allNiches.map((n) => (
+                    <option key={n.id} value={n.id}>
+                      {n.name}
+                    </option>
+                  ))}
+                </select>
+                <button className="btn-ghost">Salvar</button>
+                <span className="text-xs text-zinc-500">O canal deste vídeo não está em nenhum nicho; escolha para o estudo contar na cartilha.</span>
+              </form>
+            ) : null}
           </div>
           {noKey && (
             <p className="rounded-lg border border-amber-700 bg-amber-950/40 p-3 text-sm text-amber-200">

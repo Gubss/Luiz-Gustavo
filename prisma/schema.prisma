@@ -58,6 +58,7 @@ model Niche {
   ideas      Idea[]
   discovered DiscoveredChannel[]
   searches   DiscoverySearch[]
+  studied    Video[]             @relation("StudyNiche")
 }
 
 /// Canal de terceiros monitorado. Pode estar em vários nichos.
@@ -231,10 +232,14 @@ model Video {
   commentCount   Int?
   defaultLang    String?
   statsFetchedAt DateTime?
+  // Nicho do estudo (etapa 5): para vídeo de canal fora dos nichos (estudado por link).
+  // O vídeo entra na cartilha desse nicho além dos nichos do próprio canal.
+  studyNicheId   String?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
   channel    Channel         @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  studyNiche Niche?          @relation("StudyNiche", fields: [studyNicheId], references: [id], onDelete: SetNull)
   snapshots  VideoSnapshot[]
   favorite   Favorite?
   transcript Transcript?
@@ -345,19 +350,27 @@ model ScriptStructure {
   video Video @relation(fields: [videoId], references: [id], onDelete: Cascade)
 }
 
-/// Cartilha do nicho (feature 7).
+/// Cartilha do nicho (etapa 5): uma versão por geração, separada por formato.
+/// `stats` é medido em código a partir dos estudos; `content` é a síntese do Claude (hipóteses com base em N estudos).
 model NichePlaybook {
   id             String   @id @default(cuid())
   nicheId        String
+  format         String   @default("short") // "short" | "long"
   model          String
   stats          String // JSON calculado em código
   content        String // JSON do Claude
+  markdown       String?
   diagnosisCount Int
+  studyIds       String   @default("[]") // JSON: Video.id dos estudos usados
+  inputTokens    Int?
+  outputTokens   Int?
+  costUsd        Float?
   createdAt      DateTime @default(now())
 
   niche Niche @relation(fields: [nicheId], references: [id], onDelete: Cascade)
 
   @@index([nicheId, createdAt])
+  @@index([nicheId, format, createdAt])
 }
 
 // ---------- Gerador e banco de ideias ----------

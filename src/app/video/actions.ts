@@ -78,3 +78,11 @@ export async function studyByLinkAction(_prev: FormState, fd: FormData): Promise
   }
   redirect(`/video/${id}`);
 }
+
+/** Nicho do estudo (para vídeo de canal que não está em nenhum nicho): faz o estudo entrar na cartilha. */
+export async function setStudyNicheAction(videoId: string, fd: FormData) {
+  const nicheId = String(fd.get("nicheId") ?? "");
+  await prisma.video.update({ where: { id: videoId }, data: { studyNicheId: nicheId || null } });
+  done(videoId);
+  revalidatePath("/cartilha");
+}
