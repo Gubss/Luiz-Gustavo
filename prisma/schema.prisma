@@ -56,6 +56,8 @@ model Niche {
   myChannels MyChannel[]
   playbooks  NichePlaybook[]
   ideas      Idea[]
+  discovered DiscoveredChannel[]
+  searches   DiscoverySearch[]
 }
 
 /// Canal de terceiros monitorado. Pode estar em vários nichos.
@@ -148,6 +150,65 @@ model MyChannel {
   niche    Niche?    @relation(fields: [nicheId], references: [id], onDelete: SetNull)
   videos   MyVideo[]
   ideas    Idea[]
+}
+
+// ---------- Descoberta de canais (etapa 4) ----------
+
+/// Cada busca de descoberta feita (para mostrar histórico e custo).
+/// method: "search" (palavra-chave, 100 unidades) | "featured" (canais indicados pelos monitorados).
+model DiscoverySearch {
+  id          String   @id @default(cuid())
+  nicheId     String
+  method      String
+  query       String?
+  format      String // "short" | "long"
+  params      String // JSON com os filtros usados
+  unitsUsed   Int
+  videosFound Int      @default(0)
+  newChannels Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  niche Niche @relation(fields: [nicheId], references: [id], onDelete: Cascade)
+
+  @@index([nicheId, createdAt])
+}
+
+/// Canal encontrado na descoberta, ainda não monitorado (por nicho).
+/// status: "new" | "monitored" | "dismissed". Um canal ignorado não volta a aparecer como novo.
+model DiscoveredChannel {
+  id                String    @id @default(cuid())
+  nicheId           String
+  platform          String    @default("youtube")
+  externalId        String
+  title             String
+  handle            String?
+  thumbnailUrl      String?
+  country           String?
+  subscriberCount   Int?
+  hiddenSubscribers Boolean   @default(false)
+  videoCount        Int?
+  viewCount         Float?
+  channelCreatedAt  DateTime?
+  // Vídeos do canal que apareceram nas buscas: JSON [{id, title, views, publishedAt, durationSec, isShort, thumb}]
+  matchedVideos     String    @default("[]")
+  shortHits         Int       @default(0)
+  longHits          Int       @default(0)
+  bestViews         Int       @default(0)
+  bestRatio         Float? // melhor vídeo / inscritos
+  score             Float     @default(0)
+  queries           String    @default("[]") // JSON: palavras-chave que trouxeram o canal
+  featuredBy        String    @default("[]") // JSON: canais monitorados que indicam este canal
+  // Raio-x (últimos 50 uploads, 2 unidades): JSON calculado em código
+  analysis          String?
+  analyzedAt        DateTime?
+  status            String    @default("new")
+  firstSeenAt       DateTime  @default(now())
+  lastSeenAt        DateTime  @default(now())
+
+  niche Niche @relation(fields: [nicheId], references: [id], onDelete: Cascade)
+
+  @@unique([nicheId, platform, externalId])
+  @@index([nicheId, status])
 }
 
 // ---------- Vídeos monitorados ----------

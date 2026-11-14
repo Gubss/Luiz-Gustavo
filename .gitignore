@@ -47,3 +47,4 @@ next-env.d.ts
 !.env.example
 /prisma/test.db*
 /prisma/test-study.db*
+/prisma/test-discover.db*

@@ -309,3 +309,51 @@ export async function checkIsShortByUrl(videoId: string): Promise<boolean | null
 export const bestThumb = (t?: Thumbs) => (t?.maxres ?? t?.standard ?? t?.high ?? t?.medium ?? t?.default)?.url ?? null;
 export const videoUrl = (externalId: string, isShort?: boolean) =>
   isShort ? `https://www.youtube.com/shorts/${externalId}` : `https://www.youtube.com/watch?v=${externalId}`;
+
+// ---------- Descoberta (etapa 4) ----------
+
+export type YtSearchItem = {
+  id: { kind: string; videoId?: string; channelId?: string };
+  snippet: { channelId: string; channelTitle?: string; title: string; publishedAt: string };
+};
+
+export type SearchVideoParams = {
+  q: string;
+  /** "short" = até 4 min (inclui Shorts) | "medium" = 4–20 min | "long" = 20 min+ | "any" */
+  videoDuration: "short" | "medium" | "long" | "any";
+  order: "viewCount" | "relevance" | "date";
+  publishedAfter?: Date;
+  regionCode?: string;
+  relevanceLanguage?: string;
+  pageToken?: string;
+};
+
+/** Busca de vídeos por palavra-chave. Custa 100 unidades por chamada (até 50 resultados). */
+export async function searchVideos(p: SearchVideoParams) {
+  return ytGet<ListResponse<YtSearchItem>>("search.list", {
+    part: "snippet",
+    type: "video",
+    q: p.q,
+    maxResults: 50,
+    order: p.order,
+    videoDuration: p.videoDuration,
+    safeSearch: "none",
+    ...(p.publishedAfter ? { publishedAfter: p.publishedAfter.toISOString().replace(/\.\d{3}Z$/, "Z") } : {}),
+    ...(p.regionCode ? { regionCode: p.regionCode } : {}),
+    ...(p.relevanceLanguage ? { relevanceLanguage: p.relevanceLanguage } : {}),
+    ...(p.pageToken ? { pageToken: p.pageToken } : {}),
+  });
+}
+
+type YtChannelSection = { snippet?: { type?: string }; contentDetails?: { channels?: string[] } };
+
+/** Canais que o próprio canal indica na página dele (seções "canais em destaque"). 1 unidade. */
+export async function featuredChannelsOf(channelExternalId: string): Promise<string[]> {
+  const r = await ytGet<ListResponse<YtChannelSection>>("channelSections.list", {
+    part: "snippet,contentDetails",
+    channelId: channelExternalId,
+  });
+  const ids = new Set<string>();
+  for (const s of r.items ?? []) for (const id of s.contentDetails?.channels ?? []) if (id !== channelExternalId) ids.add(id);
+  return [...ids];
+}
