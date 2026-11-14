@@ -170,18 +170,24 @@ function StatsPanel({ st }: { st: PlaybookStats }) {
   );
 }
 
-function Refs({ ids, studyIds, titles, total }: { ids: number[]; studyIds: string[]; titles: Map<string, string>; total: number }) {
+function Refs({ ids, studyIds, titles, total }: { ids: number[]; studyIds: string[]; titles: Map<string, { title: string; channel: string }>; total: number }) {
   if (!ids.length) return null;
+  const channels = new Set(ids.map((i) => titles.get(studyIds[i - 1] ?? "")?.channel).filter(Boolean));
   const strong = total >= 3 && ids.length >= Math.max(2, Math.ceil(total / 2));
   return (
     <span className="ml-2 inline-flex flex-wrap items-center gap-1 align-middle">
       <span className={`rounded px-1.5 py-0.5 text-[10px] ${strong ? "bg-emerald-600/30 text-emerald-200" : ids.length === 1 ? "bg-zinc-800 text-zinc-400" : "bg-sky-700/30 text-sky-200"}`}>
         {ids.length === 1 ? "visto em 1 estudo" : `visto em ${ids.length} de ${total}`}
       </span>
+      {ids.length > 1 && channels.size === 1 && (
+        <span className="rounded bg-amber-600/20 px-1.5 py-0.5 text-[10px] text-amber-200" title="Pode ser o estilo desse canal, não do nicho">
+          todos do mesmo canal
+        </span>
+      )}
       {ids.map((i) => {
         const vid = studyIds[i - 1];
         return vid ? (
-          <Link key={i} href={`/video/${vid}`} title={titles.get(vid) ?? ""} className="text-[10px] text-zinc-500 hover:text-red-400">
+          <Link key={i} href={`/video/${vid}`} title={titles.get(vid) ? `${titles.get(vid)!.title} · ${titles.get(vid)!.channel}` : ""} className="text-[10px] text-zinc-500 hover:text-red-400">
             #{i}
           </Link>
         ) : null;
@@ -190,7 +196,7 @@ function Refs({ ids, studyIds, titles, total }: { ids: number[]; studyIds: strin
   );
 }
 
-function PlaybookView({ c, studyIds, titles, total }: { c: PlaybookContent; studyIds: string[]; titles: Map<string, string>; total: number }) {
+function PlaybookView({ c, studyIds, titles, total }: { c: PlaybookContent; studyIds: string[]; titles: Map<string, { title: string; channel: string }>; total: number }) {
   const R = (ids: number[]) => <Refs ids={ids} studyIds={studyIds} titles={titles} total={total} />;
   return (
     <div className="space-y-6 text-sm">
@@ -390,9 +396,9 @@ export default async function PlaybookPage({ searchParams }: PageProps<"/cartilh
   const changes = playbook && isLatest ? changedSince(studies, playbook) : null;
   const hasChanges = !!changes && changes.added + changes.updated + changes.removed > 0;
   const titleRows = pbStudyIds.length
-    ? await prisma.video.findMany({ where: { id: { in: pbStudyIds } }, select: { id: true, title: true } })
+    ? await prisma.video.findMany({ where: { id: { in: pbStudyIds } }, select: { id: true, title: true, channel: { select: { title: true } } } })
     : [];
-  const titles = new Map(titleRows.map((r) => [r.id, r.title]));
+  const titles = new Map(titleRows.map((r) => [r.id, { title: r.title, channel: r.channel.title }]));
   const est = studies.length ? await estimatePlaybook(niche.id, format) : null;
   const pending = counts[format].pending;
 
