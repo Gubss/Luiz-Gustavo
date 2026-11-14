@@ -432,8 +432,8 @@ export default async function MyVideoPage({ params }: { params: Promise<{ id: st
             </a>{" "}
             para ver retenção, % visto e de onde vieram as views. Enquanto isso, dá para colar os números do Studio nos marcos acima.
           </p>
-        ) : !analytics ? (
-          <p className="text-sm text-zinc-400">Ainda sem dados. O Analytics do YouTube atrasa de 1 a 2 dias; clique em “Só atualizar números” mais tarde.</p>
+        ) : !analytics || analytics.views == null ? (
+          <p className="text-sm text-zinc-400">O YouTube ainda não liberou os números do Analytics deste vídeo. Eles chegam com 1 a 2 dias de atraso, então vídeo publicado ontem ou hoje ainda aparece vazio. O app busca de novo sozinho; ou clique em “Só atualizar números” amanhã.</p>
         ) : (
           <>
             <div className="grid grid-cols-2 gap-2 md:grid-cols-6">
