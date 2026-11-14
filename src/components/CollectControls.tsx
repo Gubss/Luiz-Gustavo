@@ -27,7 +27,7 @@ export function AutoCollect() {
       if (!st?.due || st.running) return;
       setMsg("Coletando os dados do dia…");
       const r = await runCollect("auto");
-      setMsg(r.status === "error" ? `Erro na coleta: ${r.errors?.join("; ") ?? r.message}` : `Coleta concluída: ${r.message}`);
+      setMsg(r.status === "error" ? `Erro na coleta: ${r.errors?.join("; ") ?? r.message}` : `${r.message}`);
       router.refresh();
       setTimeout(() => setMsg(null), 8000);
     })();

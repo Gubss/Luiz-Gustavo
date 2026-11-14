@@ -111,8 +111,14 @@ export async function collectChannelVideos(channelId: string): Promise<ChannelCo
     ).map((v) => [v.externalId, v]),
   );
 
+  const liveReplays: string[] = [];
   for (const yv of ytVideos) {
     if (yv.snippet.liveBroadcastContent && yv.snippet.liveBroadcastContent !== "none") continue; // ao vivo/agendado
+    // Gravação de live: não entra no radar nem na base (distorce a média dos vídeos longos).
+    if (yv.liveStreamingDetails) {
+      liveReplays.push(yv.id);
+      continue;
+    }
     const durationSec = parseDuration(yv.contentDetails?.duration);
     const prev = existing.get(yv.id);
     let isShort: boolean;
@@ -163,6 +169,11 @@ export async function collectChannelVideos(channelId: string): Promise<ChannelCo
     result.videos++;
   }
 
+  if (liveReplays.length) {
+    // Lives gravadas em coletas antigas saem do radar (menos as favoritadas).
+    await prisma.video.deleteMany({ where: { platform: "youtube", externalId: { in: liveReplays }, favorite: null } });
+  }
+
   await prisma.channel.update({
     where: { id: channelId },
     data: { videosFetchedAt: new Date(), ...(needFullCatalog ? { catalogFetchedAt: new Date() } : {}) },
@@ -176,6 +187,17 @@ function countInWindow(items: YtPlaylistItem[], windowStart: number) {
     if (new Date(it.contentDetails.videoPublishedAt ?? it.snippet.publishedAt).getTime() >= windowStart) n++;
   }
   return n;
+}
+
+/** Resumo da coleta em português simples (aparece ao lado do botão "Coletar agora"). */
+export function collectMessage(s: Pick<CollectSummary, "channels" | "videos" | "catalogAdded" | "unitsUsed">) {
+  if (s.channels === 0) return "Nada para coletar: todos os canais já foram atualizados hoje.";
+  const canais = s.channels === 1 ? "1 canal" : `${s.channels} canais`;
+  const catalogo =
+    s.catalogAdded === 0
+      ? "Nenhum vídeo novo publicado desde a última coleta (o catálogo de títulos já estava em dia)."
+      : `${s.catalogAdded} ${s.catalogAdded === 1 ? "título novo entrou" : "títulos novos entraram"} no catálogo.`;
+  return `Coleta concluída: ${canais}, views de ${s.videos} vídeos atualizadas. ${catalogo} Usou ${s.unitsUsed} unidades da cota diária do YouTube.`;
 }
 
 // ---------- Orquestração ----------
@@ -263,7 +285,7 @@ async function doCollect(opts: { trigger: "auto" | "manual" | "script"; force?: 
   }
   summary.unitsUsed = (await quotaUsedToday()) - before;
   if (summary.errors.length && summary.channels === 0) summary.status = "error";
-  summary.message = `${summary.channels} canais, ${summary.videos} vídeos, ${summary.catalogAdded} títulos novos no catálogo, ${summary.unitsUsed} unidades.`;
+  summary.message = collectMessage(summary);
   await prisma.collectionRun.update({
     where: { id: run.id },
     data: {

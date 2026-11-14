@@ -243,6 +243,8 @@ export type YtVideo = {
   };
   contentDetails?: { duration?: string };
   statistics?: { viewCount?: string; likeCount?: string; commentCount?: string };
+  /** Presente quando o vídeo é (ou foi) uma transmissão ao vivo. */
+  liveStreamingDetails?: { actualStartTime?: string; actualEndTime?: string; scheduledStartTime?: string };
 };
 
 /** Uma página (até 50) da playlist de uploads, do mais novo para o mais antigo. */
@@ -260,7 +262,7 @@ export async function fetchVideosBatch(ids: string[]): Promise<YtVideo[]> {
   const out: YtVideo[] = [];
   for (let i = 0; i < ids.length; i += 50) {
     const r = await ytGet<ListResponse<YtVideo>>("videos.list", {
-      part: "snippet,contentDetails,statistics",
+      part: "snippet,contentDetails,statistics,liveStreamingDetails", // mesma cota (1 unidade por lote)
       id: ids.slice(i, i + 50).join(","),
       maxResults: 50,
     });

@@ -40,6 +40,17 @@ export type RadarItem = {
   history: { day: string; views: number }[];
 };
 
+/** Por que um vídeo da janela não virou outlier: resumo por canal para explicar a tela vazia. */
+export type RadarChannelDiag = {
+  channelId: string;
+  title: string;
+  inWindow: number; // vídeos do formato na janela
+  noBase: number; // sem vídeos anteriores do mesmo formato para comparar
+  belowMinViews: number; // abaixo do mínimo de views
+  bestMult: number | null; // maior "x média" entre os da janela
+  bestTitle: string | null;
+};
+
 /** Busca e calcula os itens do radar. Tudo em memória: ~100 canais x 100 vídeos. */
 export async function getRadar(f: RadarFilters) {
   const s = await getSettings();
@@ -58,6 +69,8 @@ export async function getRadar(f: RadarFilters) {
   const windowStart = Date.now() - f.days * 86_400_000;
   const items: RadarItem[] = [];
   let totalInWindow = 0;
+  const diag: RadarChannelDiag[] = [];
+  let collectedOfFormat = 0; // vídeos do formato coletados (qualquer data)
 
   for (const ch of channels) {
     const metrics = computeChannelMetrics(ch.videos, ch.subscriberCount, {
@@ -67,11 +80,20 @@ export async function getRadar(f: RadarFilters) {
       smallChannelMaxSubs: s.smallChannelMaxSubs,
       smallChannelMinRatio: s.smallChannelMinRatio,
     });
+    const d: RadarChannelDiag = { channelId: ch.id, title: ch.title, inWindow: 0, noBase: 0, belowMinViews: 0, bestMult: null, bestTitle: null };
     for (const v of ch.videos) {
       if (v.isShort !== (f.format === "short")) continue;
+      collectedOfFormat++;
       if (v.publishedAt.getTime() < windowStart) continue;
       totalInWindow++;
       const m = metrics.get(v.id)!;
+      d.inWindow++;
+      if (m.baseCount === 0) d.noBase++;
+      if (v.viewCount < s.minViews) d.belowMinViews++;
+      if (m.multAvg != null && (d.bestMult == null || m.multAvg > d.bestMult)) {
+        d.bestMult = m.multAvg;
+        d.bestTitle = v.title;
+      }
       if (!f.includeAll && !m.isOutlier && !(f.onlySmall && m.smallChannelHit) && !(f.onlyRising && m.risingFast)) continue;
       if (f.onlySmall && !m.smallChannelHit) continue;
       if (f.onlyRising && !m.risingFast) continue;
@@ -84,6 +106,7 @@ export async function getRadar(f: RadarFilters) {
         history: v.snapshots.map((sn) => ({ day: sn.day, views: sn.viewCount })),
       });
     }
+    diag.push(d);
   }
 
   const key: Record<RadarFilters["sort"], (i: RadarItem) => number> = {
@@ -93,5 +116,12 @@ export async function getRadar(f: RadarFilters) {
     vpd: (i) => i.metrics.viewsPerDay,
   };
   items.sort((a, b) => key[f.sort](b) - key[f.sort](a));
-  return { items, totalInWindow, channelCount: channels.length, settings: s };
+  return {
+    items,
+    totalInWindow,
+    collectedOfFormat,
+    channelCount: channels.length,
+    diagnostics: diag.sort((a, b) => b.inWindow - a.inWindow),
+    settings: s,
+  };
 }

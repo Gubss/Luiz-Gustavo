@@ -18,10 +18,11 @@ const now = Date.now();
 const iso = (daysAgo: number) => new Date(now - daysAgo * DAY).toISOString();
 
 // 60 Shorts antigos de 30 mil, o "bunker" com 1,6 mi há 5 dias, um vídeo de 90s que NÃO é Short e 3 longos.
-type V = { id: string; title: string; days: number; views: number; dur: string };
+type V = { id: string; title: string; days: number; views: number; dur: string; live?: boolean };
 const videos: V[] = [
   { id: "bunker00001", title: "Entrei no bunker abandonado da Guerra Fria", days: 5, views: 1_600_000, dur: "PT58S" },
   { id: "notshort001", title: "Vídeo horizontal de 90 segundos", days: 6, views: 20_000, dur: "PT1M30S" },
+  { id: "livereplay1", title: "Primeira live do canal!", days: 3, views: 900_000, dur: "PT32M", live: true },
   ...Array.from({ length: 3 }, (_, i) => ({ id: `long0000${i}0`, title: `Documentário ${i}`, days: 4 + i * 7, views: 80_000, dur: "PT12M" })),
   ...Array.from({ length: 60 }, (_, i) => ({ id: `short${String(i).padStart(5, "0")}x`, title: i === 40 ? "E se o elevador despencar com você dentro?" : `Curiosidade número ${i} sobre o oceano`, days: 2 + i, views: 30_000, dur: "PT45S" })),
 ].sort((a, b) => a.days - b.days);
@@ -64,6 +65,7 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
       snippet: { channelId: "UCbunkerbunkerbunker0001", title: v.title, publishedAt: iso(v.days), liveBroadcastContent: "none", thumbnails: { high: { url: `https://i.ytimg.com/vi/${v.id}/hqdefault.jpg` } } },
       contentDetails: { duration: v.dur },
       statistics: { viewCount: String(v.views), likeCount: "10", commentCount: "1" },
+      ...(v.live ? { liveStreamingDetails: { actualStartTime: iso(v.days), actualEndTime: iso(v.days) } } : {}),
     })) });
   }
   return new Response("{}", { status: 404 });
@@ -123,11 +125,25 @@ test("coleta de ponta a ponta", async () => {
   assert.equal(r.items.length, 1);
   const longs = await mod.getRadar({ format: "long", days: 30, minMult: 3, sort: "mult", includeAll: true });
   assert.ok(longs.items.some((i) => i.video.externalId === "notshort001"));
+  // gravação de live não entra no radar (nem na base dos longos)
+  assert.equal(await prisma.video.count({ where: { externalId: "livereplay1" } }), 0);
+  assert.ok(!longs.items.some((i) => i.video.externalId === "livereplay1"));
+
+  // aba de longos sem outlier: lista vazia, mas com o motivo por canal
+  const longOut = await mod.getRadar({ format: "long", days: 30, minMult: 3, sort: "mult" });
+  assert.equal(longOut.items.length, 0);
+  assert.equal(longOut.totalInWindow, 4); // 3 documentários + o de 90s
+  const d = longOut.diagnostics.find((x) => x.inWindow > 0)!;
+  assert.equal(d.inWindow, 4);
+  assert.ok(d.bestMult != null && d.bestMult < 3, `melhor x média: ${d.bestMult}`);
+  assert.equal(d.belowMinViews, 0);
+  assert.equal(s.message, `Coleta concluída: 1 canal, views de ${vcount} vídeos atualizadas. ${videos.length} títulos novos entraram no catálogo. Usou ${s.unitsUsed} unidades da cota diária do YouTube.`);
 
   // segunda coleta: incremental, sem reler o catálogo inteiro
   calls.length = 0;
   const s2 = await mod.collectAll({ trigger: "manual", force: true });
   assert.equal(s2.catalogAdded, 0);
+  assert.match(s2.message!, /Nenhum vídeo novo publicado desde a última coleta/);
   assert.equal(await prisma.videoSnapshot.count(), vcount); // mesmo dia: atualiza, não duplica
 
   // conferência de tema
