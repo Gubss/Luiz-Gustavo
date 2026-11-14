@@ -7,7 +7,7 @@ outliers, estuda título/thumbnail/roteiro com o Claude e gera temas e roteiros.
 
 - [x] **Etapa 1** — estrutura, banco (schema completo da v1), nichos, canais monitorados, meus canais, resolução de canal pela API, controle de cota
 - [x] **Etapa 2** — coleta de vídeos, snapshots diários, base do canal, velocidade, outliers, "Canal pequeno estourou", catálogo de títulos ("esse tema já foi feito?"), radar e favoritos
-- [ ] Etapa 3 — estudo do vídeo: transcrição, diagnóstico medido, comentários, esqueleto de roteiro
+- [x] **Etapa 3** — estudo do vídeo: transcrição, diagnóstico medido, comentários, esqueleto de roteiro
 - [ ] Etapa 4 — descoberta de canais
 - [ ] Etapa 5 — cartilha do nicho
 - [ ] Etapa 6 — gerador de temas, títulos e roteiros; banco de ideias
@@ -23,7 +23,7 @@ No PowerShell:
 ```powershell
 git clone https://github.com/gubss/luiz-gustavo.git
 cd luiz-gustavo
-git checkout claude/youtube-radar-app-wfad9w
+git checkout claude/project-thread-ifnkok
 npm install
 copy .env.example .env
 notepad .env          # cole suas chaves
@@ -64,10 +64,39 @@ Na primeira coleta de cada canal o catálogo completo de títulos é lido (1 uni
 - **Canal pequeno estourou**: canal com até 50 mil inscritos e vídeo com 10x+ os inscritos.
 - **Short**: até 60s é Short; entre 61s e 3 min confere pela URL `/shorts/` (sem gastar cota); acima é longo.
 
+## Estudo do vídeo (etapa 3)
+
+No radar ou nos favoritos, clique em **Estudar** no card (ou cole um link em *Estudos de vídeo*).
+
+1. **Transcrição** — "Buscar legenda do YouTube" lê a legenda pública do vídeo (grátis, sem cota). Se o vídeo
+   não tiver legenda ou o YouTube bloquear, cole a transcrição (painel "Mostrar transcrição" do YouTube, SRT, VTT
+   ou texto corrido).
+2. **Diagnóstico** — o Claude Opus 5.5 lê título, thumbnail, números e a transcrição com tempos e devolve:
+   hipóteses de por que funcionou (com evidência), fórmula do título, gancho, esqueleto (gancho, virada,
+   desenvolvimento, clímax, fecho), cada "momento novo" com o segundo exato, pontos de risco, como replicar e
+   temas derivados. As **medidas** (palavras/s, ritmo, abertura, fecho, intervalo entre momentos novos, maior
+   buraco sem novidade) são calculadas em código; o Claude só aponta onde estão os momentos.
+3. **Comentários** — lê os 200 comentários mais relevantes (2 unidades de cota) e o Claude Sonnet 5.5 resume
+   o que o público gostou, criticou, perguntou e pediu.
+
+Cada botão mostra o **custo estimado** antes de rodar e grava o **custo real** depois (tabela `Generation`).
+Referência: diagnóstico de Short ≈ US$ 0,05–0,15; de vídeo longo de 15 min ≈ US$ 0,10–0,30; comentários ≈ US$ 0,03.
+O gasto do mês aparece em *Estudos de vídeo*. Modelos: `claude-opus-5-5` (diagnóstico) e `claude-sonnet-5-5`
+(comentários), com reserva automática se o modelo recusar.
+
+### Importação de estudos externos (preparado, ainda não feito)
+
+`Transcript`, `Diagnosis` e `ScriptStructure` têm `source` (`youtube`/`manual`/`import` ou `app`/`import`),
+`importSource` (ex.: `faro`) e `importKey` único (ex.: `faro:Olheiros/Canal X/video.md`). O script de importação
+deve fazer `upsert` por `importKey`: rodar de novo atualiza em vez de duplicar. Para vídeos fora do radar, use
+`ensureVideo(link)` de `src/lib/videos.ts` (grava o canal sem nicho, fora da coleta diária). Um diagnóstico
+importado pode ter só `markdown` (o texto do estudo), sem o JSON estruturado.
+
 ## Testes
 
 `npm test` roda os testes de cálculo e uma coleta completa com a API do YouTube simulada
-(usa `prisma/test.db`, nunca o seu banco).
+(usa `prisma/test.db`, nunca o seu banco). O estudo do vídeo é testado com YouTube e Anthropic simulados
+(`prisma/test-study.db`, sem custo).
 
 ## Stack
 

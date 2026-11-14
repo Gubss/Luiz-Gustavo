@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { RadarItem } from "@/lib/radar";
 import { channelUrl, videoUrl } from "@/lib/youtube";
 import { fmtCompact, fmtDate, fmtInt, fmtMult } from "@/lib/format";
@@ -88,8 +89,11 @@ export function RadarCard({ item }: { item: RadarItem }) {
               {item.favorite ? "★ Favorito" : "☆ Favoritar"}
             </button>
           </form>
-          <a href={url} target="_blank" rel="noreferrer" className="btn-ghost">
-            Abrir ↗
+          <Link href={`/video/${v.id}`} className="btn-secondary">
+            Estudar
+          </Link>
+          <a href={url} target="_blank" rel="noreferrer" className="btn-ghost" title="Abrir no YouTube">
+            ↗
           </a>
         </div>
       </div>

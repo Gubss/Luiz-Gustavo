@@ -171,7 +171,7 @@ export async function collectChannelVideos(channelId: string): Promise<ChannelCo
 
   if (liveReplays.length) {
     // Lives gravadas em coletas antigas saem do radar (menos as favoritadas).
-    await prisma.video.deleteMany({ where: { platform: "youtube", externalId: { in: liveReplays }, favorite: null } });
+    await prisma.video.deleteMany({ where: { platform: "youtube", externalId: { in: liveReplays }, favorite: null, transcript: null, diagnosis: null } });
   }
 
   await prisma.channel.update({
@@ -261,6 +261,7 @@ async function doCollect(opts: { trigger: "auto" | "manual" | "script"; force?: 
     const cutoff = new Date(Date.now() - STALE_MS);
     const channels = await prisma.channel.findMany({
       where: {
+        niches: { some: {} }, // canais sem nicho (vindos de "estudar por link") não são coletados
         ...(opts.channelIds ? { id: { in: opts.channelIds } } : {}),
         ...(opts.force ? {} : { OR: [{ videosFetchedAt: null }, { videosFetchedAt: { lt: cutoff } }] }),
       },

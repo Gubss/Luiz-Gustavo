@@ -7,10 +7,10 @@ const NAV: { href: string; label: string; soon?: boolean }[] = [
   { href: "/radar", label: "Radar de outliers" },
   { href: "/nichos", label: "Nichos e canais" },
   { href: "/favoritos", label: "Favoritos" },
+  { href: "/estudos", label: "Estudos de vídeo" },
   { href: "/descobrir", label: "Descobrir", soon: true },
   { href: "/gerador", label: "Gerador", soon: true },
   { href: "/ideias", label: "Banco de ideias", soon: true },
-  { href: "/estruturas", label: "Estruturas", soon: true },
   { href: "/meus-videos", label: "Meus vídeos", soon: true },
   { href: "/configuracoes", label: "Configurações", soon: true },
 ];
