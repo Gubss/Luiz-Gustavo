@@ -36,6 +36,8 @@ export type SearchOptions = {
   order: "viewCount" | "relevance";
   language?: string; // "pt", "en", "es"...
   region?: string; // "BR", "US"...
+  /** Avisa o andamento (0-100) para a barra de progresso. */
+  onProgress?: (pct: number, step: string) => Promise<void> | void;
 };
 
 export type MatchedVideo = {
@@ -275,7 +277,8 @@ export async function discoverBySearch(opts: SearchOptions): Promise<DiscoverySu
   let units = 0;
   const publishedAfter = opts.days > 0 ? new Date(Date.now() - opts.days * DAY_MS) : undefined;
   const queryOf = new Map<string, string>(); // videoId -> palavra que encontrou
-  for (const q of keywords) {
+  for (const [i, q] of keywords.entries()) {
+    await opts.onProgress?.((i / (keywords.length + 1)) * 100, `Buscando "${q}" (${i + 1} de ${keywords.length})`);
     const r = await searchVideos({
       q,
       videoDuration: durationFor(opts.format, opts.longDuration),
@@ -289,6 +292,7 @@ export async function discoverBySearch(opts: SearchOptions): Promise<DiscoverySu
   }
 
   const ids = [...queryOf.keys()];
+  await opts.onProgress?.((keywords.length / (keywords.length + 1)) * 100, "Conferindo vídeos e canais");
   const ytVideos = ids.length ? await fetchVideosBatch(ids) : [];
   units += Math.ceil(ids.length / 50);
   const usable = ytVideos.filter((v) => !isLiveOrReplay(v));
@@ -361,7 +365,7 @@ export async function discoverBySearch(opts: SearchOptions): Promise<DiscoverySu
  * Lê as seções "canais em destaque" de cada canal monitorado do nicho (1 unidade por canal)
  * e grava os canais indicados que ainda não estão no nicho.
  */
-export async function discoverFeatured(nicheId: string): Promise<DiscoverySummary> {
+export async function discoverFeatured(nicheId: string, onProgress?: SearchOptions["onProgress"]): Promise<DiscoverySummary> {
   const links = await prisma.nicheChannel.findMany({
     where: { nicheId },
     select: { channel: { select: { externalId: true, title: true } } },
@@ -372,7 +376,8 @@ export async function discoverFeatured(nicheId: string): Promise<DiscoverySummar
   let units = 0;
   const monitored = new Set(links.map((l) => l.channel.externalId));
   const indicatedBy = new Map<string, Set<string>>();
-  for (const l of links) {
+  for (const [i, l] of links.entries()) {
+    await onProgress?.((i / links.length) * 95, `Lendo ${l.channel.title} (${i + 1} de ${links.length})`);
     try {
       const ids = await featuredChannelsOf(l.channel.externalId);
       for (const id of ids) {
@@ -551,4 +556,155 @@ export async function suggestKeywords(nicheId: string, limit = 12): Promise<stri
 
 export async function recentSearches(nicheId: string, take = 8) {
   return prisma.discoverySearch.findMany({ where: { nicheId }, orderBy: { createdAt: "desc" }, take });
+}
+
+// ---------- Parecidos com um link ----------
+
+/** Custo de "parecidos com este link": ~5 unidades para ler o link e os indicados + ~102 por palavra-chave. */
+export const LINK_BASE_COST = 5;
+export function estimateLinkCost(keywordCount: number) {
+  return LINK_BASE_COST + estimateSearchCost(keywordCount);
+}
+
+/** Palavras-chave a partir dos títulos e tags de vídeos de referência (tags que se repetem pesam mais). */
+export function keywordsFromVideos(videos: { title: string; tags?: string[] }[], channelTitle: string, limit = 5): string[] {
+  const channelWords = new Set(tokenize(channelTitle));
+  const score = new Map<string, { label: string; n: number }>();
+  const add = (label: string, w: number) => {
+    const key = tokenize(label).join(" ");
+    if (!key || key.length < 3 || key.split(" ").every((x) => channelWords.has(x))) return;
+    const cur = score.get(key) ?? { label: label.toLowerCase().trim(), n: 0 };
+    cur.n += w;
+    score.set(key, cur);
+  };
+  for (const v of videos) {
+    for (const t of new Set((v.tags ?? []).map((x) => x.trim()).filter((x) => x.length >= 3 && x.length <= 40))) add(t, 1.5);
+    const tk = tokenize(v.title).filter((w) => !/^\d+$/.test(w) && w.length >= 3);
+    for (let i = 0; i + 1 < tk.length; i++) add(`${tk[i]} ${tk[i + 1]}`, 1);
+    for (const w of tk) add(w, 0.4);
+  }
+  const ranked = [...score.entries()].sort((a, b) => b[1].n - a[1].n);
+  const out: string[] = [];
+  for (const [key, v] of ranked) {
+    if (out.some((o) => tokenize(o).join(" ").includes(key) || key.includes(tokenize(o).join(" "))) && !key.includes(" ")) continue;
+    out.push(v.label);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+/**
+ * Canais parecidos com um link (vídeo ou canal), em Shorts ou longos:
+ * lê o link, tira palavras-chave dos títulos/tags, busca por elas como na busca normal
+ * e junta os canais que o canal do link indica na própria página. O canal do link também entra na lista.
+ * (A API do YouTube não tem mais "vídeos relacionados", então o parecido vem do assunto.)
+ */
+export async function discoverFromLink(opts: {
+  nicheId: string;
+  link: string;
+  format: Format | "auto";
+  keywordCount: number;
+  days: number;
+  onProgress?: SearchOptions["onProgress"];
+}): Promise<DiscoverySummary & { keywords: string[]; format: Format; sourceTitle: string }> {
+  const settings = await getSettings();
+  const n = Math.max(1, Math.min(3, Math.round(opts.keywordCount)));
+  await assertQuota(estimateLinkCost(n));
+  await opts.onProgress?.(3, "Lendo o link");
+  const raw = opts.link.trim();
+  const videoId = /^[\w-]{11}$/.test(raw) ? raw : (() => {
+    const m = raw.match(/(?:v=|youtu\.be\/|shorts\/|embed\/|live\/)([\w-]{11})/);
+    return m?.[1] ?? null;
+  })();
+
+  let units = 0;
+  let channel: YtChannel;
+  let refs: YtVideo[] = [];
+  let detected: Format;
+  if (videoId) {
+    const [v] = await fetchVideosBatch([videoId]);
+    units += 1;
+    if (!v) throw new Error("Vídeo não encontrado no YouTube.");
+    const cls = await classifyVideos([v], settings.shortMaxSec);
+    detected = cls.get(v.id)!.isShort ? "short" : "long";
+    [channel] = await fetchChannelsBatch([v.snippet.channelId]);
+    units += 1;
+    // Também alguns vídeos recentes do canal no mesmo formato, para as palavras não saírem de um título só.
+    const page = channel?.contentDetails?.relatedPlaylists?.uploads ? await uploadsPage(channel.contentDetails.relatedPlaylists.uploads) : null;
+    if (page) units += 1;
+    const others = (page?.items ?? []).map((it) => it.contentDetails?.videoId).filter((x): x is string => !!x && x !== v.id).slice(0, 30);
+    const more = others.length ? await fetchVideosBatch(others) : [];
+    if (others.length) units += 1;
+    const mc = await classifyVideos(more, settings.shortMaxSec);
+    const fmt = opts.format === "auto" ? detected : opts.format;
+    refs = [v, ...more.filter((x) => mc.get(x.id)!.isShort === (fmt === "short")).sort((a, b) => Number(b.statistics?.viewCount ?? 0) - Number(a.statistics?.viewCount ?? 0)).slice(0, 5)];
+  } else {
+    const { resolveChannel } = await import("./youtube");
+    channel = await resolveChannel(raw);
+    units += 1;
+    const pl = channel.contentDetails?.relatedPlaylists?.uploads;
+    const page = pl ? await uploadsPage(pl) : null;
+    if (page) units += 1;
+    const ids = (page?.items ?? []).map((it) => it.contentDetails?.videoId).filter((x): x is string => !!x);
+    const vids = ids.length ? await fetchVideosBatch(ids) : [];
+    if (ids.length) units += 1;
+    const cls = await classifyVideos(vids.filter((x) => !isLiveOrReplay(x)), settings.shortMaxSec);
+    const shorts = vids.filter((x) => cls.get(x.id)?.isShort === true).length;
+    detected = shorts >= vids.length / 2 ? "short" : "long";
+    const fmt = opts.format === "auto" ? detected : opts.format;
+    refs = vids
+      .filter((x) => cls.get(x.id)?.isShort === (fmt === "short"))
+      .sort((a, b) => Number(b.statistics?.viewCount ?? 0) - Number(a.statistics?.viewCount ?? 0))
+      .slice(0, 8);
+    if (!refs.length) throw new Error(`Esse canal não tem ${fmt === "short" ? "Shorts" : "vídeos longos"} recentes para comparar. Troque o formato.`);
+  }
+  if (!channel) throw new Error("Canal não encontrado no YouTube.");
+  const format: Format = opts.format === "auto" ? detected : opts.format;
+
+  const keywords = keywordsFromVideos(
+    refs.map((v) => ({ title: v.snippet.title, tags: v.snippet.tags })),
+    channel.snippet.title,
+    n,
+  );
+  if (!keywords.length) throw new Error("Não consegui tirar palavras-chave desse link. Use a busca por palavra-chave.");
+
+  // O próprio canal do link entra na lista (se ainda não é monitorado).
+  const monitored = await monitoredInNiche(opts.nicheId);
+  if (!monitored.has(channel.id)) {
+    const cls = await classifyVideos(refs, settings.shortMaxSec);
+    await saveCandidate(opts.nicheId, channel, { videos: refs.map((v) => toMatched(v, cls.get(v.id)!)), query: `parecido com link` });
+  }
+
+  // Canais que ele indica na página.
+  await opts.onProgress?.(8, "Canais indicados pelo canal do link");
+  let featuredNew = 0;
+  try {
+    const fids = (await featuredChannelsOf(channel.id)).filter((id) => !monitored.has(id));
+    units += 1;
+    const fch = fids.length ? await fetchChannelsBatch(fids) : [];
+    if (fids.length) units += Math.ceil(fids.length / 50);
+    for (const yt of fch) if (await saveCandidate(opts.nicheId, yt, { featuredBy: channel.snippet.title })) featuredNew++;
+  } catch (e) {
+    if (e instanceof Error && /Cota/.test(e.message)) throw e;
+  }
+
+  const r = await discoverBySearch({
+    nicheId: opts.nicheId,
+    keywords,
+    format,
+    days: opts.days,
+    order: "viewCount",
+    onProgress: (pct, step) => opts.onProgress?.(10 + pct * 0.9, step),
+  });
+  units += r.unitsUsed;
+  const fmtLabel = format === "short" ? "Shorts" : "vídeos longos";
+  return {
+    ...r,
+    unitsUsed: units,
+    newChannels: r.newChannels + featuredNew,
+    keywords,
+    format,
+    sourceTitle: channel.snippet.title,
+    message: `Parecidos com ${channel.snippet.title} (${fmtLabel}). Palavras usadas: ${keywords.join(", ")}. ${r.message.replace(/Usou \d+ unidades da cota\./, "")}${featuredNew ? ` +${featuredNew} indicados pelo próprio canal.` : ""} Usou ${units} unidades da cota.`,
+  };
 }

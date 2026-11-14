@@ -7,11 +7,20 @@ export class TranscriptError extends Error {}
 // ---------- Interpretação de formatos ----------
 
 const ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " " };
-function decodeEntities(s: string) {
+function decodeOnce(s: string) {
   return s
     .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)))
     .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCodePoint(parseInt(n, 16)))
     .replace(/&(amp|lt|gt|quot|apos|nbsp);/g, (_, k) => ENTITIES[k]);
+}
+/** A legenda do YouTube às vezes vem codificada duas vezes ("&amp;#39;"): decodifica até estabilizar. */
+export function decodeEntities(s: string) {
+  for (let i = 0; i < 3; i++) {
+    const next = decodeOnce(s);
+    if (next === s) break;
+    s = next;
+  }
+  return s;
 }
 const clean = (s: string) => decodeEntities(s.replace(/<[^>]+>/g, "")).replace(/\s+/g, " ").trim();
 

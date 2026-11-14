@@ -14,7 +14,11 @@ import { channelUrl, videoUrl } from "@/lib/youtube";
 import { fmtCompact, fmtDate, fmtDateTime, fmtInt } from "@/lib/format";
 import { getSettings } from "@/lib/settings";
 import { ActionButton, FeaturedButton, SearchForm } from "./forms";
-import { analyzeAction, dismissAction, featuredAction, monitorAction, restoreAction, searchAction } from "./actions";
+import { analyzeAction, dismissAction, featuredAction, linkAction, monitorAction, restoreAction, searchAction } from "./actions";
+import { estimateLinkCost } from "@/lib/discover";
+import { runningJobsFor } from "@/lib/jobs";
+import { RunningNote } from "@/components/RunningNote";
+import { StateForm } from "@/components/StateForm";
 
 type SP = Record<string, string | string[] | undefined>;
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
@@ -90,6 +94,7 @@ export default async function DiscoverPage({ searchParams }: PageProps<"/descobr
     prisma.discoveredChannel.groupBy({ by: ["status"], where: { nicheId: niche.id }, _count: true }),
   ]);
   const countOf = (s: string) => statusCounts.find((c) => c.status === s)?._count ?? 0;
+  const discoverJob = (await runningJobsFor([niche.id])).find((j) => j.kind === "discover");
   // Canais que já estão em outro nicho seu
   const elsewhere = new Map<string, string[]>();
   if (items.length) {
@@ -135,6 +140,55 @@ export default async function DiscoverPage({ searchParams }: PageProps<"/descobr
           </Chip>
         ))}
       </div>
+
+      {discoverJob && <RunningNote job={discoverJob} what={`${discoverJob.label}${discoverJob.step ? ` · ${discoverJob.step}` : ""}`} />}
+
+      {/* Parecidos com um link */}
+      <section className="card space-y-4 p-5">
+        <div>
+          <h2 className="text-lg font-semibold">Canais parecidos com um link</h2>
+          <p className="text-xs text-zinc-500">
+            Cole o link de um vídeo ou de um canal que você gosta. O app lê os títulos e tags dele (e dos vídeos do mesmo formato do canal), tira
+            as palavras-chave, busca por elas e junta os canais que esse canal indica na página dele. O canal do link também entra na lista.
+            O YouTube não oferece mais &ldquo;vídeos relacionados&rdquo; pela API, então o &ldquo;parecido&rdquo; vem do assunto.
+          </p>
+        </div>
+        <StateForm action={linkAction.bind(null, niche.id)} label="Buscar parecidos" busy="Começando…" hint="Roda em segundo plano">
+          <div className="grid gap-3 md:grid-cols-[3fr_1fr_1fr_1fr]">
+            <div>
+              <label className="label">Link do vídeo ou do canal</label>
+              <input name="link" className="input" placeholder="https://www.youtube.com/shorts/… ou https://www.youtube.com/@canal" />
+            </div>
+            <div>
+              <label className="label">Formato</label>
+              <select name="format" className="input" defaultValue="auto">
+                <option value="auto">o mesmo do link</option>
+                <option value="short">Shorts</option>
+                <option value="long">Vídeos longos</option>
+              </select>
+            </div>
+            <div>
+              <label className="label">Palavras-chave</label>
+              <select name="keywordCount" className="input" defaultValue="2">
+                {[1, 2, 3].map((n) => (
+                  <option key={n} value={n} disabled={estimateLinkCost(n) > q.remaining}>
+                    {n} · ~{estimateLinkCost(n)} unidades
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="label">Publicados nos últimos</label>
+              <select name="days" className="input" defaultValue="365">
+                <option value="90">3 meses</option>
+                <option value="180">6 meses</option>
+                <option value="365">1 ano</option>
+                <option value="0">qualquer data</option>
+              </select>
+            </div>
+          </div>
+        </StateForm>
+      </section>
 
       {/* Busca */}
       <section className="card space-y-4 p-5">

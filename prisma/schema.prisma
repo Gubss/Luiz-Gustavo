@@ -145,12 +145,67 @@ model MyChannel {
   notes      String?
   // Preparado para OAuth (versão futura)
   oauthConnected Boolean  @default(false)
+  // Perfil do canal (etapa 6): o gerador adapta a cartilha a este formato.
+  format       String   @default("short") // formato principal: "short" | "long"
+  platforms    String? // ex.: "YouTube Shorts, TikTok"
+  concept      String? // premissa / do que o canal trata
+  characters   String? // personagens recorrentes (nome, idade, jeito, como fala)
+  visualStyle  String? // estilo visual (ex.: animação 3D estilo Pixar, casa da família)
+  tone         String? // tom e linguagem
+  storyFormats String? // formatos de história que se repetem (ex.: "menino fala algo errado e o pai corrige")
+  audience     String? // público
+  rules        String? // sempre / nunca
+  durationSec  Int? // duração alvo
+  catalogFetchedAt DateTime? // última leitura da lista de vídeos do canal no YouTube
+  analytics    String? // números do canal colados/importados (ex.: do YouTube Studio via Maestri)
+  analyticsAt  DateTime?
+  profileImportedAt DateTime? // último perfil importado de arquivo .md
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  niche    Niche?    @relation(fields: [nicheId], references: [id], onDelete: SetNull)
+  niche    Niche?           @relation(fields: [nicheId], references: [id], onDelete: SetNull)
   videos   MyVideo[]
   ideas    Idea[]
+  scripts  MyChannelScript[]
+  catalog  MyChannelVideo[]
+}
+
+/// Todos os vídeos que o meu canal já publicou (lidos do YouTube): o gerador não repete esses temas,
+/// mesmo que o vídeo antigo tenha outro estilo (ex.: 2D).
+model MyChannelVideo {
+  id          String   @id @default(cuid())
+  myChannelId String
+  externalId  String
+  title       String
+  publishedAt DateTime
+  durationSec Int?
+  isShort     Boolean?
+  viewCount   Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  myChannel MyChannel @relation(fields: [myChannelId], references: [id], onDelete: Cascade)
+  ideas     Idea[]
+
+  @@unique([myChannelId, externalId])
+  @@index([myChannelId, publishedAt])
+}
+
+/// Roteiros que o canal já publicou (ou escreveu): exemplos da voz e do formato do canal para o gerador.
+model MyChannelScript {
+  id          String   @id @default(cuid())
+  myChannelId String
+  title       String
+  url         String?
+  script      String
+  views       Int?
+  notes       String? // o que funcionou / o que não funcionou
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  myChannel MyChannel @relation(fields: [myChannelId], references: [id], onDelete: Cascade)
+
+  @@index([myChannelId])
 }
 
 // ---------- Descoberta de canais (etapa 4) ----------
@@ -391,12 +446,21 @@ model Idea {
   referenceIds  String? // JSON array de Video.id usados como referência
   structureIds  String? // JSON array de ScriptStructure.id usados no roteiro
   notes         String?
+  // Etapa 6
+  playbookId    String? // NichePlaybook usada (versão da cartilha)
+  ideaData      String? // JSON do Claude: premissa no formato do canal, gancho, adaptação, títulos com fórmula
+  scriptData    String? // JSON do roteiro: cenas, falas, texto na tela, checklist conferido
+  ideaCostUsd   Float?
+  scriptCostUsd Float?
+  // Vídeo do meu canal em que a ideia virou (publicada)
+  publishedVideoId String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
   niche     Niche?     @relation(fields: [nicheId], references: [id], onDelete: SetNull)
   myChannel MyChannel? @relation(fields: [myChannelId], references: [id], onDelete: SetNull)
   myVideos  MyVideo[]
+  publishedVideo MyChannelVideo? @relation(fields: [publishedVideoId], references: [id], onDelete: SetNull)
 }
 
 /// Registro bruto de cada chamada ao Claude (auditoria, reaproveitamento e controle de gasto).
@@ -486,4 +550,26 @@ model MyVideoCheckpoint {
   myVideo MyVideo @relation(fields: [myVideoId], references: [id], onDelete: Cascade)
 
   @@unique([myVideoId, ageHours])
+}
+
+// ---------- Tarefas em segundo plano ----------
+
+/// Chamadas demoradas ao Claude (diagnóstico, comentários, cartilha, ideias, roteiro) rodam em segundo plano:
+/// o botão cria a tarefa e volta na hora, e o app avisa quando termina. status: running | ok | error
+model Job {
+  id         String    @id @default(cuid())
+  kind       String // "diagnosis" | "comments" | "playbook" | "ideas" | "script"
+  targetId   String // vídeo, nicho:formato, canal ou ideia
+  label      String // texto para o aviso (ex.: "Diagnóstico: título do vídeo")
+  href       String // onde ver o resultado
+  status     String    @default("running")
+  message    String?
+  progress   Int? // 0-100 quando dá para medir (etapas, palavras-chave); senão o aviso estima pelo tempo
+  step       String? // etapa atual (ex.: "Diagnóstico (2 de 3)")
+  expectedSec Int? // duração típica, para estimar a barra de progresso
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+
+  @@index([status])
+  @@index([kind, targetId])
 }

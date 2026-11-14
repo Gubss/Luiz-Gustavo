@@ -38,9 +38,15 @@ const hasDiagnosis = {
   diagnosis: { is: { OR: [{ content: { not: null } }, { markdown: { not: null } }] } },
 };
 
+/** Vídeos dos MEUS canais não entram na cartilha: ela é feita só das referências. */
+async function notMine() {
+  const mine = await prisma.myChannel.findMany({ where: { externalId: { not: null } }, select: { externalId: true } });
+  return { channel: { externalId: { notIn: mine.map((m) => m.externalId!) } } };
+}
+
 export async function loadNicheStudies(nicheId: string, format: PlaybookFormat) {
   const rows = await prisma.video.findMany({
-    where: { AND: [inNiche(nicheId), hasDiagnosis, { isShort: format === "short" }] },
+    where: { AND: [inNiche(nicheId), hasDiagnosis, { isShort: format === "short" }, await notMine()] },
     include: {
       channel: { select: { title: true, subscriberCount: true } },
       diagnosis: true,
@@ -76,11 +82,13 @@ export type NicheStudy = Awaited<ReturnType<typeof loadNicheStudies>>[number];
 
 /** Contagem por formato (estudos prontos e vídeos que ainda não têm diagnóstico). */
 export async function studyCounts(nicheId: string) {
+  const mine = await notMine();
   const count = (isShort: boolean, diag: boolean) =>
     prisma.video.count({
       where: {
         AND: [
           inNiche(nicheId),
+          mine,
           { isShort },
           diag ? hasDiagnosis : { transcript: { isNot: null }, NOT: hasDiagnosis },
         ],
@@ -308,7 +316,7 @@ e use "lacunas" para dizer quantos e quais tipos de vídeo estudar a seguir para
 const pct = (s: Share) => (s.n ? `${s.yes} de ${s.n}` : "—");
 const medTxt = (m: Med, unit = "") => (m.value == null ? "—" : `${String(m.value)}${unit}${m.n > 1 ? ` (de ${m.min} a ${m.max}, ${m.n} estudos)` : ""}`);
 
-function statsBlock(st: PlaybookStats) {
+export function statsBlock(st: PlaybookStats) {
   const lines = [
     `# Medidas calculadas em código (${st.studies} estudos de ${formatLabel(st.format, true)})`,
     `Views (mediana): ${medTxt(st.views)} · x média do canal: ${medTxt(st.multAvg, "x")} · x inscritos: ${medTxt(st.multSubs, "x")}`,
@@ -328,7 +336,7 @@ function statsBlock(st: PlaybookStats) {
 
 const ts = (s: number) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`;
 
-function studyBlock(s: NicheStudy, i: number) {
+export function studyBlock(s: NicheStudy, i: number) {
   const c = s.content;
   const m = s.metrics;
   const head = [

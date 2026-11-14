@@ -178,7 +178,7 @@ export function SearchForm({
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
-        <Submit disabled={list.length === 0 || tooMany || noQuota} pendingText="Buscando… (pode levar alguns segundos)">
+        <Submit disabled={list.length === 0 || tooMany || noQuota} pendingText="Começando…">
           Buscar canais
         </Submit>
         <span className={`text-sm ${noQuota || tooMany ? "text-red-400" : eatsReserve ? "text-amber-400" : "text-zinc-400"}`}>
@@ -226,7 +226,7 @@ export function FeaturedButton({ action, cost, disabled }: { action: () => Promi
   return (
     <form action={formAction} className="space-y-2">
       <div className="flex flex-wrap items-center gap-3">
-        <Submit className="btn-secondary" disabled={disabled} pendingText="Lendo as páginas dos canais…">
+        <Submit className="btn-secondary" disabled={disabled} pendingText="Começando…">
           Buscar canais indicados
         </Submit>
         <span className="text-sm text-zinc-400">Custo: ~{units(cost)}</span>

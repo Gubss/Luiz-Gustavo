@@ -5,6 +5,9 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { addChannelToNiche, refreshChannels } from "@/lib/channels";
 import { studiedVideoFilter } from "@/lib/videos";
+import { startJob } from "@/lib/jobs";
+
+const BACKGROUND_OK = "Começou em segundo plano. Pode sair desta tela: o aviso no canto mostra o andamento e quando terminar.";
 
 export type FormState = { ok?: string; error?: string } | null;
 
@@ -39,23 +42,37 @@ export async function addChannels(nicheId: string, _prev: FormState, fd: FormDat
     .filter(Boolean);
   if (lines.length === 0) return { error: "Cole ao menos uma URL, @handle ou ID." };
   if (lines.length > 50) return { error: "Adicione no máximo 50 canais por vez." };
+  const niche = await prisma.niche.findUniqueOrThrow({ where: { id: nicheId }, select: { name: true } });
 
-  const added: string[] = [];
-  const already: string[] = [];
-  const errors: string[] = [];
-  for (const line of lines) {
-    try {
-      const r = await addChannelToNiche(nicheId, line);
-      (r.alreadyInNiche ? already : added).push(r.channel.title);
-    } catch (e) {
-      errors.push(`${line}: ${e instanceof Error ? e.message : "erro"}`);
-    }
+  try {
+    await startJob(
+      { kind: "channels", targetId: nicheId, label: `Adicionar ${lines.length} ${lines.length === 1 ? "canal" : "canais"}: ${niche.name}`, href: `/nichos/${nicheId}`, expectedSec: 2 * lines.length },
+      async (report) => {
+        const added: string[] = [];
+        const already: string[] = [];
+        const errors: string[] = [];
+        for (const [i, line] of lines.entries()) {
+          await report((i / lines.length) * 100, `${i + 1} de ${lines.length}`);
+          try {
+            const r = await addChannelToNiche(nicheId, line);
+            (r.alreadyInNiche ? already : added).push(r.channel.title);
+          } catch (e) {
+            errors.push(`${line}: ${e instanceof Error ? e.message : "erro"}`);
+          }
+        }
+        const parts: string[] = [];
+        if (added.length) parts.push(`Adicionado: ${added.join(", ")}.`);
+        if (already.length) parts.push(`Já estava no nicho: ${already.join(", ")}.`);
+        if (errors.length) parts.push(`Não deu: ${errors.join("; ")}`);
+        if (!added.length && !already.length) throw new Error(parts.join(" ") || "Nenhum canal adicionado.");
+        return parts.join(" ");
+      },
+    );
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Erro inesperado." };
   }
   revalidatePath(`/nichos/${nicheId}`);
-  const parts: string[] = [];
-  if (added.length) parts.push(`Adicionado: ${added.join(", ")}.`);
-  if (already.length) parts.push(`Já estava no nicho: ${already.join(", ")}.`);
-  return { ok: parts.join(" ") || undefined, error: errors.length ? errors.join("\n") : undefined };
+  return { ok: BACKGROUND_OK };
 }
 
 export async function removeChannel(nicheId: string, channelId: string) {
@@ -72,9 +89,14 @@ export async function refreshNicheChannels(nicheId: string): Promise<FormState> 
   const links = await prisma.nicheChannel.findMany({ where: { nicheId }, select: { channelId: true } });
   if (links.length === 0) return { error: "Nenhum canal para atualizar." };
   try {
-    const r = await refreshChannels({ force: true, channelIds: links.map((l) => l.channelId) });
-    revalidatePath(`/nichos/${nicheId}`);
-    return { ok: `${r.updated} canais atualizados (${r.units} unidade${r.units === 1 ? "" : "s"} de cota).` };
+    await startJob(
+      { kind: "refresh", targetId: nicheId, label: "Atualizar dados dos canais", href: `/nichos/${nicheId}`, expectedSec: 3 + Math.ceil(links.length / 50) * 2 },
+      async () => {
+        const r = await refreshChannels({ force: true, channelIds: links.map((l) => l.channelId) });
+        return `${r.updated} canais atualizados (${r.units} unidade${r.units === 1 ? "" : "s"} de cota).`;
+      },
+    );
+    return { ok: BACKGROUND_OK };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Erro ao atualizar." };
   }

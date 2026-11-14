@@ -10,7 +10,7 @@ outliers, estuda título/thumbnail/roteiro com o Claude e gera temas e roteiros.
 - [x] **Etapa 3** — estudo do vídeo: transcrição, diagnóstico medido, comentários, esqueleto de roteiro
 - [x] **Etapa 4** — descoberta de canais (busca por palavra-chave, canais indicados, raio-x do canal)
 - [x] **Etapa 5** — cartilha do nicho (por formato: Shorts e longos separados)
-- [ ] Etapa 6 — gerador de temas, títulos e roteiros; banco de ideias
+- [x] **Etapa 6** — perfil do meu canal, gerador de temas, títulos e roteiros adaptados ao formato do canal; banco de ideias
 - [ ] Etapa 7 — meus vídeos publicados (marcos 1h/3h/24h/48h) e cruzamento com referências
 - [ ] Etapa 8 — configurações e controle de cota
 
@@ -134,11 +134,77 @@ têm cartilhas separadas.
   *Versões anteriores*. Quando há estudo novo ou refeito, a tela avisa para gerar de novo.
   `latestPlaybook(nicheId, format)` em `src/lib/playbook.ts` fica pronto para a etapa 6.
 
+## Gerador de roteiros (etapa 6)
+
+1. **Meus canais → Perfil** — preencha do que o canal trata, personagens, formatos de história que se repetem
+   (ex.: "o menino afirma algo errado e o pai corrige"), estilo visual, tom, público, sempre/nunca, duração alvo e
+   cole os roteiros que você já publicou (com views, se souber). O gerador lê até 5 deles para copiar a voz do canal.
+2. **Gerador** — escolha o canal, a cartilha (nicho + formato) e, se quiser, um vídeo estudado para adaptar.
+   Escreva um ponto de partida (ex.: "mitos sobre dinossauros") ou deixe vazio. **Sugerir ideias** (Claude Opus 5.5,
+   ≈ US$ 0,10–0,25 para 5 ideias, custo no botão) devolve para cada ideia: a cena no formato do canal, o gancho
+   falado pelo personagem, 3–5 títulos com a fórmula da cartilha, o que veio da cartilha × o que é do canal e o risco.
+3. **Ideia → Escrever roteiro** (≈ US$ 0,10–0,25 num Short) — roteiro cena a cena (tempo, quem fala, fala exata,
+   o que aparece na animação, texto na tela), checklist da cartilha conferido, fatos para conferir, capa, descrição
+   e hashtags. As **medidas do roteiro** (duração, palavras/s, tamanho das cenas, onde o gancho termina) são
+   calculadas em código e comparadas com a mediana da cartilha.
+
+**O que o seu canal já fez:** no perfil, *Ler os vídeos do meu canal* lê do YouTube todos os vídeos publicados
+(pela URL do canal; ~1 unidade + 2 a cada 50 vídeos). O gerador recebe esses títulos, os roteiros cadastrados e as ideias
+do banco e não repete o tema, mesmo que o vídeo antigo seja de outro estilo (ex.: 2D). Além disso, cada ideia é conferida
+em código e ganha o aviso "⚠ Seu canal já fez algo parecido" com o vídeo/roteiro/ideia parecido. Repetir um tema que deu
+certo em outros canais pode; repetir o que o próprio canal já contou, não.
+
+**Seus vídeos × cartilha:** estude um vídeo seu pelo link (*Estudos de vídeo*) com *Estudar tudo*. A página do vídeo
+mostra "Comparado com a cartilha" (grátis, em código): duração, palavras/s, abertura, algo novo a cada X s, fecho e
+título, dentro ou fora da faixa dos estudos. Vídeos dos seus canais nunca entram na cartilha (ela é só das referências).
+
+A regra central do gerador: da cartilha e da referência ele usa só o **como** (tipo de gancho, fórmula de título,
+ritmo, virada, fecho); o **o quê** (personagens, cenário, tom, formato de história) vem sempre do perfil do canal.
+Sem cartilha ainda, usa até 5 estudos direto; sem nicho, usa só o perfil.
+O **Banco de ideias** guarda tudo com status (ideia, roteiro pronto, produzido, publicado, descartada) e mostra
+títulos parecidos já feitos pelos canais monitorados (checagem grátis no catálogo).
+
+**Banco de ideias:** cada cartão tem *Apagar*. Na página da ideia, *Virou vídeo no seu canal?* liga a ideia ao vídeo
+publicado (lista do canal, com os mais parecidos primeiro, ou pelo link): a ideia fica "Publicado", mostra as views e o
+gerador não repete o tema.
+
+**Perfil pelo GPT do Maestri (.md):** no perfil, *Baixar o pedido para o GPT (.md)* gera o arquivo
+[`docs/prompt-perfil-canal.md`](docs/prompt-perfil-canal.md) com o nome e a URL do canal. Cole no GPT do Maestri que conhece
+o canal; ele devolve o perfil num modelo fixo (títulos `##` que o app procura, roteiros publicados em `### Roteiro:` e,
+se tiver, os números do YouTube Studio/TikTok). Salve a resposta como .md (ou copie) e use *Importar*: o app mostra a
+**prévia** (campo a campo, roteiros e avisos de títulos que não reconheceu) e só grava quando você confirma. Campo vazio
+ou `-` mantém o que já estava; roteiro com o mesmo título é atualizado. O campo **Números do canal** guarda os analytics
+colados com a data (o gerador lê). Atualizar esses números sozinho precisa do acesso ao Studio (etapa 7).
+
+**Roteiro para o Maestri:** na página da ideia, *Baixar roteiro (.md) para o Maestri* baixa o roteiro cena a cena com
+um bloco de referência do canal (personagens, estilo visual, tom, sempre/nunca).
+
+## Ordem do menu
+
+O menu é numerado na ordem de uso: 1 Meus canais → 2 Nichos e canais → 3 Descobrir canais → 4 Radar (e Favoritos) →
+5 Estudos de vídeo → 6 Cartilha → 7 Gerador → 8 Banco de ideias.
+
+## Tarefas em segundo plano
+
+Diagnóstico, comentários, "Estudar tudo", cartilha, ideias, roteiros, buscas do *Descobrir canais*, raio-x e
+adicionar/atualizar canais num nicho rodam em segundo plano: o botão volta na hora e dá para usar o resto do app.
+O aviso no canto inferior direito mostra cada tarefa com barra de progresso (por etapa quando dá para medir; senão
+estimada pelo tempo típico) e avisa quando termina, com link para o resultado. Se você permitir, o Windows também
+avisa quando o app está em outra aba. As tarefas ficam na tabela `Job`; se o app for fechado no meio, a tarefa é
+marcada como interrompida depois de 15 min.
+
+Na página do vídeo, **Estudar tudo** faz transcrição → diagnóstico → comentários num clique (sem legenda, segue sem
+ela e avisa). Os botões de cada etapa continuam lá.
+
+**Canais parecidos com um link** (*Descobrir canais*): cole um vídeo ou canal; o app tira palavras-chave dos títulos e
+tags (dele e dos vídeos do mesmo formato do canal), busca por elas, junta os canais que o canal do link indica e põe o
+próprio canal na lista. Formato automático (o do link) ou escolhido. Custo: ~5 unidades + ~102 por palavra-chave (1 a 3).
+
 ## Testes
 
 `npm test` roda os testes de cálculo e uma coleta completa com a API do YouTube simulada
 (usa `prisma/test.db`, nunca o seu banco). O estudo do vídeo é testado com YouTube e Anthropic simulados
-(`prisma/test-study.db`, sem custo). A descoberta de canais é testada com a API simulada (`prisma/test-discover.db`). A cartilha é testada com a Anthropic simulada (`prisma/test-playbook.db`).
+(`prisma/test-study.db`, sem custo). A descoberta de canais é testada com a API simulada (`prisma/test-discover.db`). A cartilha é testada com a Anthropic simulada (`prisma/test-playbook.db`). O gerador também (`prisma/test-generator.db`).
 
 ## Stack
 
