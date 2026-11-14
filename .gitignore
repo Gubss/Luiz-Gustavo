@@ -48,3 +48,7 @@ next-env.d.ts
 /prisma/test.db*
 /prisma/test-study.db*
 /prisma/test-discover.db*
+
+# cópias de segurança do banco (Configurações)
+/backups/
+/prisma/test-settings.db*

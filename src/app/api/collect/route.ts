@@ -1,7 +1,10 @@
 import { collectAll, isCollecting, isCollectionDue, lastCollection } from "@/lib/collect";
+import { getSettings } from "@/lib/settings";
 
+/** `due`: a tela deve coletar sozinha ao abrir (desligável em Configurações → Automático). */
 export async function GET() {
-  return Response.json({ running: isCollecting(), due: await isCollectionDue(), last: await lastCollection() });
+  const { autoCollect } = await getSettings();
+  return Response.json({ running: isCollecting(), due: autoCollect && (await isCollectionDue()), last: await lastCollection() });
 }
 
 /** POST { trigger: "auto" | "manual", force?: boolean, nicheId?: string } */

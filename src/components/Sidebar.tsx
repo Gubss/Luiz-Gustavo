@@ -15,7 +15,6 @@ const NAV: { href: string; label: string; step?: number; sub?: boolean; soon?: b
   { href: "/gerador", label: "Gerador", step: 7, hint: "Ideias e roteiros no seu formato" },
   { href: "/ideias", label: "Banco de ideias", step: 8, hint: "O que já foi gerado e usado" },
   { href: "/meus-videos", label: "Meus vídeos", step: 9, hint: "Por que meus vídeos foram bem ou mal" },
-  { href: "/configuracoes", label: "Configurações", soon: true },
 ];
 
 export function Sidebar({ quotaUsed, quotaLimit }: { quotaUsed: number; quotaLimit: number }) {
@@ -67,7 +66,21 @@ export function Sidebar({ quotaUsed, quotaLimit }: { quotaUsed: number; quotaLim
           );
         })}
       </nav>
-      <div className="mt-4 rounded-lg border border-zinc-800 p-3 text-xs text-zinc-400">
+      <Link
+        href="/configuracoes"
+        title="Chaves, cota, gastos, regras do radar e cópia de segurança"
+        className={`mt-2 flex items-center gap-2 rounded-lg px-3 py-2 text-sm ${
+          path.startsWith("/configuracoes") ? "bg-zinc-800 font-medium text-white" : "text-zinc-400 hover:bg-zinc-900 hover:text-white"
+        }`}
+      >
+        <span className="grid h-5 w-5 shrink-0 place-items-center text-sm">⚙</span>
+        Configurações
+      </Link>
+      <Link
+        href="/configuracoes#cota"
+        title="Ver o que gastou a cota hoje"
+        className="mt-2 block rounded-lg border border-zinc-800 p-3 text-xs text-zinc-400 hover:border-zinc-600"
+      >
         <div className="mb-1 flex justify-between">
           <span>Cota YouTube hoje</span>
           <span className="tabular-nums text-zinc-200">
@@ -80,7 +93,7 @@ export function Sidebar({ quotaUsed, quotaLimit }: { quotaUsed: number; quotaLim
             style={{ width: `${pct}%` }}
           />
         </div>
-      </div>
+      </Link>
     </aside>
   );
 }

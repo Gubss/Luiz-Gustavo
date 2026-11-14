@@ -12,7 +12,7 @@ outliers, estuda título/thumbnail/roteiro com o Claude e gera temas e roteiros.
 - [x] **Etapa 5** — cartilha do nicho (por formato: Shorts e longos separados)
 - [x] **Etapa 6** — perfil do meu canal, gerador de temas, títulos e roteiros adaptados ao formato do canal; banco de ideias
 - [x] **Etapa 7** — meus vídeos: acompanhamento em 1h/3h/24h/48h/3d/7d, YouTube Analytics (login do Google, só leitura), diagnóstico de cada vídeo e do canal, lições indo para o gerador
-- [ ] Etapa 8 — configurações e controle de cota
+- [x] **Etapa 8** — configurações e controle de cota: chaves pela tela (com teste), cota do YouTube por origem e por dia, gastos com o Claude com limite mensal, regras do radar, o que roda sozinho e cópia de segurança do banco
 
 ## Como rodar no Windows
 
@@ -185,6 +185,25 @@ colados com a data (o gerador lê). Com o login do Google (etapa 7, *Meus vídeo
 **Roteiro para o Maestri:** na página da ideia, *Baixar roteiro (.md) para o Maestri* baixa o roteiro cena a cena com
 um bloco de referência do canal (personagens, estilo visual, tom, sempre/nunca).
 
+## Configurações (etapa 8)
+
+Menu **⚙ Configurações** (embaixo do menu; o quadro da cota também leva para lá). Tudo salvo vale na hora, sem reiniciar.
+
+- **Chaves** — cole a chave do YouTube ou da Anthropic e clique em *Testar e salvar*: o app testa antes de gravar
+  (YouTube: 1 unidade; Anthropic: grátis, não gera texto). Chave salva aqui vale mais que a do `.env`; *Apagar daqui* volta
+  para a do `.env`. A tela mostra só o começo e o fim da chave. O login do Google continua no `.env` (passo a passo abaixo).
+- **Cota do YouTube** — quanto foi gasto hoje, **o que gastou** (coleta, acompanhamento, Descobrir canais, raio-x, Estudar
+  tudo…, gravado em `QuotaLog.source`), os últimos 14 dias, a hora da renovação em Brasília e quanto o dia normal precisa
+  (coleta ~4/canal + acompanhamento ~150/canal meu), com quantas palavras-chave de busca ainda cabem.
+- **Gastos com o Claude** — mês atual, projeção do mês, mês passado, por tipo, por modelo, últimos 30 dias e últimas chamadas.
+  **Limite por mês** (US$; 0 = sem limite): ao chegar nele, os botões do Claude param com aviso até o mês virar ou você
+  aumentar. Câmbio do dólar e os modelos (análises fortes / tarefas leves) também ficam aqui.
+- **Regras do radar** — outlier (x e views mínimas), base do canal, janela, canal pequeno e duração para conferir Short.
+- **Automático** — coletar ao abrir (e depois de quantas horas), acompanhamento dos meus vídeos, teto de diagnósticos
+  automáticos por dia e cópia semanal do banco.
+- **Cópia de segurança** — *Fazer uma cópia agora* grava `backups/radar-AAAA-MM-DD_HH-MM-SS.db` (ficam as 10 mais novas).
+  Para voltar: feche o app (Ctrl+C), `copy backups\radar-....db prisma\radar.db`, `npm run dev`.
+
 ## Ordem do menu
 
 O menu é numerado na ordem de uso: 1 Meus canais → 2 Nichos e canais → 3 Descobrir canais → 4 Radar (e Favoritos) →
@@ -298,7 +317,7 @@ próprio canal na lista. Formato automático (o do link) ou escolhido. Custo: ~5
 
 `npm test` roda os testes de cálculo e uma coleta completa com a API do YouTube simulada
 (usa `prisma/test.db`, nunca o seu banco). O estudo do vídeo é testado com YouTube e Anthropic simulados
-(`prisma/test-study.db`, sem custo). A descoberta de canais é testada com a API simulada (`prisma/test-discover.db`). A cartilha é testada com a Anthropic simulada (`prisma/test-playbook.db`). O gerador também (`prisma/test-generator.db`). Meus vídeos: YouTube, Google (login e Analytics) e Anthropic simulados (`prisma/test-myvideos.db`).
+(`prisma/test-study.db`, sem custo). A descoberta de canais é testada com a API simulada (`prisma/test-discover.db`). A cartilha é testada com a Anthropic simulada (`prisma/test-playbook.db`). O gerador também (`prisma/test-generator.db`). Meus vídeos: YouTube, Google (login e Analytics) e Anthropic simulados (`prisma/test-myvideos.db`). Configurações: chaves, origem da cota, limite de gasto e cópia de segurança (`prisma/test-settings.db`).
 
 ## Stack
 

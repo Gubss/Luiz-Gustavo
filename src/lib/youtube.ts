@@ -20,7 +20,7 @@ export class YouTubeError extends Error {
 export async function ytGet<T>(endpoint: QuotaEndpoint, params: Record<string, string | number>): Promise<T> {
   const { youtubeApiKey } = await getSettings();
   if (!youtubeApiKey) {
-    throw new YouTubeError("Chave da YouTube Data API não configurada (veja Configurações ou o arquivo .env).");
+    throw new YouTubeError("Chave da YouTube Data API não configurada. Cole a chave em Configurações (menu da esquerda).");
   }
   const path = endpoint.replace(".list", "");
   const qs = new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)]));
@@ -39,13 +39,45 @@ export async function ytGet<T>(endpoint: QuotaEndpoint, params: Record<string, s
       /* corpo não-JSON */
     }
     if (res.status === 400 && /API key not valid/i.test(msg))
-      msg = "Chave da YouTube API inválida. Confira em Configurações ou no arquivo .env.";
+      msg = "Chave da YouTube API inválida. Confira em Configurações.";
     else if (res.status !== 400 && res.status !== 401) await logQuota(endpoint);
     if (reason === "quotaExceeded") msg = "Cota diária da YouTube API esgotada. Ela renova à meia-noite (horário do Pacífico).";
     throw new YouTubeError(msg, res.status, reason);
   }
   await logQuota(endpoint);
   return (await res.json()) as T;
+}
+
+/**
+ * Confere uma chave do YouTube antes de salvar: lê 1 vídeo público (1 unidade de cota).
+ */
+export async function testYoutubeKey(key: string): Promise<string> {
+  const qs = new URLSearchParams({ part: "id", id: "jNQXAC9IVRw" }); // "Me at the zoo", o primeiro vídeo do YouTube
+  let res: Response;
+  try {
+    res = await fetch(`${API}/videos?${qs}`, { headers: { "X-goog-api-key": key, Accept: "application/json" }, cache: "no-store" });
+  } catch {
+    throw new YouTubeError("Sem conexão com o YouTube. Confira a internet.");
+  }
+  if (res.ok) {
+    await logQuota("videos.list");
+    return "Chave funcionando (gastou 1 unidade de cota no teste).";
+  }
+  let reason: string | undefined;
+  let message = "";
+  try {
+    const body = await res.json();
+    reason = body?.error?.errors?.[0]?.reason;
+    message = body?.error?.message ?? "";
+  } catch {
+    /* corpo não-JSON */
+  }
+  if (res.status === 400 && /API key not valid/i.test(message)) throw new YouTubeError("Chave inválida: o Google não reconheceu essa chave.", 400, reason);
+  if (reason === "quotaExceeded") throw new YouTubeError("A chave funciona, mas a cota de hoje já acabou. Renova à meia-noite do Pacífico.", res.status, reason);
+  if (res.status === 403 && /has not been used|disabled/i.test(message))
+    throw new YouTubeError("A chave existe, mas a YouTube Data API v3 não está ativada no projeto dela (console.cloud.google.com → Biblioteca).", 403, reason);
+  if (res.status === 403) throw new YouTubeError(`O Google recusou a chave: ${message || "sem permissão"}. Confira as restrições da chave.`, 403, reason);
+  throw new YouTubeError(`YouTube respondeu ${res.status}${message ? `: ${message}` : ""}`, res.status, reason);
 }
 
 // ---------- Tipos mínimos da API ----------
