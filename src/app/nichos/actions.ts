@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { addChannelToNiche, refreshChannels } from "@/lib/channels";
+import { studiedVideoFilter } from "@/lib/videos";
 
 export type FormState = { ok?: string; error?: string } | null;
 
@@ -24,9 +25,10 @@ export async function updateNiche(id: string, fd: FormData) {
 }
 
 export async function deleteNiche(id: string) {
-  // Remove o nicho e os vínculos. Canais que ficarem sem nicho são removidos também.
+  // Remove o nicho e os vínculos. Canais que ficarem sem nicho são removidos também,
+  // menos os que têm vídeos estudados (transcrição/diagnóstico/favorito), que ficam guardados.
   await prisma.niche.delete({ where: { id } });
-  await prisma.channel.deleteMany({ where: { niches: { none: {} } } });
+  await prisma.channel.deleteMany({ where: { niches: { none: {} }, videos: { none: studiedVideoFilter } } });
   redirect("/nichos");
 }
 
@@ -59,7 +61,10 @@ export async function addChannels(nicheId: string, _prev: FormState, fd: FormDat
 export async function removeChannel(nicheId: string, channelId: string) {
   await prisma.nicheChannel.delete({ where: { nicheId_channelId: { nicheId, channelId } } });
   const remaining = await prisma.nicheChannel.count({ where: { channelId } });
-  if (remaining === 0) await prisma.channel.delete({ where: { id: channelId } });
+  if (remaining === 0) {
+    const studied = await prisma.video.count({ where: { channelId, ...studiedVideoFilter } });
+    if (studied === 0) await prisma.channel.delete({ where: { id: channelId } });
+  }
   revalidatePath(`/nichos/${nicheId}`);
 }
 

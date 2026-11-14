@@ -164,6 +164,7 @@ model Video {
   publishedAt    DateTime
   durationSec    Int?
   isShort        Boolean   @default(false)
+  shortSource    String? // "duration" | "url" — como foi classificado
   viewCount      Int       @default(0)
   likeCount      Int?
   commentCount   Int?
@@ -209,30 +210,55 @@ model Favorite {
 
 // ---------- Estudo ----------
 
+/// Transcrição do vídeo. Uma por vídeo.
+/// source: "youtube" (legendas buscadas pelo app) | "manual" (colada na tela) | "import" (estudo externo).
+/// Importações externas (ex.: projeto Faro) preenchem importSource + importKey; o importKey é único,
+/// então rodar a importação de novo atualiza em vez de duplicar.
 model Transcript {
-  id        String   @id @default(cuid())
-  videoId   String   @unique
-  language  String
-  source    String // "youtube-transcript" | "yt-dlp"
-  text      String
-  segments  String? // JSON [{start, dur, text}]
-  createdAt DateTime @default(now())
+  id           String    @id @default(cuid())
+  videoId      String    @unique
+  language     String
+  source       String // "youtube" | "manual" | "import"
+  trackKind    String? // "manual" (legenda feita por gente) | "asr" (automática do YouTube)
+  text         String
+  segments     String? // JSON [{start, dur, text}] — segundos; vazio quando não há tempos
+  wordCount    Int?
+  importSource String? // ex.: "faro"
+  importKey    String?   @unique // ex.: "faro:Olheiros/Canal X/transcricao-video.md"
+  importedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   video Video @relation(fields: [videoId], references: [id], onDelete: Cascade)
 }
 
+/// Diagnóstico do vídeo (uma linha por vídeo).
+/// `metrics` é medido em código (nunca pelo Claude); `content` é a leitura do Claude (hipóteses).
+/// source: "app" (gerado aqui) | "import" (estudo externo; nesse caso o texto pode vir só em `markdown`).
 model Diagnosis {
   id                 String    @id @default(cuid())
   videoId            String    @unique
-  model              String
-  content            String // JSON estruturado (explicação = hipótese)
+  source             String    @default("app") // "app" | "import"
+  model              String?
+  effort             String?
+  content            String? // JSON estruturado (explicação = hipótese)
   metrics            String? // JSON medido: palavras/s, intervalo entre eventos, abertura, fecho, fórmula do título
   markdown           String? // versão em texto
   usedTranscript     Boolean   @default(false)
+  inputTokens        Int?
+  outputTokens       Int?
+  costUsd            Float?
+  diagnosedAt        DateTime?
   // Análise de comentários (feature 10)
+  commentsRaw        String? // JSON [{author, text, likes, replies, publishedAt}] — os mais relevantes
+  commentsFetchedAt  DateTime?
   commentsAnalysis   String? // JSON
   commentsModel      String?
+  commentsCostUsd    Float?
   commentsAnalyzedAt DateTime?
+  importSource       String?
+  importKey          String?   @unique
+  importedAt         DateTime?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
@@ -250,7 +276,10 @@ model ScriptStructure {
   avgBeatInterval  Float? // segundos médios entre eventos novos
   maxBeatGap       Float? // maior intervalo sem novidade
   durationSec      Int?
+  source           String  @default("app") // "app" | "import"
+  importKey        String? @unique
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   video Video @relation(fields: [videoId], references: [id], onDelete: Cascade)
 }
@@ -296,14 +325,20 @@ model Idea {
   myVideos  MyVideo[]
 }
 
-/// Registro bruto de cada geração (para auditoria e reaproveitamento).
+/// Registro bruto de cada chamada ao Claude (auditoria, reaproveitamento e controle de gasto).
 model Generation {
-  id        String   @id @default(cuid())
-  kind      String // "ideas" | "script" | "playbook" | ...
-  model     String
-  input     String // JSON
-  output    String // JSON
-  createdAt DateTime @default(now())
+  id           String   @id @default(cuid())
+  kind         String // "diagnosis" | "comments" | "ideas" | "script" | "playbook" | ...
+  model        String
+  videoId      String?
+  input        String // JSON
+  output       String // JSON
+  inputTokens  Int?
+  outputTokens Int?
+  costUsd      Float?
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])
 }
 
 // ---------- Meus vídeos publicados (feature 8) ----------
