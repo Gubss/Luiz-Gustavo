@@ -470,7 +470,7 @@ export async function generateScript(ideaId: string, opts: { title?: string; ext
     user: scriptPrompt(ctx, idea, title, extra),
     schema: ScriptSchema,
     videoId: ctx.reference?.id,
-    maxTokens: fmt === "short" ? 16000 : 32000,
+    maxTokens: 16000, // acima de ~21 mil o SDK exige streaming
   });
 
   const metrics = computeScriptMetrics(r.data);
