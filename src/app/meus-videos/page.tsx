@@ -3,7 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { fmtCompact, fmtDateTime, fmtInt } from "@/lib/format";
 import { googleConfigured } from "@/lib/google";
-import { ageHours, AUTO_DAILY_MAX, checkpointLabel, fmtAge, peerStats } from "@/lib/my-videos";
+import { ageHours, AUTO_DAILY_MAX, checkpointLabel, checkpointTolerance, fmtAge, peerStats } from "@/lib/my-videos";
 import { estimateChannelReport, type ChannelReportContent, type MyDiagnosisContent } from "@/lib/my-diagnosis";
 import { runningJobsFor } from "@/lib/jobs";
 import { getSettings } from "@/lib/settings";
@@ -46,73 +46,105 @@ function GoogleBanner({ status, msg }: { status?: string; msg?: string }) {
 type VideoRow = Prisma.MyVideoGetPayload<{ include: { checkpoints: true; diagnoses: true } }>;
 
 function Row({ v, all, now }: { v: VideoRow; all: VideoRow[]; now: Date }) {
-  const age = ageHours(v.publishedAt, now);
+  const age = ageHours(v.publishedAt, now) ?? 0;
   // normal do canal sem o próprio vídeo (mesma regra da página do vídeo)
   const peers = peerStats(all, v.isShort, v.id, now);
   const ratio = peers.baseMedian && v.viewCount != null ? v.viewCount / peers.baseMedian : null;
   const d = parse<MyDiagnosisContent>(v.diagnoses[0]?.content);
+  const pct = v.avgViewPercent != null && v.avgViewPercent > 0 ? v.avgViewPercent : null;
   return (
-    <tr className="border-t border-zinc-800 align-top">
-      <td className="py-2 pr-3">
-        <Link href={`/meus-videos/${v.id}`} className="flex gap-3">
+    <tr className="border-t border-zinc-800 align-middle">
+      <td className="py-2 pr-4">
+        <Link href={`/meus-videos/${v.id}`} className="flex items-center gap-3">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={v.thumbnailUrl ?? `https://i.ytimg.com/vi/${v.externalId}/mqdefault.jpg`} alt="" className={`shrink-0 rounded bg-zinc-800 object-cover ${v.isShort ? "h-16 w-10" : "h-12 w-20"}`} />
+          <img src={v.thumbnailUrl ?? `https://i.ytimg.com/vi/${v.externalId}/mqdefault.jpg`} alt="" className={`shrink-0 rounded bg-zinc-800 object-cover ${v.isShort ? "h-14 w-9" : "h-12 w-20"}`} />
           <span className="min-w-0">
             <span className="line-clamp-2 block font-medium hover:text-red-400">{v.title ?? v.externalId}</span>
             <span className="block text-xs text-zinc-500">
-              {fmtAge(age)} · {v.isShort ? "Short" : "longo"}
+              {fmtAge(age)} de vida · {v.isShort ? "Short" : "longo"}
               {v.inspiredIdeaId ? " · do gerador" : ""}
             </span>
           </span>
         </Link>
       </td>
-      <td className="py-2 pr-3 text-right tabular-nums">
-        <div>{fmtInt(v.viewCount)}</div>
+      <td className="w-24 py-2 pr-4 text-right tabular-nums">
+        <div className="font-medium">{fmtInt(v.viewCount)}</div>
         <div className={`text-xs ${ratioClass(ratio)}`}>{ratio != null ? `${ratio.toFixed(1)}x o normal` : ""}</div>
       </td>
       {SHOWN_CHECKPOINTS.map((h) => {
         const cp = v.checkpoints.find((x) => x.ageHours === h);
         const med = peers.byCheckpoint[h]?.median;
         const r = cp?.viewCount != null && med ? cp.viewCount / med : null;
+        const est = cp?.source === "analytics";
+        const notYet = age < h - checkpointTolerance(h);
+        const title =
+          cp?.viewCount != null
+            ? `${est ? "estimado pelas views por dia do Analytics" : "medido pelo app"}${med != null ? ` · normal do canal em ${checkpointLabel(h)}: ${fmtInt(med)}` : ""}`
+            : notYet
+              ? `o vídeo ainda não fez ${checkpointLabel(h)}`
+              : h < 24
+                ? "o app não estava acompanhando nessa hora (o YouTube não guarda views por hora)"
+                : "ainda sem dado do Analytics para essa idade";
         return (
-          <td key={h} className={`py-2 pr-3 text-right text-xs tabular-nums ${ratioClass(r)}`} title={med != null ? `normal do canal em ${checkpointLabel(h)}: ${fmtInt(med)}` : undefined}>
-            {cp?.viewCount != null ? fmtCompact(cp.viewCount) : <span className="text-zinc-700">—</span>}
+          <td key={h} className={`w-16 border-l border-zinc-800/60 py-2 text-center text-xs tabular-nums ${ratioClass(r)}`} title={title}>
+            {cp?.viewCount != null ? (
+              <>
+                {est && <span className="text-zinc-500">≈</span>}
+                {fmtCompact(cp.viewCount)}
+              </>
+            ) : notYet ? (
+              <span className="text-zinc-800">·</span>
+            ) : (
+              <span className="text-zinc-600">—</span>
+            )}
           </td>
         );
       })}
-      <td className="py-2 pr-3 text-right text-xs tabular-nums">{v.avgViewPercent != null ? `${v.avgViewPercent.toFixed(0)}%` : <span className="text-zinc-700">—</span>}</td>
-      <td className="py-2 text-xs">{d ? <VerdictBadge v={d.veredito} /> : <span className="text-zinc-600">—</span>}</td>
+      <td
+        className="w-16 border-l border-zinc-800/60 py-2 text-center text-xs tabular-nums"
+        title={pct != null && pct > 100 ? "acima de 100% = gente assistindo mais de uma vez (loop)" : "% médio do vídeo assistido (YouTube Analytics)"}
+      >
+        {pct != null ? `${pct.toFixed(0)}%` : <span className="text-zinc-600">—</span>}
+      </td>
+      <td className="w-36 py-2 pl-4 text-xs">{d ? <VerdictBadge v={d.veredito} /> : <span className="text-zinc-600">—</span>}</td>
     </tr>
   );
 }
 
 function VideosTable({ rows, all, now }: { rows: VideoRow[]; all: VideoRow[]; now: Date }) {
-return (
-  <div className="overflow-x-auto">
-    <table className="w-full text-sm">
-      <thead className="text-xs text-zinc-500">
-        <tr>
-          <th className="pb-2 text-left font-normal">Vídeo</th>
-          <th className="pb-2 pr-3 text-right font-normal">Views agora</th>
-          {SHOWN_CHECKPOINTS.map((h) => (
-            <th key={h} className="pb-2 pr-3 text-right font-normal">
-              {checkpointLabel(h)}
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead className="text-xs text-zinc-500">
+          <tr>
+            <th className="font-normal" colSpan={2} />
+            <th className="border-l border-zinc-800/60 pb-1 text-center font-normal text-zinc-400" colSpan={SHOWN_CHECKPOINTS.length}>
+              Views com…
             </th>
+            <th className="font-normal" colSpan={2} />
+          </tr>
+          <tr>
+            <th className="pb-2 text-left font-normal">Vídeo</th>
+            <th className="pb-2 pr-4 text-right font-normal">Views agora</th>
+            {SHOWN_CHECKPOINTS.map((h) => (
+              <th key={h} className="border-l border-zinc-800/60 pb-2 text-center font-normal">
+                {h < 24 ? checkpointLabel(h) : h === 24 ? "1 dia" : h === 48 ? "2 dias" : `${Math.round(h / 24)} dias`}
+              </th>
+            ))}
+            <th className="border-l border-zinc-800/60 pb-2 text-center font-normal" title="% médio do vídeo assistido (YouTube Analytics)">
+              % visto
+            </th>
+            <th className="pb-2 pl-4 text-left font-normal">Diagnóstico</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((v) => (
+            <Row key={v.id} v={v} all={all} now={now} />
           ))}
-          <th className="pb-2 pr-3 text-right font-normal" title="% médio do vídeo assistido (YouTube Analytics)">
-            % visto
-          </th>
-          <th className="pb-2 text-left font-normal">Diagnóstico</th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((v) => (
-          <Row key={v.id} v={v} all={all} now={now} />
-        ))}
-      </tbody>
-    </table>
-  </div>
-);
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
 export default async function MyVideosPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
@@ -372,7 +404,9 @@ export default async function MyVideosPage({ searchParams }: { searchParams: Pro
       <section className="card space-y-3 p-5">
         <h2 className="text-lg font-semibold">Últimos 30 dias ({recent.length})</h2>
         <p className="text-xs text-zinc-500">
-          Cada coluna é o número de views naquela idade. Verde = bem acima do normal do canal na mesma idade; vermelho = abaixo. Passe o mouse para ver o normal.
+          Cada coluna é o número de views naquela idade. Verde = bem acima do normal do canal na mesma idade; vermelho = abaixo. “≈” = estimado pelas views por
+          dia do Analytics. “—” = o app não estava acompanhando naquela hora (1h e 3h só existem para vídeos publicados com o app aberto ou agendado). “·” = o vídeo
+          ainda não chegou nessa idade. Passe o mouse para ver o normal.
         </p>
         {recent.length ? <VideosTable rows={recent} all={videos} now={now} /> : <p className="text-sm text-zinc-500">Nenhum vídeo nos últimos 30 dias.</p>}
       </section>

@@ -329,7 +329,7 @@ export default async function MyVideoPage({ params }: { params: Promise<{ id: st
                 return (
                   <tr key={h} className="border-t border-zinc-800">
                     <td className="py-1.5 font-medium">{checkpointLabel(h)}</td>
-                    <td className="py-1.5 pr-3 text-right text-xs text-zinc-500">{c?.source === "analytics" ? `fim do dia (${fmtAge((c.measuredAgeMin ?? 0) / 60)}) · Analytics` : c?.measuredAgeMin != null ? fmtAge(c.measuredAgeMin / 60) : c ? "Studio" : "—"}</td>
+                    <td className="py-1.5 pr-3 text-right text-xs text-zinc-500">{c?.source === "analytics" ? "≈ views por dia do Analytics" : c?.measuredAgeMin != null ? fmtAge(c.measuredAgeMin / 60) : c ? "Studio" : "—"}</td>
                     <td className={`py-1.5 pr-3 text-right tabular-nums ${ratioClass(r)}`}>
                       {fmtInt(c?.viewCount)}
                       {r != null && <span className="ml-1 text-xs">({r.toFixed(1)}x)</span>}

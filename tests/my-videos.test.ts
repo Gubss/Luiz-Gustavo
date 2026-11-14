@@ -333,13 +333,14 @@ test("marcos de vídeos antigos vêm das views por dia do Analytics (sem passar 
   const n = await mv.backfillCheckpointsFromDaily(v, daily);
   const cps = await prisma.myVideoCheckpoint.findMany({ where: { myVideoId: v.id }, orderBy: { ageHours: "asc" } });
   const by = Object.fromEntries(cps.map((c) => [c.ageHours, c]));
-  // 01/10 termina 02/10 07:00 UTC = 20h de vida (vale para 24h, janela 18–30h)
-  assert.equal(by[24].viewCount, 1000);
+  // Fins de dia (vida): 01/10 → 20h (1000), 02/10 → 44h (3000), 03/10 → 68h (6000), 07/10 → 164h (28000), 08/10 → 188h (36000)
+  assert.equal(by[24].viewCount, 1000 + Math.round((2000 * 4) / 24), "24h fica entre o fim do 1º e do 2º dia");
   assert.equal(by[24].source, "analytics");
   assert.equal(by[48].viewCount, 7777, "o número medido pelo app fica");
-  assert.equal(by[72].viewCount, 1000 + 2000 + 3000, "3 dias = soma até 03/10 (68h de vida)");
-  assert.equal(by[168].viewCount, 28000, "7 dias = soma até 07/10 (164h)");
+  assert.equal(by[72].viewCount, 6000 + Math.round((4000 * 4) / 24));
+  assert.equal(by[168].viewCount, 28000 + Math.round((8000 * 4) / 24));
   assert.equal(by[1], undefined, "1h não dá para saber pelo Analytics");
+  assert.equal(by[336], undefined, "14 dias ainda não chegou nos dados");
   assert.equal(n, 3);
   // o app medindo depois troca o número do Analytics
   await mv.recordCheckpoints(v, new Date(v.publishedAt!.getTime() + 72 * 3_600_000), { views: 6500, likes: 1, comments: 1 });

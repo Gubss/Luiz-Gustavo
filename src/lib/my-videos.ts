@@ -249,7 +249,8 @@ export function pacificEndOfDay(day: string) {
 }
 
 /**
- * Preenche os marcos de 24h em diante com as views por dia do Analytics (soma acumulada até o fim de cada dia).
+ * Preenche os marcos de 24h em diante com as views por dia do Analytics. O Analytics só tem o total de cada dia
+ * (no fuso do Pacífico), então o número em 24h, 48h, 3 dias… é estimado ligando os fins de dia em linha reta.
  * Serve para os vídeos que saíram antes do app começar a acompanhar. 1h/3h/6h/12h não dá: o Analytics não tem
  * views por hora. Nunca passa por cima de um número medido pelo app ou colado do Studio.
  */
@@ -257,24 +258,31 @@ export async function backfillCheckpointsFromDaily(v: Pick<MyVideo, "id" | "publ
   if (!v.publishedAt || !daily.length) return 0;
   const sorted = [...daily].sort((a, b) => a.day.localeCompare(b.day));
   const lastWithData = sorted.filter((d) => d.views > 0).at(-1)?.day;
+  if (!lastWithData) return 0;
   let cum = 0;
-  const points: { age: number; views: number }[] = [];
+  const points: { age: number; views: number }[] = [{ age: 0, views: 0 }];
   for (const d of sorted) {
+    if (d.day > lastWithData) break;
     cum += d.views;
-    if (lastWithData && d.day > lastWithData) break;
     const age = (pacificEndOfDay(d.day).getTime() - v.publishedAt.getTime()) / HOUR;
     if (age > 0) points.push({ age, views: cum });
   }
+  const at = (h: number) => {
+    for (let i = 1; i < points.length; i++) {
+      const p0 = points[i - 1];
+      const p1 = points[i];
+      if (h <= p1.age) return Math.round(p0.views + ((p1.views - p0.views) * (h - p0.age)) / (p1.age - p0.age || 1));
+    }
+    return null; // ainda não tem dado até essa idade
+  };
   let filled = 0;
   for (const h of CHECKPOINTS) {
     if (h < 24) continue;
-    const best = points
-      .filter((p) => Math.abs(p.age - h) <= checkpointTolerance(h))
-      .sort((a, b) => Math.abs(a.age - h) - Math.abs(b.age - h))[0];
-    if (!best) continue;
+    const views = at(h);
+    if (views == null) continue;
     const prev = await prisma.myVideoCheckpoint.findUnique({ where: { myVideoId_ageHours: { myVideoId: v.id, ageHours: h } } });
     if (prev && prev.source !== "analytics") continue;
-    const data = { measuredAgeMin: Math.round(best.age * 60), viewCount: best.views, source: "analytics" };
+    const data = { measuredAgeMin: h * 60, viewCount: views, source: "analytics" };
     await prisma.myVideoCheckpoint.upsert({
       where: { myVideoId_ageHours: { myVideoId: v.id, ageHours: h } },
       create: { myVideoId: v.id, ageHours: h, ...data },
@@ -307,6 +315,15 @@ export async function refreshChannelNow(myChannelId: string, opts: { full?: bool
     const fresh = Date.now() - (opts.analyticsFreshHours ?? 6) * HOUR;
     const all = await prisma.myVideo.findMany({ where: { myChannelId }, orderBy: { publishedAt: "desc" }, include: { myChannel: true } });
     const due = all.filter((v) => !v.analyticsFetchedAt || v.analyticsFetchedAt.getTime() < fresh).slice(0, opts.analyticsMax ?? 300);
+    // Os que já estavam em dia: monta os marcos com as views por dia que já estão guardadas (não gasta nada).
+    for (const v of all) {
+      if (due.includes(v) || !v.dailyViews) continue;
+      try {
+        await backfillCheckpointsFromDaily(v, JSON.parse(v.dailyViews));
+      } catch {
+        /* dado antigo estranho: ignora */
+      }
+    }
     let ok = 0;
     const errors: string[] = [];
     for (const v of due) {
