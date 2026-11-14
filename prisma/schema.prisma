@@ -522,3 +522,25 @@ model MyVideoCheckpoint {
 
   @@unique([myVideoId, ageHours])
 }
+
+// ---------- Tarefas em segundo plano ----------
+
+/// Chamadas demoradas ao Claude (diagnóstico, comentários, cartilha, ideias, roteiro) rodam em segundo plano:
+/// o botão cria a tarefa e volta na hora, e o app avisa quando termina. status: running | ok | error
+model Job {
+  id         String    @id @default(cuid())
+  kind       String // "diagnosis" | "comments" | "playbook" | "ideas" | "script"
+  targetId   String // vídeo, nicho:formato, canal ou ideia
+  label      String // texto para o aviso (ex.: "Diagnóstico: título do vídeo")
+  href       String // onde ver o resultado
+  status     String    @default("running")
+  message    String?
+  progress   Int? // 0-100 quando dá para medir (etapas, palavras-chave); senão o aviso estima pelo tempo
+  step       String? // etapa atual (ex.: "Diagnóstico (2 de 3)")
+  expectedSec Int? // duração típica, para estimar a barra de progresso
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+
+  @@index([status])
+  @@index([kind, targetId])
+}

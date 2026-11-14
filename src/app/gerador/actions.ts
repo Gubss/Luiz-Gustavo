@@ -5,7 +5,10 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { usdToBrl } from "@/lib/claude";
 import { generateIdeas, generateScript, IDEA_STATUS, type IdeasRequest } from "@/lib/generator";
+import { startJob } from "@/lib/jobs";
 import type { FormState } from "@/app/video/actions";
+
+const BACKGROUND_OK = "Começou em segundo plano. Pode sair desta tela: o aviso no canto mostra quando terminar.";
 
 const money = (usd: number) =>
   `US$ ${usd.toFixed(usd < 0.1 ? 3 : 2).replace(".", ",")} (≈ R$ ${(usd * usdToBrl()).toFixed(2).replace(".", ",")})`;
@@ -19,9 +22,17 @@ function refresh(ideaId?: string) {
 
 export async function generateIdeasAction(req: Omit<IdeasRequest, "ponto">, _prev: FormState, fd: FormData): Promise<FormState> {
   try {
-    const r = await generateIdeas({ ...req, ponto: String(fd.get("ponto") ?? "") });
+    const ch = await prisma.myChannel.findUniqueOrThrow({ where: { id: req.myChannelId }, select: { name: true } });
+    const ponto = String(fd.get("ponto") ?? "");
+    await startJob(
+      { kind: "ideas", targetId: req.myChannelId, label: `${req.count} ideias para ${ch.name}`, href: `/gerador?canal=${req.myChannelId}`, expectedSec: 40 + 10 * req.count },
+      async () => {
+        const r = await generateIdeas({ ...req, ponto });
+        return `${r.ideas.length} ideias novas. Custo: ${money(r.costUsd)}.`;
+      },
+    );
     refresh();
-    return { ok: `${r.ideas.length} ideias novas logo abaixo (e no Banco de ideias). Custo: ${money(r.costUsd)}.` };
+    return { ok: BACKGROUND_OK };
   } catch (e) {
     return { error: errMsg(e) };
   }
@@ -31,9 +42,17 @@ export async function generateScriptAction(ideaId: string, _prev: FormState, fd:
   const picked = String(fd.get("title") ?? "");
   const custom = String(fd.get("customTitle") ?? "").trim();
   try {
-    const r = await generateScript(ideaId, { title: custom || (picked === "__custom" ? "" : picked), extra: String(fd.get("extra") ?? "") });
+    const idea = await prisma.idea.findUniqueOrThrow({ where: { id: ideaId }, select: { theme: true, chosenTitle: true } });
+    const extra = String(fd.get("extra") ?? "");
+    await startJob(
+      { kind: "script", targetId: ideaId, label: `Roteiro: ${idea.chosenTitle || idea.theme}`, href: `/ideias/${ideaId}`, expectedSec: 90 },
+      async () => {
+        const r = await generateScript(ideaId, { title: custom || (picked === "__custom" ? "" : picked), extra });
+        return `${r.metrics.scenes} cenas, ~${r.metrics.durationSec}s. Custo: ${money(r.costUsd)}.`;
+      },
+    );
     refresh(ideaId);
-    return { ok: `Roteiro pronto (${r.metrics.scenes} cenas, ~${r.metrics.durationSec}s). Custo: ${money(r.costUsd)}.` };
+    return { ok: BACKGROUND_OK };
   } catch (e) {
     return { error: errMsg(e) };
   }

@@ -17,8 +17,11 @@ import {
   fetchTranscriptAction,
   pasteTranscriptAction,
   setStudyNicheAction,
+  studyAllAction,
 } from "../actions";
 import { ActionButton, PasteTranscriptForm } from "./forms";
+import { runningJobsFor } from "@/lib/jobs";
+import { RunningNote } from "@/components/RunningNote";
 
 const ts = (s: number) => {
   const h = Math.floor(s / 3600);
@@ -348,7 +351,11 @@ export default async function VideoStudyPage({ params }: PageProps<"/video/[id]"
   const metrics = savedMetrics && !transcriptNewer ? savedMetrics : liveMetrics;
   const comments = parse<CommentsAnalysis>(diag?.commentsAnalysis);
   const rawComments = parse<RawComment[]>(diag?.commentsRaw) ?? [];
-  const [diagEst, comEst] = await Promise.all([estimateDiagnosis(v.id), estimateComments(v.id)]);
+  const [diagEst, comEst, jobs] = await Promise.all([estimateDiagnosis(v.id), estimateComments(v.id), runningJobsFor([v.id])]);
+  const studyJob = jobs.find((j) => j.kind === "study");
+  const diagJob = studyJob ?? jobs.find((j) => j.kind === "diagnosis");
+  const comJob = studyJob ?? jobs.find((j) => j.kind === "comments");
+  const allDone = !!v.transcript && !!diag?.content && !!diag?.commentsAnalysis;
   const noKey = !s.anthropicApiKey;
   const url = videoUrl(v.externalId, v.isShort);
 
@@ -417,6 +424,22 @@ export default async function VideoStudyPage({ params }: PageProps<"/video/[id]"
                 <span className="text-xs text-zinc-500">O canal deste vídeo não está em nenhum nicho; escolha para o estudo contar na cartilha.</span>
               </form>
             ) : null}
+          </div>
+          <div className="rounded-lg border border-zinc-800 bg-zinc-950/50 p-3">
+            {studyJob ? (
+              <RunningNote job={studyJob} what={`Estudo completo · ${studyJob.step ?? ""}`} />
+            ) : diagJob || comJob ? (
+              <p className="text-xs text-zinc-500">Tem uma etapa rodando abaixo; o “Estudar tudo” libera quando ela terminar.</p>
+            ) : (
+              <ActionButton
+                action={studyAllAction.bind(null, v.id)}
+                label={allDone ? "Estudar tudo de novo" : "Estudar tudo (transcrição → diagnóstico → comentários)"}
+                busy="Começando…"
+                hint={`Um clique só, em segundo plano. ${modelLabel(diagEst.model)} + ${modelLabel(comEst.model)}: custo estimado ${usd(diagEst.usd + comEst.usd)} a ${usd(diagEst.usdMax + comEst.usdMax)}${rawComments.length ? "" : " · comentários usam 2 unidades de cota"}`}
+                className={allDone ? "btn-secondary" : "btn-primary"}
+              />
+            )}
+            <p className="mt-1 text-xs text-zinc-500">Ou faça uma etapa de cada vez nos botões abaixo.</p>
           </div>
           {noKey && (
             <p className="rounded-lg border border-amber-700 bg-amber-950/40 p-3 text-sm text-amber-200">
@@ -534,13 +557,17 @@ export default async function VideoStudyPage({ params }: PageProps<"/video/[id]"
               Sem transcrição o diagnóstico olha só título, thumbnail e números (sem esqueleto e sem ritmo). Pegue a transcrição primeiro, se der.
             </p>
           )}
-          <ActionButton
-            action={diagnoseAction.bind(null, v.id)}
-            label={content ? "Gerar diagnóstico de novo" : "Gerar diagnóstico"}
-            busy="O Claude está estudando o vídeo… (até 2 min)"
-            hint={estimateHint(diagEst)}
-            className={content ? "btn-secondary" : "btn-primary"}
-          />
+          {diagJob ? (
+            <RunningNote job={diagJob} what="Diagnóstico" />
+          ) : (
+            <ActionButton
+              action={diagnoseAction.bind(null, v.id)}
+              label={content ? "Gerar diagnóstico de novo" : "Gerar diagnóstico"}
+              busy="Começando…"
+              hint={`${estimateHint(diagEst)} · roda em segundo plano (até 2 min)`}
+              className={content ? "btn-secondary" : "btn-primary"}
+            />
+          )}
         </div>
       </Section>
 
@@ -558,13 +585,17 @@ export default async function VideoStudyPage({ params }: PageProps<"/video/[id]"
       >
         {comments && <CommentsView c={comments} />}
         <div className={comments ? "border-t border-zinc-800 pt-4" : ""}>
-          <ActionButton
-            action={commentsAction.bind(null, v.id)}
-            label={comments ? "Analisar de novo" : "Ler e analisar comentários"}
-            busy="Lendo comentários…"
-            hint={`${rawComments.length ? `${rawComments.length} já baixados · ` : "Lê os 200 mais relevantes (2 unidades de cota) · "}${estimateHint(comEst)}`}
-            className={comments ? "btn-secondary" : "btn-primary"}
-          />
+          {comJob ? (
+            <RunningNote job={comJob} what="Análise dos comentários" />
+          ) : (
+            <ActionButton
+              action={commentsAction.bind(null, v.id)}
+              label={comments ? "Analisar de novo" : "Ler e analisar comentários"}
+              busy="Começando…"
+              hint={`${rawComments.length ? `${rawComments.length} já baixados · ` : "Lê os 200 mais relevantes (2 unidades de cota) · "}${estimateHint(comEst)}`}
+              className={comments ? "btn-secondary" : "btn-primary"}
+            />
+          )}
         </div>
       </Section>
     </div>

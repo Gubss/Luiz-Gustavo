@@ -34,7 +34,7 @@ export function AutoCollect() {
   }, [router]);
   if (!msg) return null;
   return (
-    <div className="fixed bottom-4 right-4 z-50 max-w-sm rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm shadow-xl">
+    <div className="fixed right-4 top-4 z-50 max-w-sm rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm shadow-xl">
       {msg}
     </div>
   );

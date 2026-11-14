@@ -8,6 +8,7 @@ import { analyzeComments } from "@/lib/comments";
 import { ensureVideo } from "@/lib/videos";
 import { prisma } from "@/lib/db";
 import { usdToBrl } from "@/lib/claude";
+import { startJob } from "@/lib/jobs";
 
 export type FormState = { ok?: string; error?: string } | null;
 
@@ -48,11 +49,23 @@ export async function deleteTranscriptAction(videoId: string) {
   done(videoId);
 }
 
+const BACKGROUND_OK = "Começou em segundo plano. Pode sair desta tela: o aviso no canto mostra quando terminar.";
+
+const shortTitle = (t: string) => (t.length > 50 ? t.slice(0, 48) + "…" : t);
+
+/** Roda em segundo plano (a tela não fica presa). */
 export async function diagnoseAction(videoId: string): Promise<FormState> {
   try {
-    const r = await runDiagnosis(videoId);
+    const v = await prisma.video.findUniqueOrThrow({ where: { id: videoId }, select: { title: true } });
+    await startJob({ kind: "diagnosis", targetId: videoId, label: `Diagnóstico: ${shortTitle(v.title)}`, href: `/video/${videoId}`, expectedSec: 70 },
+      async () => {
+        const r = await runDiagnosis(videoId);
+        return `Custo: ${money(r.costUsd)}.`;
+      },
+      ["study"],
+    );
     done(videoId);
-    return { ok: `Diagnóstico pronto. Custo: ${money(r.costUsd)}.` };
+    return { ok: BACKGROUND_OK };
   } catch (e) {
     return { error: errMsg(e) };
   }
@@ -60,9 +73,58 @@ export async function diagnoseAction(videoId: string): Promise<FormState> {
 
 export async function commentsAction(videoId: string): Promise<FormState> {
   try {
-    const r = await analyzeComments(videoId);
+    const v = await prisma.video.findUniqueOrThrow({ where: { id: videoId }, select: { title: true } });
+    await startJob({ kind: "comments", targetId: videoId, label: `Comentários: ${shortTitle(v.title)}`, href: `/video/${videoId}`, expectedSec: 30 },
+      async () => {
+        const r = await analyzeComments(videoId);
+        return `Custo: ${money(r.costUsd)}.`;
+      },
+      ["study"],
+    );
     done(videoId);
-    return { ok: `Comentários analisados. Custo: ${money(r.costUsd)}.` };
+    return { ok: BACKGROUND_OK };
+  } catch (e) {
+    return { error: errMsg(e) };
+  }
+}
+
+/**
+ * "Estudar tudo": transcrição (se ainda não tiver) → diagnóstico → comentários, numa tarefa só.
+ * Se a legenda não vier, segue sem ela (o diagnóstico olha título, thumbnail e números) e avisa.
+ */
+export async function studyAllAction(videoId: string): Promise<FormState> {
+  try {
+    const v = await prisma.video.findUniqueOrThrow({ where: { id: videoId }, select: { title: true, transcript: { select: { id: true } } } });
+    await startJob(
+      { kind: "study", targetId: videoId, label: `Estudo completo: ${shortTitle(v.title)}`, href: `/video/${videoId}`, expectedSec: 110, step: "Transcrição (1 de 3)" },
+      async (report) => {
+        const notes: string[] = [];
+        let cost = 0;
+        if (!v.transcript) {
+          try {
+            const t = await fetchAndSaveTranscript(videoId);
+            notes.push(`transcrição: ${t.wordCount} palavras`);
+          } catch (e) {
+            notes.push(`sem transcrição (${errMsg(e)}) — diagnóstico feito sem ela`);
+          }
+        } else notes.push("transcrição já existia");
+        await report(10, "Diagnóstico (2 de 3)");
+        const d = await runDiagnosis(videoId);
+        cost += d.costUsd;
+        await report(75, "Comentários (3 de 3)");
+        try {
+          const c = await analyzeComments(videoId);
+          cost += c.costUsd;
+          notes.push("comentários analisados");
+        } catch (e) {
+          notes.push(`comentários: ${errMsg(e)}`);
+        }
+        return `${notes.join(" · ").replace(/\.+$/, "")}. Custo total: ${money(cost)}.`;
+      },
+      ["diagnosis", "comments"],
+    );
+    done(videoId);
+    return { ok: BACKGROUND_OK };
   } catch (e) {
     return { error: errMsg(e) };
   }

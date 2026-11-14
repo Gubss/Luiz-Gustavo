@@ -8,6 +8,8 @@ import { estimateIdeas, loadContext, profileGaps } from "@/lib/generator";
 import { StateForm } from "@/components/StateForm";
 import { IdeaCard } from "@/components/IdeaCard";
 import { generateIdeasAction } from "./actions";
+import { runningJobsFor } from "@/lib/jobs";
+import { RunningNote } from "@/components/RunningNote";
 
 type SP = Record<string, string | string[] | undefined>;
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
@@ -69,6 +71,7 @@ export default async function GeneratorPage({ searchParams }: PageProps<"/gerado
   ]);
   const req = { myChannelId: channel.id, nicheId, format, referenceId: ctx.reference?.id ?? null, count };
   const est = await estimateIdeas(req);
+  const ideasJob = (await runningJobsFor([channel.id])).find((j) => j.kind === "ideas");
   const gaps = profileGaps(channel, channel._count.scripts);
 
   const href = (patch: Record<string, string | undefined>) => {
@@ -226,11 +229,13 @@ export default async function GeneratorPage({ searchParams }: PageProps<"/gerado
             Falta a chave da Anthropic: coloque <code>ANTHROPIC_API_KEY</code> no arquivo <code>.env</code> e reinicie o app.
           </p>
         )}
+        {ideasJob && <RunningNote job={ideasJob} what="Geração de ideias" />}
+        {!ideasJob && (
         <StateForm
           action={generateIdeasAction.bind(null, req)}
           label={`Sugerir ${count} ideias`}
-          busy="O Claude está pensando nas ideias… (até 2 min)"
-          hint={estimateHint(est)}
+          busy="Começando…"
+          hint={`${estimateHint(est)} · roda em segundo plano (até 2 min)`}
         >
           <div>
             <label className="label">Ponto de partida (opcional)</label>
@@ -242,6 +247,7 @@ export default async function GeneratorPage({ searchParams }: PageProps<"/gerado
             />
           </div>
         </StateForm>
+        )}
         <p className="text-xs text-zinc-500">
           Cada ideia vem com a cena no formato do canal, o gancho falado pelo personagem, 3 a 5 títulos com a fórmula usada e o que veio da
           cartilha × o que é do seu canal. Depois, abra a ideia para escrever o roteiro completo (outro custo, mostrado no botão).

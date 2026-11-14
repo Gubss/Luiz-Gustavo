@@ -11,6 +11,8 @@ import { StatusBadge } from "@/components/IdeaCard";
 import { ConfirmDelete } from "@/app/nichos/[id]/forms";
 import { deleteIdea, generateScriptAction, saveIdeaNotes, setIdeaStatus } from "@/app/gerador/actions";
 import { IdeaStatusSelect } from "./forms";
+import { runningJobsFor } from "@/lib/jobs";
+import { RunningNote } from "@/components/RunningNote";
 
 function parse<T>(json: string | null | undefined): T | null {
   if (!json) return null;
@@ -203,12 +205,14 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
   const refIds = parse<string[]>(idea.referenceIds) ?? [];
   const pbId = sd?.playbookId ?? idea.playbookId;
 
-  const [refs, playbook, similar, est] = await Promise.all([
+  const [refs, playbook, similar, est, jobs] = await Promise.all([
     refIds.length ? prisma.video.findMany({ where: { id: { in: refIds } }, select: { id: true, title: true, channel: { select: { title: true } } } }) : [],
     pbId ? prisma.nichePlaybook.findUnique({ where: { id: pbId }, select: { stats: true, diagnosisCount: true, createdAt: true } }) : null,
     findSimilarTitles(`${idea.theme} ${idea.chosenTitle ?? ""}`, { nicheId: idea.nicheId ?? undefined, limit: 5 }),
     idea.myChannelId ? estimateScript(idea.id) : null,
+    runningJobsFor([idea.id]),
   ]);
+  const scriptJob = jobs.find((j) => j.kind === "script");
   const pbStats = parse<PlaybookStats>(playbook?.stats);
   const allTitles = [...new Set([...(idea.chosenTitle ? [idea.chosenTitle] : []), ...titles])];
 
@@ -324,13 +328,15 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
           <p className="text-sm text-zinc-400">Ainda sem roteiro.</p>
         )}
 
-        {est ? (
+        {scriptJob ? (
+          <RunningNote job={scriptJob} what="Roteiro" />
+        ) : est ? (
           <div className={sd ? "border-t border-zinc-800 pt-4" : ""}>
             <StateForm
               action={generateScriptAction.bind(null, idea.id)}
               label={sd ? "Escrever de novo" : "Escrever roteiro"}
-              busy="O Claude está escrevendo o roteiro… (até 3 min)"
-              hint={estimateHint(est)}
+              busy="Começando…"
+              hint={`${estimateHint(est)} · roda em segundo plano (até 3 min)`}
               className={sd ? "btn-secondary" : "btn-primary"}
             >
               <div>

@@ -19,6 +19,8 @@ import {
 } from "@/lib/playbook";
 import { ActionButton } from "@/app/video/[id]/forms";
 import { generatePlaybookAction } from "./actions";
+import { runningJobsFor } from "@/lib/jobs";
+import { RunningNote } from "@/components/RunningNote";
 
 type SP = Record<string, string | string[] | undefined>;
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
@@ -400,6 +402,7 @@ export default async function PlaybookPage({ searchParams }: PageProps<"/cartilh
     : [];
   const titles = new Map(titleRows.map((r) => [r.id, { title: r.title, channel: r.channel.title }]));
   const est = studies.length ? await estimatePlaybook(niche.id, format) : null;
+  const pbJob = (await runningJobsFor([`${niche.id}:${format}`]))[0];
   const pending = counts[format].pending;
 
   const href = (patch: Record<string, string | undefined>) => {
@@ -555,13 +558,17 @@ export default async function PlaybookPage({ searchParams }: PageProps<"/cartilh
                 generalizar). Dá para gerar agora e de novo depois de estudar mais vídeos.
               </p>
             )}
-            <ActionButton
-              action={generatePlaybookAction.bind(null, niche.id, format)}
-              label={content ? (hasChanges ? "Gerar de novo com os estudos novos" : "Gerar de novo") : "Gerar cartilha"}
-              busy="O Claude está montando a cartilha… (até 2 min)"
-              hint={estimateHint(est)}
-              className={content && !hasChanges ? "btn-secondary" : "btn-primary"}
-            />
+            {pbJob ? (
+              <RunningNote job={pbJob} what="Cartilha" />
+            ) : (
+              <ActionButton
+                action={generatePlaybookAction.bind(null, niche.id, format)}
+                label={content ? (hasChanges ? "Gerar de novo com os estudos novos" : "Gerar de novo") : "Gerar cartilha"}
+                busy="Começando…"
+                hint={`${estimateHint(est)} · roda em segundo plano (até 2 min)`}
+                className={content && !hasChanges ? "btn-secondary" : "btn-primary"}
+              />
+            )}
           </div>
         )}
 

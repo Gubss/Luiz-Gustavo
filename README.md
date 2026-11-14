@@ -154,6 +154,22 @@ Sem cartilha ainda, usa até 5 estudos direto; sem nicho, usa só o perfil.
 O **Banco de ideias** guarda tudo com status (ideia, roteiro pronto, produzido, publicado, descartada) e mostra
 títulos parecidos já feitos pelos canais monitorados (checagem grátis no catálogo).
 
+## Tarefas em segundo plano
+
+Diagnóstico, comentários, "Estudar tudo", cartilha, ideias, roteiros, buscas do *Descobrir canais*, raio-x e
+adicionar/atualizar canais num nicho rodam em segundo plano: o botão volta na hora e dá para usar o resto do app.
+O aviso no canto inferior direito mostra cada tarefa com barra de progresso (por etapa quando dá para medir; senão
+estimada pelo tempo típico) e avisa quando termina, com link para o resultado. Se você permitir, o Windows também
+avisa quando o app está em outra aba. As tarefas ficam na tabela `Job`; se o app for fechado no meio, a tarefa é
+marcada como interrompida depois de 15 min.
+
+Na página do vídeo, **Estudar tudo** faz transcrição → diagnóstico → comentários num clique (sem legenda, segue sem
+ela e avisa). Os botões de cada etapa continuam lá.
+
+**Canais parecidos com um link** (*Descobrir canais*): cole um vídeo ou canal; o app tira palavras-chave dos títulos e
+tags (dele e dos vídeos do mesmo formato do canal), busca por elas, junta os canais que o canal do link indica e põe o
+próprio canal na lista. Formato automático (o do link) ou escolhido. Custo: ~5 unidades + ~102 por palavra-chave (1 a 3).
+
 ## Testes
 
 `npm test` roda os testes de cálculo e uma coleta completa com a API do YouTube simulada
