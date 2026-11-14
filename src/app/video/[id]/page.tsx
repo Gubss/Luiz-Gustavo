@@ -465,8 +465,7 @@ export default async function VideoStudyPage({ params }: PageProps<"/video/[id]"
           </div>
           {noKey && (
             <p className="rounded-lg border border-amber-700 bg-amber-950/40 p-3 text-sm text-amber-200">
-              Falta a chave da Anthropic: coloque <code>ANTHROPIC_API_KEY</code> no arquivo <code>.env</code> e reinicie o app (feche o
-              terminal e rode <code>npm run dev</code> de novo). A transcrição funciona sem ela.
+              Falta a chave da Anthropic: cole a chave em <Link href="/configuracoes#chaves" className="underline">Configurações</Link> (não precisa reiniciar). A transcrição funciona sem ela.
             </p>
           )}
         </div>

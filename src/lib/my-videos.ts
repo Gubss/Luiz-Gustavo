@@ -12,7 +12,7 @@
 import type { MyVideo } from "@prisma/client";
 import { prisma } from "./db";
 import { getSettings } from "./settings";
-import { localDay } from "./quota";
+import { localDay, withQuotaSource } from "./quota";
 import { classifyByDuration, median } from "./metrics";
 import { bestThumb, checkIsShortByUrl, fetchVideosBatch, parseDuration, resolveChannel, uploadsPage, YouTubeError } from "./youtube";
 import { accessTokenFor, fetchVideoAnalytics, GoogleAuthError } from "./google";
@@ -377,7 +377,7 @@ export type TrackSummary = { channels: number; newVideos: number; updated: numbe
 /** Confere tudo o que está na hora (seguro rodar a cada poucos minutos: só gasta cota quando precisa). */
 export function trackDue(opts: { onDiagnose?: (myVideoId: string, milestone: number) => Promise<boolean> } = {}) {
   if (tracking) return tracking;
-  tracking = doTrack(opts).finally(() => {
+  tracking = withQuotaSource("acompanhamento", () => doTrack(opts)).finally(() => {
     tracking = null;
   });
   return tracking;
@@ -385,8 +385,7 @@ export function trackDue(opts: { onDiagnose?: (myVideoId: string, milestone: num
 
 /** Marcos em que o diagnóstico automático roda. */
 export const AUTO_MILESTONES = [24, 72, 168] as const;
-/** Teto de diagnósticos automáticos por dia (todas as contas), para o gasto não fugir. */
-export const AUTO_DAILY_MAX = 6;
+/** Teto de diagnósticos automáticos por dia (todas as contas), para o gasto não fugir: `autoDiagnoseMaxPerDay` em Configurações. */
 
 async function doTrack(opts: { onDiagnose?: (myVideoId: string, milestone: number) => Promise<boolean> }): Promise<TrackSummary> {
   const sum: TrackSummary = { channels: 0, newVideos: 0, updated: 0, checkpoints: 0, analytics: 0, diagnoses: 0, errors: [] };
@@ -432,7 +431,7 @@ async function doTrack(opts: { onDiagnose?: (myVideoId: string, milestone: numbe
         }
       }
 
-      if (c.autoDiagnose && opts.onDiagnose) sum.diagnoses += await autoDiagnose(c.id, opts.onDiagnose);
+      if (c.autoDiagnose && opts.onDiagnose) sum.diagnoses += await autoDiagnose(c.id, opts.onDiagnose, s.autoDiagnoseMaxPerDay);
     } catch (e) {
       sum.errors.push(`${c.name}: ${e instanceof Error ? e.message : String(e)}`);
       if (e instanceof YouTubeError && e.reason === "quotaExceeded") break;
@@ -459,10 +458,10 @@ export async function pendingMilestones(myChannelId: string, now = new Date()) {
   return out;
 }
 
-async function autoDiagnose(myChannelId: string, run: (myVideoId: string, milestone: number) => Promise<boolean>) {
+async function autoDiagnose(myChannelId: string, run: (myVideoId: string, milestone: number) => Promise<boolean>, dailyMax: number) {
   const startOfDay = new Date(`${localDay()}T00:00:00-03:00`); // meia-noite em São Paulo
   const doneToday = await prisma.myVideoDiagnosis.count({ where: { trigger: "auto", createdAt: { gte: startOfDay } } });
-  let left = AUTO_DAILY_MAX - doneToday;
+  let left = dailyMax - doneToday;
   let started = 0;
   for (const p of await pendingMilestones(myChannelId)) {
     if (left <= 0) break;

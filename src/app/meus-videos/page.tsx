@@ -3,7 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { fmtCompact, fmtDateTime, fmtInt } from "@/lib/format";
 import { googleConfigured } from "@/lib/google";
-import { ageHours, AUTO_DAILY_MAX, checkpointLabel, checkpointTolerance, fmtAge, peerStats } from "@/lib/my-videos";
+import { ageHours, checkpointLabel, checkpointTolerance, fmtAge, peerStats } from "@/lib/my-videos";
 import { estimateChannelReport, type ChannelReportContent, type MyDiagnosisContent } from "@/lib/my-diagnosis";
 import { runningJobsFor } from "@/lib/jobs";
 import { getSettings } from "@/lib/settings";
@@ -311,7 +311,7 @@ export default async function MyVideosPage({ searchParams }: { searchParams: Pro
             </label>
             <p className="text-xs text-zinc-500">
               Faz sozinho o diagnóstico de cada vídeo novo com 24h, 3 dias e 7 dias de vida, e o do canal 1 vez por semana. Cada um custa como o botão (≈ US$
-              0,05 a 0,20). No máximo {AUTO_DAILY_MAX} por dia. Precisa do app aberto. {c.autoDiagnose ? "Está LIGADO." : "Está desligado."}
+              0,05 a 0,20). No máximo {s.autoDiagnoseMaxPerDay} por dia (muda em <Link href="/configuracoes#automatico" className="underline">Configurações</Link>). Precisa do app aberto. {c.autoDiagnose ? "Está LIGADO." : "Está desligado."}
             </p>
           </form>
         </div>

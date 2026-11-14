@@ -242,7 +242,7 @@ export default async function GeneratorPage({ searchParams }: PageProps<"/gerado
         </div>
         {!s.anthropicApiKey && (
           <p className="text-sm text-amber-300">
-            Falta a chave da Anthropic: coloque <code>ANTHROPIC_API_KEY</code> no arquivo <code>.env</code> e reinicie o app.
+            Falta a chave da Anthropic: cole a chave em <Link href="/configuracoes#chaves" className="underline">Configurações</Link> (não precisa reiniciar).
           </p>
         )}
         {ideasJob && <RunningNote job={ideasJob} what="Geração de ideias" />}

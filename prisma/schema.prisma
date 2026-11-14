@@ -26,6 +26,8 @@ model QuotaLog {
   quotaDay  String
   endpoint  String
   units     Int
+  /// Quem gastou: "coleta", "acompanhamento", o tipo da tarefa em segundo plano (ex.: "discover") ou null (outras ações).
+  source    String?
   createdAt DateTime @default(now())
 
   @@index([quotaDay])

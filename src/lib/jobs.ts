@@ -4,6 +4,7 @@
  * o trabalho continua no servidor local e o aviso no canto da tela mostra quando terminou.
  */
 import { prisma } from "./db";
+import { withQuotaSource } from "./quota";
 
 /** Tarefa "rodando" há mais que isso foi interrompida (app fechado no meio). */
 const STALE_MS = 15 * 60_000;
@@ -55,7 +56,8 @@ export async function startJob(
       })
       .catch(() => {});
   };
-  void (async () => {
+  // a cota do YouTube gasta dentro da tarefa fica registrada com o tipo dela (tela Configurações)
+  void withQuotaSource(job.kind, async () => {
     try {
       const message = await work(report);
       await prisma.job.update({ where: { id: row.id }, data: { status: "ok", message, finishedAt: new Date() } });
@@ -64,7 +66,7 @@ export async function startJob(
         .update({ where: { id: row.id }, data: { status: "error", message: e instanceof Error ? e.message : String(e), finishedAt: new Date() } })
         .catch(() => {});
     }
-  })();
+  });
   return { id: row.id };
 }
 

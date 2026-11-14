@@ -1,6 +1,6 @@
 import { prisma } from "./db";
 import { getSettings } from "./settings";
-import { localDay, quotaUsedToday } from "./quota";
+import { localDay, quotaUsedToday, withQuotaSource } from "./quota";
 import { refreshChannels } from "./channels";
 import { classifyByDuration } from "./metrics";
 import {
@@ -19,8 +19,8 @@ const MAX_WINDOW_DAYS = 30;
 const MAX_VIDEOS_PER_CHANNEL = 100;
 /** Teto da carga inicial do catálogo de títulos (40 unidades por canal no máximo). */
 const MAX_CATALOG = 2000;
-/** Considera os dados de vídeo "do dia" se coletados há menos de 20h. */
-const STALE_MS = 20 * 60 * 60 * 1000;
+/** Considera os dados de vídeo "do dia" se coletados há menos de X horas (padrão 20h, ajustável em Configurações). */
+const staleMs = async () => Math.max(1, (await getSettings()).autoCollectHours || 20) * 60 * 60 * 1000;
 
 export type ChannelCollectResult = {
   channelId: string;
@@ -226,7 +226,7 @@ export async function isCollectionDue() {
     orderBy: { startedAt: "desc" },
   });
   const hasChannels = (await prisma.channel.count()) > 0;
-  return hasChannels && (!last || Date.now() - last.startedAt.getTime() > STALE_MS);
+  return hasChannels && (!last || Date.now() - last.startedAt.getTime() > (await staleMs()));
 }
 
 /**
@@ -236,7 +236,7 @@ export async function isCollectionDue() {
  */
 export function collectAll(opts: { trigger: "auto" | "manual" | "script"; force?: boolean; channelIds?: string[] }) {
   if (running) return running;
-  running = doCollect(opts).finally(() => {
+  running = withQuotaSource("coleta", () => doCollect(opts)).finally(() => {
     running = null;
   });
   return running;
@@ -258,7 +258,7 @@ async function doCollect(opts: { trigger: "auto" | "manual" | "script"; force?: 
   };
   try {
     await refreshChannels({ force: opts.force, channelIds: opts.channelIds });
-    const cutoff = new Date(Date.now() - STALE_MS);
+    const cutoff = new Date(Date.now() - (await staleMs()));
     const channels = await prisma.channel.findMany({
       where: {
         niches: { some: {} }, // canais sem nicho (vindos de "estudar por link") não são coletados

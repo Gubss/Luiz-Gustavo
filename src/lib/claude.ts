@@ -2,7 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import type * as z from "zod/v4";
 import { prisma } from "./db";
-import { getSettings } from "./settings";
+import { cachedDollarBrl, getSettings } from "./settings";
 
 /** Preço em US$ por 1 milhão de tokens (tabela da Anthropic, nov/2026). */
 export const PRICING: Record<string, { input: number; output: number; label: string }> = {
@@ -12,8 +12,8 @@ export const PRICING: Record<string, { input: number; output: number; label: str
   "claude-fable-5-2": { input: 8, output: 40, label: "Claude Fable 5.2" },
 };
 
-/** Câmbio só para exibir uma ideia em reais (ajuste em DOLAR_BRL no .env se quiser). */
-export const usdToBrl = () => Number(process.env.DOLAR_BRL) || 5.6;
+/** Câmbio só para exibir uma ideia em reais (ajustável em Configurações; antes, DOLAR_BRL no .env). */
+export const usdToBrl = () => cachedDollarBrl() || Number(process.env.DOLAR_BRL) || 5.6;
 
 export const modelLabel = (m: string | null | undefined) => (m ? (PRICING[m]?.label ?? m) : "—");
 
@@ -46,10 +46,23 @@ export class ClaudeError extends Error {}
 
 let cached: { key: string; client: Anthropic } | null = null;
 
+/** Começo do mês corrente em São Paulo (aproximado pelo UTC-3). */
+function monthStart(now = new Date()): Date {
+  const sp = new Date(now.getTime() - 3 * 3600_000);
+  return new Date(Date.UTC(sp.getUTCFullYear(), sp.getUTCMonth(), 1, 3));
+}
+
 async function client(): Promise<Anthropic> {
-  const { anthropicApiKey } = await getSettings();
+  const { anthropicApiKey, monthlyBudgetUsd } = await getSettings();
   if (!anthropicApiKey)
-    throw new ClaudeError("Chave da Anthropic não configurada. Coloque ANTHROPIC_API_KEY no arquivo .env e reinicie o app.");
+    throw new ClaudeError("Chave da Anthropic não configurada. Cole a chave em Configurações (menu da esquerda).");
+  if (monthlyBudgetUsd > 0) {
+    const { usd } = await claudeSpendThisMonth();
+    if (usd >= monthlyBudgetUsd)
+      throw new ClaudeError(
+        `Limite do mês atingido: já foram US$ ${usd.toFixed(2).replace(".", ",")} de US$ ${monthlyBudgetUsd.toFixed(2).replace(".", ",")}. Aumente o limite em Configurações para continuar.`,
+      );
+  }
   if (cached?.key !== anthropicApiKey) cached = { key: anthropicApiKey, client: new Anthropic({ apiKey: anthropicApiKey }) };
   return cached.client;
 }
@@ -102,7 +115,7 @@ export async function callStructured<S extends z.ZodType>(opts: {
       ],
     });
   } catch (e) {
-    if (e instanceof Anthropic.AuthenticationError) throw new ClaudeError("Chave da Anthropic inválida. Confira ANTHROPIC_API_KEY no .env.");
+    if (e instanceof Anthropic.AuthenticationError) throw new ClaudeError("Chave da Anthropic inválida. Confira em Configurações.");
     if (e instanceof Anthropic.PermissionDeniedError)
       throw new ClaudeError("A chave da Anthropic não tem permissão para esse modelo (ou falta crédito na conta).");
     if (e instanceof Anthropic.RateLimitError) throw new ClaudeError("Limite de uso da Anthropic atingido. Espere um minuto e tente de novo.");
@@ -143,12 +156,85 @@ export async function callStructured<S extends z.ZodType>(opts: {
 
 /** Gasto com o Claude no mês corrente (fuso de São Paulo, aproximado pelo UTC-3). */
 export async function claudeSpendThisMonth(): Promise<{ usd: number; calls: number }> {
-  const now = new Date(Date.now() - 3 * 3600_000);
-  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 3));
+  const start = monthStart();
   const agg = await prisma.generation.aggregate({
     where: { createdAt: { gte: start } },
     _sum: { costUsd: true },
     _count: true,
   });
   return { usd: agg._sum.costUsd ?? 0, calls: agg._count };
+}
+
+/** Nome amigável de cada tipo de chamada ao Claude. */
+export const GENERATION_KIND_LABEL: Record<string, string> = {
+  diagnosis: "Diagnóstico de vídeo estudado",
+  comments: "Resumo dos comentários",
+  playbook: "Cartilha do nicho",
+  ideas: "Ideias do gerador",
+  script: "Roteiros",
+  "profile-from-channel": "Perfil a partir do meu canal",
+  "my-video-diagnosis": "Diagnóstico de vídeo meu",
+  "my-channel-report": "Diagnóstico do meu canal",
+};
+
+/** Gasto com o Claude: mês corrente por tipo e por modelo, gasto por dia (últimos 30 dias) e mês passado. */
+export async function claudeSpendSummary(now = new Date()) {
+  const start = monthStart(now);
+  const prevStart = monthStart(new Date(start.getTime() - 86_400_000));
+  const since30 = new Date(now.getTime() - 29 * 86_400_000);
+  const [byKind, byModel, prev, recent, last30] = await Promise.all([
+    prisma.generation.groupBy({ by: ["kind"], where: { createdAt: { gte: start } }, _sum: { costUsd: true }, _count: true }),
+    prisma.generation.groupBy({ by: ["model"], where: { createdAt: { gte: start } }, _sum: { costUsd: true }, _count: true }),
+    prisma.generation.aggregate({ where: { createdAt: { gte: prevStart, lt: start } }, _sum: { costUsd: true }, _count: true }),
+    prisma.generation.findMany({
+      orderBy: { createdAt: "desc" },
+      take: 15,
+      select: { id: true, kind: true, model: true, costUsd: true, createdAt: true, videoId: true, inputTokens: true, outputTokens: true },
+    }),
+    prisma.generation.findMany({ where: { createdAt: { gte: since30 } }, select: { createdAt: true, costUsd: true } }),
+  ]);
+  const dayKey = (d: Date) => new Date(d.getTime() - 3 * 3600_000).toISOString().slice(0, 10);
+  const perDay = new Map<string, number>();
+  for (let i = 29; i >= 0; i--) perDay.set(dayKey(new Date(now.getTime() - i * 86_400_000)), 0);
+  for (const g of last30) {
+    const k = dayKey(g.createdAt);
+    if (perDay.has(k)) perDay.set(k, (perDay.get(k) ?? 0) + (g.costUsd ?? 0));
+  }
+  const usd = byKind.reduce((a, r) => a + (r._sum.costUsd ?? 0), 0);
+  const calls = byKind.reduce((a, r) => a + r._count, 0);
+  // projeção simples: ritmo do mês até agora × dias do mês
+  const sp = new Date(now.getTime() - 3 * 3600_000);
+  const daysInMonth = new Date(Date.UTC(sp.getUTCFullYear(), sp.getUTCMonth() + 1, 0)).getUTCDate();
+  const elapsedDays = Math.max(1, (now.getTime() - start.getTime()) / 86_400_000);
+  return {
+    usd,
+    calls,
+    projectedUsd: (usd / elapsedDays) * daysInMonth,
+    prevMonthUsd: prev._sum.costUsd ?? 0,
+    prevMonthCalls: prev._count,
+    byKind: byKind
+      .map((r) => ({ kind: r.kind, label: GENERATION_KIND_LABEL[r.kind] ?? r.kind, usd: r._sum.costUsd ?? 0, calls: r._count }))
+      .sort((a, b) => b.usd - a.usd),
+    byModel: byModel.map((r) => ({ model: r.model, label: modelLabel(r.model), usd: r._sum.costUsd ?? 0, calls: r._count })).sort((a, b) => b.usd - a.usd),
+    perDay: [...perDay].map(([day, usd]) => ({ day, usd })),
+    recent,
+  };
+}
+
+/**
+ * Confere uma chave da Anthropic sem gastar nada: pede os dados do modelo (chamada gratuita, não gera texto).
+ */
+export async function testAnthropicKey(key: string, model: string): Promise<string> {
+  const c = new Anthropic({ apiKey: key, maxRetries: 0, timeout: 20_000 });
+  try {
+    const info = await c.models.retrieve(model);
+    return `Chave funcionando. Modelo ${info.display_name ?? modelLabel(model)} disponível.`;
+  } catch (e) {
+    if (e instanceof Anthropic.AuthenticationError) throw new ClaudeError("Chave inválida: a Anthropic não reconheceu essa chave.");
+    if (e instanceof Anthropic.PermissionDeniedError) throw new ClaudeError("A chave existe, mas não tem permissão para esse modelo.");
+    if (e instanceof Anthropic.NotFoundError) throw new ClaudeError(`A chave funciona, mas o modelo ${model} não foi encontrado.`);
+    if (e instanceof Anthropic.APIConnectionError) throw new ClaudeError("Sem conexão com a Anthropic. Confira a internet.");
+    if (e instanceof Anthropic.APIError) throw new ClaudeError(`Erro da Anthropic (${e.status}): ${e.message}`);
+    throw e;
+  }
 }
