@@ -4,6 +4,9 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import type { FormState } from "@/app/video/actions";
+import { startJob } from "@/lib/jobs";
+import { syncMyChannelVideos } from "@/lib/my-catalog";
+import { parseProfileMd, type ParsedProfile } from "@/lib/profile-md";
 
 const str = (fd: FormData, k: string) => String(fd.get(k) ?? "").trim();
 const optStr = (fd: FormData, k: string) => str(fd, k) || null;
@@ -37,11 +40,16 @@ export async function createMyChannel(fd: FormData) {
 export async function saveProfile(id: string, _prev: FormState, fd: FormData): Promise<FormState> {
   const name = str(fd, "name");
   if (!name) return { error: "O canal precisa de um nome." };
+  const before = await prisma.myChannel.findUniqueOrThrow({ where: { id }, select: { url: true, analytics: true } });
+  const url = optStr(fd, "url");
+  const analytics = optStr(fd, "analytics");
   await prisma.myChannel.update({
     where: { id },
     data: {
       name,
-      url: optStr(fd, "url"),
+      url,
+      // URL trocada: o canal é procurado de novo na próxima leitura dos vídeos.
+      ...(url !== before.url ? { externalId: null } : {}),
       nicheId: optStr(fd, "nicheId"),
       status: str(fd, "status") || "RESEARCH",
       format: str(fd, "format") === "long" ? "long" : "short",
@@ -55,6 +63,8 @@ export async function saveProfile(id: string, _prev: FormState, fd: FormData): P
       audience: optStr(fd, "audience"),
       rules: optStr(fd, "rules"),
       notes: optStr(fd, "notes"),
+      analytics,
+      ...(analytics !== before.analytics ? { analyticsAt: analytics ? new Date() : null } : {}),
     },
   });
   refresh(id);
@@ -82,4 +92,71 @@ export async function deleteMyChannelFromProfile(id: string) {
   await prisma.myChannel.delete({ where: { id } });
   refresh();
   redirect("/meus-canais");
+}
+
+/** Lê do YouTube todos os vídeos que o canal já publicou (em segundo plano). */
+export async function syncMyVideosAction(id: string): Promise<FormState> {
+  try {
+    const c = await prisma.myChannel.findUniqueOrThrow({ where: { id }, select: { name: true, url: true, externalId: true } });
+    if (!c.url && !c.externalId) return { error: "Coloque a URL do seu canal no perfil e salve antes." };
+    await startJob({ kind: "my-videos", targetId: id, label: `Vídeos do meu canal: ${c.name}`, href: `/meus-canais/${id}`, expectedSec: 20 }, async (report) => {
+      const r = await syncMyChannelVideos(id, report);
+      return `${r.videos} vídeos de ${r.channelTitle} lidos (${r.units} unidades de cota).`;
+    });
+    refresh(id);
+    return { ok: "Começou em segundo plano. O aviso no canto mostra quando terminar." };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Erro inesperado." };
+  }
+}
+
+// ---------- Perfil por arquivo .md (GPT do Maestri) ----------
+
+/** Só lê o arquivo e devolve o que entendeu (prévia; não salva nada). */
+export async function previewProfileImport(text: string): Promise<ParsedProfile> {
+  return parseProfileMd(String(text ?? "").slice(0, 400_000));
+}
+
+/** Salva o perfil importado. Campos vazios no arquivo não apagam o que já existe; roteiros com o mesmo título são atualizados. */
+export async function applyProfileImport(id: string, text: string): Promise<FormState> {
+  const p = parseProfileMd(String(text ?? "").slice(0, 400_000));
+  const f = p.fields;
+  const filled = Object.values(f).filter((v) => v != null).length;
+  if (!filled && !p.scripts.length) return { error: "Não achei nada para importar nesse arquivo." };
+  const before = await prisma.myChannel.findUniqueOrThrow({ where: { id }, select: { url: true } });
+  const data: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(f)) if (v != null && k !== "analytics") data[k] = v;
+  if (f.url && f.url !== before.url) data.externalId = null;
+  if (f.analytics) {
+    data.analytics = f.analytics;
+    data.analyticsAt = new Date();
+  }
+  data.profileImportedAt = new Date();
+  await prisma.myChannel.update({ where: { id }, data });
+
+  const existing = await prisma.myChannelScript.findMany({ where: { myChannelId: id }, select: { id: true, title: true } });
+  let added = 0;
+  let updated = 0;
+  for (const s of p.scripts) {
+    const same = existing.find((e) => e.title.trim().toLowerCase() === s.title.trim().toLowerCase());
+    if (same) {
+      await prisma.myChannelScript.update({ where: { id: same.id }, data: s });
+      updated++;
+    } else {
+      await prisma.myChannelScript.create({ data: { ...s, myChannelId: id } });
+      added++;
+    }
+  }
+  refresh(id);
+  const n = (k: number, um: string, varios: string) => `${k} ${k === 1 ? um : varios}`;
+  return {
+    ok: `Perfil importado: ${n(filled, "campo preenchido", "campos preenchidos")}, ${n(added, "roteiro novo", "roteiros novos")}${updated ? `, ${n(updated, "atualizado", "atualizados")}` : ""}.`,
+  };
+}
+
+export async function saveAnalytics(id: string, _prev: FormState, fd: FormData): Promise<FormState> {
+  const v = str(fd, "analytics");
+  await prisma.myChannel.update({ where: { id }, data: { analytics: v || null, analyticsAt: v ? new Date() : null } });
+  refresh(id);
+  return { ok: "Números salvos." };
 }

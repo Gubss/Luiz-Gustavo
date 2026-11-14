@@ -5,7 +5,13 @@ import { fmtInt } from "@/lib/format";
 import { CHANNEL_STATUS, PROFILE_FIELDS, profileGaps } from "@/lib/generator";
 import { StateForm } from "@/components/StateForm";
 import { ConfirmDelete } from "@/app/nichos/[id]/forms";
-import { deleteMyChannelFromProfile, deleteScript, saveProfile, saveScript } from "../actions";
+import { applyProfileImport, deleteMyChannelFromProfile, deleteScript, previewProfileImport, saveProfile, saveScript, syncMyVideosAction } from "../actions";
+import { ProfileImport } from "./import";
+import { ActionButton } from "@/app/video/[id]/forms";
+import { RunningNote } from "@/components/RunningNote";
+import { runningJobsFor } from "@/lib/jobs";
+import { estimateCatalogUnits } from "@/lib/my-catalog";
+import { fmtCompact, fmtDate } from "@/lib/format";
 
 function ScriptFields({ s }: { s?: { title: string; url: string | null; views: number | null; script: string; notes: string | null } }) {
   return (
@@ -50,6 +56,11 @@ export default async function MyChannelProfilePage({ params }: PageProps<"/meus-
     prisma.niche.findMany({ orderBy: { createdAt: "asc" }, select: { id: true, name: true } }),
   ]);
   if (!c) notFound();
+  const [videos, videoCount, job] = await Promise.all([
+    prisma.myChannelVideo.findMany({ where: { myChannelId: c.id }, orderBy: { publishedAt: "desc" }, take: 300 }),
+    prisma.myChannelVideo.count({ where: { myChannelId: c.id } }),
+    runningJobsFor([c.id]).then((js) => js.find((j) => j.kind === "my-videos")),
+  ]);
   const gaps = profileGaps(c, c.scripts.length);
 
   return (
@@ -79,6 +90,21 @@ export default async function MyChannelProfilePage({ params }: PageProps<"/meus-
           Falta preencher: {gaps.join(", ")}. Dá para gerar assim mesmo, mas o resultado fica mais genérico.
         </p>
       )}
+
+      <section className="card space-y-4 p-5">
+        <div>
+          <h2 className="text-lg font-semibold">Preencher pelo GPT (Maestri)</h2>
+          <p className="text-sm text-zinc-400">
+            Em vez de preencher à mão: <b>1.</b> baixe o pedido, <b>2.</b> cole no GPT do Maestri que conhece este canal, <b>3.</b> salve a resposta
+            como .md (ou copie) e importe aqui. Você vê a prévia antes de salvar.
+            {c.profileImportedAt && ` Última importação: ${fmtDate(c.profileImportedAt)}.`}
+          </p>
+        </div>
+        <a href={`/api/meus-canais/${c.id}/pedido-perfil`} className="btn-secondary" download>
+          1. Baixar o pedido para o GPT (.md)
+        </a>
+        <ProfileImport preview={previewProfileImport} apply={applyProfileImport.bind(null, c.id)} />
+      </section>
 
       <section className="card p-5">
         <h2 className="mb-4 text-lg font-semibold">Perfil</h2>
@@ -142,6 +168,16 @@ export default async function MyChannelProfilePage({ params }: PageProps<"/meus-
               <label className="label">Outras notas</label>
               <textarea name="notes" rows={2} className="input" defaultValue={c.notes ?? ""} />
             </div>
+            <div className="md:col-span-2">
+              <label className="label">Números do canal{c.analyticsAt ? ` (atualizado em ${fmtDate(c.analyticsAt)})` : ""}</label>
+              <textarea
+                name="analytics"
+                rows={3}
+                className="input"
+                defaultValue={c.analytics ?? ""}
+                placeholder="Cole do YouTube Studio / TikTok (ou venha pelo GPT): inscritos, views 28 dias, retenção, % continuaram assistindo, vídeos que mais foram bem…"
+              />
+            </div>
           </div>
         </StateForm>
       </section>
@@ -177,6 +213,45 @@ export default async function MyChannelProfilePage({ params }: PageProps<"/meus-
             <ScriptFields />
           </StateForm>
         </div>
+      </section>
+
+      <section className="card space-y-4 p-5">
+        <div>
+          <h2 className="text-lg font-semibold">Vídeos que o canal já publicou ({videoCount})</h2>
+          <p className="text-sm text-zinc-400">
+            Lidos do YouTube pela URL do canal. O gerador recebe esses títulos e não sugere um tema que você já fez (mesmo que o vídeo antigo seja
+            2D ou tenha outro título), e marca &ldquo;seu canal já fez algo parecido&rdquo; quando a ideia bate com um deles.
+            {c.catalogFetchedAt && ` Última leitura: ${fmtDate(c.catalogFetchedAt)}.`}
+          </p>
+        </div>
+        {job ? (
+          <RunningNote job={job} what="Leitura dos vídeos do canal" />
+        ) : (
+          <ActionButton
+            action={syncMyVideosAction.bind(null, c.id)}
+            label={videoCount ? "Ler de novo (pega os vídeos novos)" : "Ler os vídeos do meu canal"}
+            busy="Começando…"
+            hint={c.url || c.externalId ? `~${estimateCatalogUnits(videoCount || null)} unidades de cota · em segundo plano` : "Coloque a URL do canal no perfil acima e salve."}
+            className={videoCount ? "btn-secondary" : "btn-primary"}
+          />
+        )}
+        {videos.length > 0 && (
+          <details className="rounded-lg border border-zinc-800">
+            <summary className="cursor-pointer px-3 py-2 text-sm text-zinc-300">Ver a lista</summary>
+            <ul className="max-h-96 divide-y divide-zinc-800 overflow-y-auto text-sm">
+              {videos.map((v) => (
+                <li key={v.id} className="flex items-center gap-3 px-3 py-1.5">
+                  <a href={`https://www.youtube.com/watch?v=${v.externalId}`} target="_blank" rel="noreferrer" className="min-w-0 flex-1 truncate hover:text-red-400">
+                    {v.title}
+                  </a>
+                  <span className="shrink-0 text-xs text-zinc-500">
+                    {v.isShort === true ? "Short" : v.isShort === false ? "longo" : ""} · {fmtCompact(v.viewCount)} views · {fmtDate(v.publishedAt)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
       </section>
 
       <div className="flex justify-end">

@@ -177,6 +177,10 @@ test("gerador: perfil + cartilha viram ideias e roteiro no formato do canal", as
   assert.ok(est.usd > 0 && est.usdMax > est.usd, "estimativa antes de chamar");
   assert.equal(bodies.length, 0, "estimar não chama a API");
 
+  // Vídeo antigo do próprio canal (lido do YouTube) com o mesmo tema da ideia 1.
+  await prisma.myChannelVideo.create({
+    data: { myChannelId: ch.id, externalId: "old00000001", title: "O T-Rex rugia mesmo? Mitos do T-Rex (animação 2D)", publishedAt: new Date("2024-01-01") },
+  });
   const r = await generateIdeas({ myChannelId: ch.id, referenceId: ref.id, count: 2, ponto: "mitos de dinossauro" });
   assert.equal(r.ideas.length, 2);
   assert.equal(bodies.length, 1);
@@ -184,13 +188,18 @@ test("gerador: perfil + cartilha viram ideias e roteiro no formato do canal", as
   assert.match(sys, /separar o COMO do O QUÊ/);
   const user = bodies[0].messages[0].content.map((c) => c.text ?? "").join("");
   assert.match(user, /mitos de dinossauro/);
-  assert.match(user, /Theo e o arco-íris/, "temas já feitos entram para não repetir");
+  assert.match(user, /Theo e o arco-íris \[roteiro cadastrado\]/, "temas já feitos entram para não repetir");
+  assert.match(user, /Mitos do T-Rex \(animação 2D\) \[vídeo publicado\]/);
+  assert.match(sys, /mesmo que o vídeo antigo seja de outro estilo/);
 
   const saved = await prisma.idea.findMany({ where: { myChannelId: ch.id }, orderBy: { createdAt: "asc" } });
   assert.equal(saved.length, 2);
   assert.equal(saved[0].status, "IDEA");
   assert.equal(saved[0].playbookId, pb.id);
   assert.equal(saved[0].chosenTitle, "O T-Rex NÃO rugia?!");
+  const d0 = JSON.parse(saved[0].ideaData!);
+  assert.equal(d0.jaFeito[0]?.source, "vídeo publicado", "marca o tema já feito pelo canal");
+  assert.deepEqual(JSON.parse(saved[1].ideaData!).jaFeito, [], "tema novo não é marcado");
   assert.deepEqual(JSON.parse(saved[0].referenceIds!), [ref.id]);
   assert.ok(Math.abs(saved[0].ideaCostUsd! * 2 - r.costUsd) < 1e-9, "custo dividido entre as ideias");
 
@@ -218,4 +227,18 @@ test("gerador: perfil + cartilha viram ideias e roteiro no formato do canal", as
   const solo = await loadContext({ myChannelId: ch.id, nicheId: null });
   assert.equal(solo.playbook, null);
   assert.doesNotMatch(solo.block, /CARTILHA/);
+});
+
+test("já fez esse tema? tampa de caneta × vídeo antigo; uma palavra em comum não basta", async () => {
+  const { findOwnRepeats } = await import("../src/lib/my-catalog");
+  const items = [
+    { title: "Por que a tampa da caneta BIC tem um furinho?", source: "vídeo publicado" as const },
+    { title: "Como fazer um vulcão na escola em uma noite", source: "vídeo publicado" as const },
+    { title: "Culpa de quem? Puxei um fiozinho", source: "vídeo publicado" as const },
+  ];
+  const m = findOwnRepeats("O furo da tampa da caneta: não é pela tinta!", items);
+  assert.equal(m.length, 1);
+  assert.match(m[0].title, /tampa da caneta/);
+  assert.deepEqual(findOwnRepeats("Por que o céu é azul?", items), []);
+  assert.deepEqual(findOwnRepeats("Vulcão de verdade", items), [], "só 'vulcão' em comum não é o mesmo tema");
 });

@@ -125,7 +125,12 @@ export async function saveScriptAction(myVideoId: string, _prev: FormState, fd: 
   const ideaId = str(fd, "ideaId") || null;
   const scriptText = str(fd, "scriptText") || null;
   await prisma.myVideo.update({ where: { id: myVideoId }, data: { inspiredIdeaId: ideaId, scriptText } });
-  if (ideaId) await prisma.idea.update({ where: { id: ideaId }, data: { status: "PUBLISHED" } }).catch(() => {});
+  if (ideaId) {
+    // liga também no Banco de ideias ("Virou vídeo no seu canal?"), se o vídeo já estiver na lista do canal
+    const v = await prisma.myVideo.findUniqueOrThrow({ where: { id: myVideoId } });
+    const cv = await prisma.myChannelVideo.findUnique({ where: { myChannelId_externalId: { myChannelId: v.myChannelId, externalId: v.externalId } } });
+    await prisma.idea.update({ where: { id: ideaId }, data: { status: "PUBLISHED", ...(cv ? { publishedVideoId: cv.id } : {}) } }).catch(() => {});
+  }
   refresh(undefined, myVideoId);
   revalidatePath("/ideias");
   return { ok: "Roteiro salvo." };
@@ -166,7 +171,7 @@ export async function pasteMyTranscriptAction(myVideoId: string, _prev: FormStat
 
 export async function saveAnalyticsNotesAction(myChannelId: string, _prev: FormState, fd: FormData): Promise<FormState> {
   const text = String(fd.get("analyticsNotes") ?? "").trim();
-  await prisma.myChannel.update({ where: { id: myChannelId }, data: { analyticsNotes: text || null } });
+  await prisma.myChannel.update({ where: { id: myChannelId }, data: { analytics: text || null, analyticsAt: text ? new Date() : null } });
   refresh(myChannelId);
   return { ok: text ? "Salvo. Os próximos diagnósticos (do canal e dos vídeos) leem esses números." : "Apagado." };
 }
@@ -177,7 +182,7 @@ export async function importAnalyticsFileAction(myChannelId: string, _prev: Form
   if (!(f instanceof File) || !f.size) return { error: "Escolha um arquivo .md ou .txt." };
   if (f.size > 300_000) return { error: "Arquivo grande demais (máx. 300 KB)." };
   const text = (await f.text()).trim();
-  await prisma.myChannel.update({ where: { id: myChannelId }, data: { analyticsNotes: text } });
+  await prisma.myChannel.update({ where: { id: myChannelId }, data: { analytics: text, analyticsAt: new Date() } });
   refresh(myChannelId);
   return { ok: `Importado: ${f.name} (${text.length.toLocaleString("pt-BR")} caracteres).` };
 }

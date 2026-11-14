@@ -135,8 +135,17 @@ export function lineAt(lines: Line[], sec: number) {
 
 // ---------- Contexto do vídeo ----------
 
+/**
+ * Ideia do gerador ligada ao vídeo: a escolhida em "Meus vídeos" ou, senão, a marcada no Banco de ideias
+ * ("Virou vídeo no seu canal?").
+ */
+export async function linkedIdea(v: { myChannelId: string; externalId: string; inspiredIdeaId: string | null }) {
+  if (v.inspiredIdeaId) return prisma.idea.findUnique({ where: { id: v.inspiredIdeaId } });
+  return prisma.idea.findFirst({ where: { myChannelId: v.myChannelId, publishedVideo: { externalId: v.externalId } }, orderBy: { updatedAt: "desc" } });
+}
+
 async function loadMyVideo(myVideoId: string) {
-  return prisma.myVideo.findUniqueOrThrow({
+  const v = await prisma.myVideo.findUniqueOrThrow({
     where: { id: myVideoId },
     include: {
       myChannel: { include: { scripts: { select: { title: true, views: true, notes: true, url: true, script: true } } } },
@@ -145,6 +154,7 @@ async function loadMyVideo(myVideoId: string) {
       diagnoses: { orderBy: { createdAt: "desc" }, take: 3 },
     },
   });
+  return { ...v, inspiredIdea: v.inspiredIdea ?? (await linkedIdea(v)) };
 }
 type Loaded = Awaited<ReturnType<typeof loadMyVideo>>;
 
@@ -273,8 +283,8 @@ async function buildContext(v: Loaded) {
   }
   if (daily.length) L.push(``, `# VIEWS POR DIA (Analytics)`, daily.slice(-21).map((d) => `${d.day.slice(5)}: ${fmt(d.views)}`).join(" · "));
   if (v.studioNotes?.trim()) L.push(``, `# ANOTAÇÕES COLADAS DO YOUTUBE STUDIO`, cut(v.studioNotes.trim(), 2500));
-  if (v.myChannel.analyticsNotes?.trim())
-    L.push(``, `# NÚMEROS DO CANAL COLADOS (Studio ou relatório de outra ferramenta; procure este vídeo pelo título)`, cut(v.myChannel.analyticsNotes.trim(), 4000));
+  if (v.myChannel.analytics?.trim())
+    L.push(``, `# NÚMEROS DO CANAL COLADOS (Studio ou relatório de outra ferramenta; procure este vídeo pelo título)`, cut(v.myChannel.analytics.trim(), 4000));
 
   L.push(``, `# ROTEIRO${script ? ` (${script.source}; [s] = segundo)` : ""}`, script ? script.prompt : "(sem roteiro nem legenda: analise pelo título, thumbnail e números, e diga que falta o roteiro)");
 
@@ -485,7 +495,7 @@ async function reportPrompt(myChannelId: string) {
       if (d) L.push(`  diagnóstico (${fmtAge(v.diagnoses[0].ageHours)}): ${d.veredito} — ${cut(d.resumo, 300)} | lições: ${d.licoes.slice(0, 3).join("; ")}`);
     }
   }
-  if (c.analyticsNotes?.trim()) L.push(``, `# NÚMEROS DO CANAL COLADOS (Studio ou relatório de outra ferramenta)`, cut(c.analyticsNotes.trim(), 8000));
+  if (c.analytics?.trim()) L.push(``, `# NÚMEROS DO CANAL COLADOS (Studio ou relatório de outra ferramenta)`, cut(c.analytics.trim(), 8000));
   if (c.nicheId) {
     const pb = await latestPlaybook(c.nicheId, format);
     if (pb) L.push(``, `# CARTILHA DO NICHO (${pb.diagnosisCount} estudos)`, cut(pb.markdown ?? pb.content, 5000));
@@ -563,10 +573,4 @@ export async function learningsBlock(myChannelId: string): Promise<{ block: stri
     ].join("\n"),
     count,
   };
-}
-
-/** Títulos que o canal já publicou (todos os uploads lidos), para o gerador não repetir tema. */
-export async function publishedTitles(myChannelId: string) {
-  const vids = await prisma.myVideo.findMany({ where: { myChannelId, title: { not: null } }, select: { title: true }, orderBy: { publishedAt: "desc" }, take: 200 });
-  return vids.map((v) => v.title as string);
 }

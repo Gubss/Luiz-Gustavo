@@ -282,7 +282,7 @@ export default async function MyVideosPage({ searchParams }: { searchParams: Pro
         </div>
         <details className="rounded-lg border border-dashed border-zinc-700">
           <summary className="cursor-pointer px-3 py-2 text-sm">
-            Números colados do canal (Studio, Maestri/GPT){c.analyticsNotes ? ` · ${c.analyticsNotes.length.toLocaleString("pt-BR")} caracteres salvos` : ""}
+            Números colados do canal (Studio, Maestri/GPT){c.analytics ? ` · ${c.analytics.length.toLocaleString("pt-BR")} caracteres salvos` : ""}
           </summary>
           <div className="grid gap-4 border-t border-zinc-800 p-3 md:grid-cols-[2fr_1fr]">
             <StateForm action={saveAnalyticsNotesAction.bind(null, c.id)} label="Salvar" className="btn-secondary">
@@ -290,7 +290,7 @@ export default async function MyVideosPage({ searchParams }: { searchParams: Pro
                 name="analyticsNotes"
                 rows={6}
                 className="input font-mono text-xs"
-                defaultValue={c.analyticsNotes ?? ""}
+                defaultValue={c.analytics ?? ""}
                 placeholder={"Sem login do Google (ou para complementar), cole aqui os números do canal: por vídeo, views, % visto, continuaram assistindo, CTR…\nExemplo:\nPuxei um fiozinho — 21.000 views · continuaram assistindo 78% · % visto 92%\nVulcão na escola — 800 views · continuaram assistindo 55%"}
               />
             </StateForm>

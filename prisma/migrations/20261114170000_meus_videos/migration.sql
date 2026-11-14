@@ -90,18 +90,21 @@ CREATE TABLE "new_MyChannel" (
     "audience" TEXT,
     "rules" TEXT,
     "durationSec" INTEGER,
+    "catalogFetchedAt" DATETIME,
+    "analytics" TEXT,
+    "analyticsAt" DATETIME,
+    "profileImportedAt" DATETIME,
     "title" TEXT,
     "thumbnailUrl" TEXT,
     "subscriberCount" INTEGER,
     "uploadsPlaylistId" TEXT,
     "syncedAt" DATETIME,
     "autoDiagnose" BOOLEAN NOT NULL DEFAULT false,
-    "analyticsNotes" TEXT,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL,
     CONSTRAINT "MyChannel_nicheId_fkey" FOREIGN KEY ("nicheId") REFERENCES "Niche" ("id") ON DELETE SET NULL ON UPDATE CASCADE
 );
-INSERT INTO "new_MyChannel" ("audience", "characters", "concept", "createdAt", "durationSec", "externalId", "format", "id", "name", "nicheId", "notes", "oauthConnected", "platform", "platforms", "rules", "status", "storyFormats", "tone", "updatedAt", "url", "visualStyle") SELECT "audience", "characters", "concept", "createdAt", "durationSec", "externalId", "format", "id", "name", "nicheId", "notes", "oauthConnected", "platform", "platforms", "rules", "status", "storyFormats", "tone", "updatedAt", "url", "visualStyle" FROM "MyChannel";
+INSERT INTO "new_MyChannel" ("analytics", "analyticsAt", "audience", "catalogFetchedAt", "characters", "concept", "createdAt", "durationSec", "externalId", "format", "id", "name", "nicheId", "notes", "oauthConnected", "platform", "platforms", "profileImportedAt", "rules", "status", "storyFormats", "tone", "updatedAt", "url", "visualStyle") SELECT "analytics", "analyticsAt", "audience", "catalogFetchedAt", "characters", "concept", "createdAt", "durationSec", "externalId", "format", "id", "name", "nicheId", "notes", "oauthConnected", "platform", "platforms", "profileImportedAt", "rules", "status", "storyFormats", "tone", "updatedAt", "url", "visualStyle" FROM "MyChannel";
 DROP TABLE "MyChannel";
 ALTER TABLE "new_MyChannel" RENAME TO "MyChannel";
 PRAGMA foreign_keys=ON;

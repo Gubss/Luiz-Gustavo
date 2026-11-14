@@ -111,6 +111,12 @@ export async function syncUploads(myChannelId: string, opts: { full?: boolean } 
       },
       update: { myChannelId },
     });
+    // mesma lista que o gerador usa para não repetir tema (Meus canais → vídeos do canal)
+    await prisma.myChannelVideo.upsert({
+      where: { myChannelId_externalId: { myChannelId, externalId: i.id } },
+      create: { myChannelId, externalId: i.id, title: i.title, publishedAt: i.publishedAt },
+      update: { title: i.title },
+    });
   }
   await prisma.myChannel.update({ where: { id: myChannelId }, data: { syncedAt: new Date() } });
   return { found: items.length, added: fresh.length };
@@ -183,6 +189,10 @@ export async function refreshStats(videos: MyVideo[]) {
         commentCount: st.comments,
         statsFetchedAt: now,
       },
+    });
+    await prisma.myChannelVideo.updateMany({
+      where: { myChannelId: v.myChannelId, externalId: v.externalId },
+      data: { title: y.snippet.title, viewCount: st.views, durationSec, isShort },
     });
     const age = ageHours(publishedAt, now) ?? 0;
     if (age <= TRACK_DAYS * 24) {

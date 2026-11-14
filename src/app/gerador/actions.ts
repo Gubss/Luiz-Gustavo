@@ -71,6 +71,37 @@ export async function saveIdeaNotes(ideaId: string, _prev: FormState, fd: FormDa
   return { ok: "Anotação salva." };
 }
 
+/** Apaga a ideia sem sair da lista. */
+export async function deleteIdeaInline(ideaId: string) {
+  await prisma.idea.delete({ where: { id: ideaId } });
+  refresh();
+}
+
+/** Liga a ideia ao vídeo do meu canal em que ela virou (escolhido na lista ou pelo link) e marca como publicada. */
+export async function linkPublishedAction(ideaId: string, _prev: FormState, fd: FormData): Promise<FormState> {
+  const idea = await prisma.idea.findUniqueOrThrow({ where: { id: ideaId }, select: { myChannelId: true } });
+  if (!idea.myChannelId) return { error: "Essa ideia não está ligada a um canal seu." };
+  let videoId = String(fd.get("videoId") ?? "");
+  const link = String(fd.get("link") ?? "").trim();
+  if (link) {
+    const ext = link.match(/(?:v=|youtu\.be\/|shorts\/|embed\/|live\/)([\w-]{11})/)?.[1] ?? (/^[\w-]{11}$/.test(link) ? link : null);
+    if (!ext) return { error: "Não reconheci o link do vídeo." };
+    const v = await prisma.myChannelVideo.findUnique({ where: { myChannelId_externalId: { myChannelId: idea.myChannelId, externalId: ext } } });
+    if (!v) return { error: "Esse vídeo ainda não está na lista do seu canal. No perfil do canal, clique em “Ler de novo” e tente outra vez." };
+    videoId = v.id;
+  }
+  if (!videoId) return { error: "Escolha o vídeo na lista ou cole o link." };
+  await prisma.idea.update({ where: { id: ideaId }, data: { publishedVideoId: videoId, status: "PUBLISHED" } });
+  refresh(ideaId);
+  return { ok: "Marcada como publicada." };
+}
+
+export async function unlinkPublishedAction(ideaId: string) {
+  const idea = await prisma.idea.findUniqueOrThrow({ where: { id: ideaId }, select: { script: true } });
+  await prisma.idea.update({ where: { id: ideaId }, data: { publishedVideoId: null, status: idea.script ? "SCRIPT" : "IDEA" } });
+  refresh(ideaId);
+}
+
 export async function deleteIdea(ideaId: string) {
   await prisma.idea.delete({ where: { id: ideaId } });
   refresh();

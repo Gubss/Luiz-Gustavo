@@ -262,8 +262,9 @@ test("meus vídeos: lê o canal, acompanha marcos, Analytics, diagnóstico e li�
   assert.ok(ctx.learnings >= 2);
 
   // Títulos já publicados entram na lista de "não repita" (o caso da tampa da caneta).
-  const titles = await md.publishedTitles(ch.id);
-  assert.ok(titles.includes("Por que a tampa da caneta tem um furo?"));
+  const { ownItems } = await import("../src/lib/my-catalog");
+  const own = await ownItems(ch.id);
+  assert.ok(own.some((i) => i.title === "Por que a tampa da caneta tem um furo?" && i.source === "vídeo publicado"));
 
   // 8) Atualização mais tarde: views sobem e o marco de 24h do vulcão é medido.
   views = { ...views, vulcao00000: 900 };

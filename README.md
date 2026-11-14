@@ -148,19 +148,49 @@ têm cartilhas separadas.
    e hashtags. As **medidas do roteiro** (duração, palavras/s, tamanho das cenas, onde o gancho termina) são
    calculadas em código e comparadas com a mediana da cartilha.
 
+**O que o seu canal já fez:** no perfil, *Ler os vídeos do meu canal* lê do YouTube todos os vídeos publicados
+(pela URL do canal; ~1 unidade + 2 a cada 50 vídeos). O gerador recebe esses títulos, os roteiros cadastrados e as ideias
+do banco e não repete o tema, mesmo que o vídeo antigo seja de outro estilo (ex.: 2D). Além disso, cada ideia é conferida
+em código e ganha o aviso "⚠ Seu canal já fez algo parecido" com o vídeo/roteiro/ideia parecido. Repetir um tema que deu
+certo em outros canais pode; repetir o que o próprio canal já contou, não.
+
+**Seus vídeos × cartilha:** estude um vídeo seu pelo link (*Estudos de vídeo*) com *Estudar tudo*. A página do vídeo
+mostra "Comparado com a cartilha" (grátis, em código): duração, palavras/s, abertura, algo novo a cada X s, fecho e
+título, dentro ou fora da faixa dos estudos. Vídeos dos seus canais nunca entram na cartilha (ela é só das referências).
+
 A regra central do gerador: da cartilha e da referência ele usa só o **como** (tipo de gancho, fórmula de título,
 ritmo, virada, fecho); o **o quê** (personagens, cenário, tom, formato de história) vem sempre do perfil do canal.
 Sem cartilha ainda, usa até 5 estudos direto; sem nicho, usa só o perfil.
 O **Banco de ideias** guarda tudo com status (ideia, roteiro pronto, produzido, publicado, descartada) e mostra
 títulos parecidos já feitos pelos canais monitorados (checagem grátis no catálogo).
 
+**Banco de ideias:** cada cartão tem *Apagar*. Na página da ideia, *Virou vídeo no seu canal?* liga a ideia ao vídeo
+publicado (lista do canal, com os mais parecidos primeiro, ou pelo link): a ideia fica "Publicado", mostra as views e o
+gerador não repete o tema.
+
+**Perfil pelo GPT do Maestri (.md):** no perfil, *Baixar o pedido para o GPT (.md)* gera o arquivo
+[`docs/prompt-perfil-canal.md`](docs/prompt-perfil-canal.md) com o nome e a URL do canal. Cole no GPT do Maestri que conhece
+o canal; ele devolve o perfil num modelo fixo (títulos `##` que o app procura, roteiros publicados em `### Roteiro:` e,
+se tiver, os números do YouTube Studio/TikTok). Salve a resposta como .md (ou copie) e use *Importar*: o app mostra a
+**prévia** (campo a campo, roteiros e avisos de títulos que não reconheceu) e só grava quando você confirma. Campo vazio
+ou `-` mantém o que já estava; roteiro com o mesmo título é atualizado. O campo **Números do canal** guarda os analytics
+colados com a data (o gerador lê). Com o login do Google (etapa 7, *Meus vídeos*) os números de cada vídeo vêm sozinhos do YouTube Analytics.
+
+**Roteiro para o Maestri:** na página da ideia, *Baixar roteiro (.md) para o Maestri* baixa o roteiro cena a cena com
+um bloco de referência do canal (personagens, estilo visual, tom, sempre/nunca).
+
+## Ordem do menu
+
+O menu é numerado na ordem de uso: 1 Meus canais → 2 Nichos e canais → 3 Descobrir canais → 4 Radar (e Favoritos) →
+5 Estudos de vídeo → 6 Cartilha → 7 Gerador → 8 Banco de ideias → 9 Meus vídeos.
+
 ## Meus vídeos (etapa 7)
 
 Menu **Meus vídeos**. Para cada canal seu (cadastrado em *Meus canais*):
 
 1. **Ligar ao YouTube** — cole o link do canal (ou entre com o Google, que liga sozinho). Na primeira vez o app lê todos os
-   vídeos do canal (até 500; 1 unidade de cota a cada 50). Os títulos entram na lista de "não repita" do gerador: ele não
-   sugere de novo um tema que o canal já publicou.
+   vídeos do canal (até 500; 1 unidade de cota a cada 50). Vídeo novo também entra na lista de vídeos do canal que o
+   gerador usa para não repetir tema.
 2. **Acompanhamento** — com o app aberto, a cada 5 minutos ele confere o que está na hora: vídeo novo (lista de uploads a cada
    20 min), vídeos com menos de 12h a cada 15 min, até 4 dias de hora em hora, até 30 dias a cada 6h. Guarda os números em
    **marcos**: 1h, 3h, 6h, 12h, 24h, 48h, 3 dias, 7 dias, 14 dias e 28 dias (vale a medição mais perto da idade, dentro de ±25%;
@@ -181,7 +211,8 @@ Menu **Meus vídeos**. Para cada canal seu (cadastrado em *Meus canais*):
 7. **Diagnóstico automático** (caixinha, desligado por padrão) — faz sozinho o diagnóstico de cada vídeo novo com 24h, 3 dias e 7 dias,
    e o do canal 1 vez por semana. No máximo 6 por dia.
 8. **Sem login do Google** — cole os números do Studio em cada marco, escreva anotações no vídeo ou cole/importe um arquivo `.md`/`.txt`
-   com os números do canal (ex.: o relatório que o GPT do Maestri gera) em *Números colados do canal*. Os diagnósticos leem tudo isso.
+   com os números do canal (ex.: o relatório que o GPT do Maestri gera) em *Números colados do canal* (é o mesmo campo
+   "Números do canal" do perfil). Os diagnósticos leem tudo isso.
 
 **O ciclo:** estudos → cartilha → gerador → vídeo publicado → diagnóstico → lições. O gerador lê as lições do último diagnóstico do
 canal e dos diagnósticos de vídeo feitos depois dele ("Aprendizados dos meus vídeos"), e elas valem mais que a cartilha quando as duas

@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db";
 import { fmtDateTime, fmtInt } from "@/lib/format";
 import { TRAFFIC_LABEL, type DailyPoint, type RetentionPoint, type TrafficPoint, type VideoAnalytics } from "@/lib/google";
 import { ageHours, channelPeers, checkpointLabel, checkpointTolerance, CHECKPOINTS, fmtAge } from "@/lib/my-videos";
-import { estimateMyDiagnosis, lineAt, scriptTimeline, summarizeRetention, type MyDiagnosisContent } from "@/lib/my-diagnosis";
+import { estimateMyDiagnosis, lineAt, linkedIdea, scriptTimeline, summarizeRetention, type MyDiagnosisContent } from "@/lib/my-diagnosis";
 import { runningJobsFor } from "@/lib/jobs";
 import { RunningNote } from "@/components/RunningNote";
 import { StateForm } from "@/components/StateForm";
@@ -174,7 +174,8 @@ export default async function MyVideoPage({ params }: { params: Promise<{ id: st
   const ret = summarizeRetention(curve, v.durationSec);
   const traffic = parse<TrafficPoint[]>(v.trafficSources) ?? [];
   const daily = parse<DailyPoint[]>(v.dailyViews) ?? [];
-  const script = scriptTimeline(v, v.inspiredIdea);
+  const idea = v.inspiredIdea ?? (await linkedIdea(v));
+  const script = scriptTimeline(v, idea);
   const ratio = peers.baseMedian && v.viewCount != null ? v.viewCount / peers.baseMedian : null;
   const cps = CHECKPOINTS.filter((h) => h <= age + checkpointTolerance(h));
   const latest = v.diagnoses[0];
@@ -509,7 +510,7 @@ export default async function MyVideoPage({ params }: { params: Promise<{ id: st
         <StateForm action={saveScriptAction.bind(null, v.id)} label="Salvar roteiro" className="btn-secondary">
           <div>
             <label className="label">Veio do Gerador? Escolha a ideia</label>
-            <select name="ideaId" className="input" defaultValue={v.inspiredIdeaId ?? ""}>
+            <select name="ideaId" className="input" defaultValue={idea?.id ?? ""}>
               <option value="">— não veio do gerador —</option>
               {ideas.map((i) => (
                 <option key={i.id} value={i.id}>

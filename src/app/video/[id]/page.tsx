@@ -22,6 +22,8 @@ import {
 import { ActionButton, PasteTranscriptForm } from "./forms";
 import { runningJobsFor } from "@/lib/jobs";
 import { RunningNote } from "@/components/RunningNote";
+import { CompareWithPlaybook } from "@/components/CompareWithPlaybook";
+import { latestPlaybook, type PlaybookStats } from "@/lib/playbook";
 
 const ts = (s: number) => {
   const h = Math.floor(s / 3600);
@@ -350,6 +352,20 @@ export default async function VideoStudyPage({ params }: PageProps<"/video/[id]"
   const transcriptNewer = !!(v.transcript && diag?.diagnosedAt && v.transcript.updatedAt > diag.diagnosedAt);
   const metrics = savedMetrics && !transcriptNewer ? savedMetrics : liveMetrics;
   const comments = parse<CommentsAnalysis>(diag?.commentsAnalysis);
+
+  // Vídeo de um canal meu? (para comparar com a cartilha e não misturar nas referências)
+  const myChannel = await prisma.myChannel.findFirst({ where: { externalId: v.channel.externalId }, select: { id: true, name: true, nicheId: true } });
+  const cmpNicheIds = [...new Set([...channelNiches.map((n) => n.id), v.studyNicheId, myChannel?.nicheId].filter((x): x is string => !!x))];
+  let cmp: { st: PlaybookStats; nicheName: string; href: string } | null = null;
+  for (const nid of cmpNicheIds) {
+    const pb = await latestPlaybook(nid, v.isShort ? "short" : "long");
+    const st = parse<PlaybookStats>(pb?.stats);
+    if (pb && st) {
+      const nn = await prisma.niche.findUnique({ where: { id: nid }, select: { name: true } });
+      cmp = { st, nicheName: nn?.name ?? "", href: `/cartilha?niche=${nid}&format=${v.isShort ? "short" : "long"}` };
+      break;
+    }
+  }
   const rawComments = parse<RawComment[]>(diag?.commentsRaw) ?? [];
   const [diagEst, comEst, jobs] = await Promise.all([estimateDiagnosis(v.id), estimateComments(v.id), runningJobsFor([v.id])]);
   const studyJob = jobs.find((j) => j.kind === "study");
@@ -395,6 +411,12 @@ export default async function VideoStudyPage({ params }: PageProps<"/video/[id]"
               Abrir no YouTube ↗
             </a>
           </div>
+          {myChannel && (
+            <p className="rounded-lg border border-sky-800 bg-sky-950/40 p-2 text-sm text-sky-200">
+              Este vídeo é do seu canal <Link href={`/meus-canais/${myChannel.id}`} className="underline">{myChannel.name}</Link>. Estude normalmente;
+              deixe &ldquo;Entra na cartilha&rdquo; em <b>nenhum nicho</b> para a cartilha continuar sendo só das referências.
+            </p>
+          )}
           <div className="text-sm text-zinc-400">
             {channelNiches.length ? (
               <>
@@ -451,6 +473,12 @@ export default async function VideoStudyPage({ params }: PageProps<"/video/[id]"
       </header>
 
       {/* 1. Transcrição */}
+      {cmp && metrics && (
+        <section className="card space-y-3 p-5">
+          <h2 className="text-lg font-semibold">Comparado com a cartilha</h2>
+          <CompareWithPlaybook m={metrics} st={cmp.st} nicheName={cmp.nicheName} href={cmp.href} own={!!myChannel} />
+        </section>
+      )}
       <Section
         n={1}
         title="Transcrição"
