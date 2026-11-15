@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { usdToBrl } from "@/lib/claude";
-import { generateIdeas, generateScript, IDEA_STATUS, NO_RECIPE_MSG, revisionDefaults, scriptMissingRecipe, type IdeasRequest, type ScriptMode } from "@/lib/generator";
+import { correctScript, requestCritique, generateIdeas, generateScript, IDEA_STATUS, NO_RECIPE_MSG, revisionDefaults, scriptMissingRecipe, type IdeasRequest, type ScriptMode } from "@/lib/generator";
+import { captureLegacyVersion, approveVersion, restoreVersion } from "@/lib/script-versions";
 import { startJob } from "@/lib/jobs";
 import { returnPoints } from "@/lib/speech";
 import type { FormState } from "@/app/video/actions";
@@ -44,13 +45,7 @@ function startScriptJob(ideaId: string, label: string, title: string, extra: str
     { kind: "script", targetId: ideaId, label: `${mode === "corrigir" ? "Correção do roteiro" : "Roteiro"}: ${label}`, href: `/ideias/${ideaId}`, expectedSec: 150 },
     async () => {
       const r = await generateScript(ideaId, { title, extra, mode, noRecipeOk });
-      const rv = r.review;
-      const check = rv.error
-        ? " A leitura de espectador falhou; confira o roteiro com atenção."
-        : rv.rewritten
-          ? ` A leitura de espectador achou ${rv.points.length} ${rv.points.length === 1 ? "ponto" : "pontos"} e o roteiro foi reescrito uma vez.`
-          : ` Passou na leitura de espectador (${rv.laughs} risadas).`;
-      return `${r.mode === "corrigir" ? "Roteiro corrigido: " : ""}${r.metrics.scenes} cenas, ~${r.metrics.durationSec}s.${check} Custo: ${money(r.costUsd)}.`;
+      return `Versão ${r.version.number} salva; duração estimada ${r.data.duracaoSeg}s. Custo: ${money(r.costUsd)}.`;
     },
   );
 }
@@ -212,13 +207,11 @@ export async function returnIdeaAction(ideaId: string, _prev: FormState, fd: For
         returnNotes: [idea.returnNotes, `Devolução de ${stamp}:\n${raw}`].filter(Boolean).join("\n\n"),
       },
     }),
-    ...points.map((text) =>
-      prisma.channelLesson.create({ data: { myChannelId: idea.myChannelId!, ideaId, formatId: idea.formatId, text: text.slice(0, 1000) } }),
-    ),
+
   ]);
   refresh(ideaId);
   revalidatePath(`/meus-canais/${idea.myChannelId}`);
-  return { ok: `${points.length} ${points.length === 1 ? "ponto virou aprendizado" : "pontos viraram aprendizado"} do canal. A ideia ficou como devolvida.` };
+  return { ok: "Devolução registrada no projeto. Não virou regra do canal." };
 }
 
 export async function deleteLessonAction(lessonId: string) {
@@ -226,3 +219,19 @@ export async function deleteLessonAction(lessonId: string) {
   if (l.ideaId) refresh(l.ideaId);
   revalidatePath(`/meus-canais/${l.myChannelId}`);
 }
+
+export async function correctScriptAction(ideaId:string,_prev:FormState,fd:FormData):Promise<FormState> {
+ try { const versionId=String(fd.get("versionId")??""); const line=Number(fd.get("line")); const request=String(fd.get("request")??""); const category=String(fd.get("category")??"");
+ await startJob({kind:"script",targetId:ideaId,label:"Correção de fala",href:"/ideias/"+ideaId,expectedSec:60},async()=>{const v=await correctScript(ideaId,versionId,line,request,category);return "Versão "+v.number+" salva; demais falas preservadas.";}); refresh(ideaId);return {ok:BACKGROUND_OK}; } catch(e){return {error:errMsg(e)}}
+}
+export async function critiqueAction(ideaId:string,_prev:FormState,fd:FormData):Promise<FormState> {
+ try {const versionId=String(fd.get("versionId")??"");await startJob({kind:"script",targetId:ideaId,label:"Crítica opcional",href:"/ideias/"+ideaId,expectedSec:45},async()=>{const r=await requestCritique(ideaId,versionId);return "Crítica registrada, sem alterar o roteiro. Custo: "+money(r.costUsd);});refresh(ideaId);return {ok:BACKGROUND_OK};} catch(e){return {error:errMsg(e)}}
+}
+export async function approveAction(ideaId:string,_prev:FormState,fd:FormData):Promise<FormState> {
+ try{await approveVersion(ideaId,String(fd.get("versionId")??""));refresh(ideaId);return {ok:"Esta versão das falas foi aprovada."}}catch(e){return {error:errMsg(e)}}
+}
+export async function restoreAction(ideaId:string,_prev:FormState,fd:FormData):Promise<FormState> {
+ try{await restoreVersion(ideaId,String(fd.get("versionId")??""),String(fd.get("currentVersionId")??"")||null);refresh(ideaId);return {ok:"Restaurada como nova versão; histórico preservado."}}catch(e){return {error:errMsg(e)}}
+}
+
+export async function captureLegacyAction(ideaId:string,_prev:FormState):Promise<FormState>{void _prev;try{await captureLegacyVersion(ideaId);refresh(ideaId);return {ok:"Roteiro preservado como versão legada, ainda sem aprovação."}}catch(e){return {error:errMsg(e)}}}
