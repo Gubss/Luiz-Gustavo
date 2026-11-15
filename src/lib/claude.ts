@@ -42,6 +42,34 @@ export function estimateCost(model: string, inputText: string, outputTypical: nu
   };
 }
 
+/**
+ * Faixa de custo pelo histórico real: a saída típica é a média das últimas chamadas que terminaram inteiras
+ * (com raciocínio adaptativo, o raciocínio conta como saída e varia muito); o teto é o limite de saída da chamada.
+ * Sem histórico, usa a saída típica informada.
+ */
+export function estimateFromHistory(
+  model: string,
+  inputText: string,
+  history: number[],
+  opts: { fallbackTypical: number; maxTokens: number },
+): CostEstimate & { basedOn: number } {
+  const recent = history.filter((n) => n > 0);
+  const typical = recent.length ? Math.round(recent.reduce((a, n) => a + n, 0) / recent.length) : opts.fallbackTypical;
+  const est = estimateCost(model, inputText, Math.min(typical, opts.maxTokens), opts.maxTokens);
+  return { ...est, basedOn: recent.length };
+}
+
+/** Tokens de saída das últimas chamadas de um tipo que terminaram inteiras (as cortadas no limite não contam). */
+export async function recentOutputTokens(kind: string, take = 3): Promise<number[]> {
+  const rows = await prisma.generation.findMany({
+    where: { kind, outputTokens: { gt: 0 }, NOT: { output: { contains: '"stop_reason":"max_tokens"' } } },
+    orderBy: { createdAt: "desc" },
+    take,
+    select: { outputTokens: true },
+  });
+  return rows.map((r) => r.outputTokens ?? 0);
+}
+
 export class ClaudeError extends Error {}
 
 let cached: { key: string; client: Anthropic } | null = null;

@@ -4,7 +4,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { execSync } from "node:child_process";
+import { execFileSync, execSync } from "node:child_process";
 import { existsSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -174,9 +174,10 @@ test("cópia de segurança: gera um banco íntegro e guarda só as 10 mais novas
   assert.equal(await backupIfDue(), null, "a de agora é nova: não faz outra");
 
   // a cópia abre e tem os dados (lê com o próprio Prisma apontando para ela)
-  const out = execSync(`node -e "const {PrismaClient}=require('@prisma/client');const p=new PrismaClient({datasources:{db:{url:'file:${b.path.replace(/\\/g, "/")}'}}});p.quotaLog.count().then(n=>{console.log(n);return p.\\$disconnect()})"`, {
-    encoding: "utf8",
-  });
+  // Sem shell no meio (execFileSync): o código vai como argumento, igual no Windows e no Linux.
+  const url = JSON.stringify(`file:${b.path.replace(/\\/g, "/")}`);
+  const code = `const {PrismaClient}=require('@prisma/client');const p=new PrismaClient({datasources:{db:{url:${url}}}});p.quotaLog.count().then(n=>{console.log(n);return p.$disconnect()})`;
+  const out = execFileSync(process.execPath, ["-e", code], { encoding: "utf8" });
   assert.ok(Number(out.trim()) >= 4);
   rmSync(BACKUPS, { recursive: true, force: true });
 });

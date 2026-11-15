@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { usdToBrl } from "@/lib/claude";
-import { generateIdeas, generateScript, IDEA_STATUS, type IdeasRequest } from "@/lib/generator";
+import { generateIdeas, generateScript, IDEA_STATUS, revisionDefaults, type IdeasRequest, type ScriptMode } from "@/lib/generator";
 import { startJob } from "@/lib/jobs";
 import { returnPoints } from "@/lib/speech";
 import type { FormState } from "@/app/video/actions";
@@ -39,12 +39,12 @@ export async function generateIdeasAction(req: Omit<IdeasRequest, "ponto">, _pre
   }
 }
 
-function startScriptJob(ideaId: string, label: string, title: string, extra: string) {
+function startScriptJob(ideaId: string, label: string, title: string, extra: string, mode?: ScriptMode) {
   return startJob(
-    { kind: "script", targetId: ideaId, label: `Roteiro: ${label}`, href: `/ideias/${ideaId}`, expectedSec: 90 },
+    { kind: "script", targetId: ideaId, label: `${mode === "corrigir" ? "Correção do roteiro" : "Roteiro"}: ${label}`, href: `/ideias/${ideaId}`, expectedSec: 90 },
     async () => {
-      const r = await generateScript(ideaId, { title, extra });
-      return `${r.metrics.scenes} cenas, ~${r.metrics.durationSec}s. Custo: ${money(r.costUsd)}.`;
+      const r = await generateScript(ideaId, { title, extra, mode });
+      return `${r.mode === "corrigir" ? "Roteiro corrigido: " : ""}${r.metrics.scenes} cenas, ~${r.metrics.durationSec}s. Custo: ${money(r.costUsd)}.`;
     },
   );
 }
@@ -58,7 +58,15 @@ const pickedTitle = (fd: FormData) => {
 export async function generateScriptAction(ideaId: string, _prev: FormState, fd: FormData): Promise<FormState> {
   try {
     const idea = await prisma.idea.findUniqueOrThrow({ where: { id: ideaId }, select: { theme: true, chosenTitle: true } });
-    await startScriptJob(ideaId, idea.chosenTitle || idea.theme, pickedTitle(fd), String(fd.get("extra") ?? ""));
+    const m = String(fd.get("mode") ?? "");
+    const mode: ScriptMode | undefined = m === "corrigir" || m === "nova" ? m : undefined;
+    const extra = String(fd.get("extra") ?? "");
+    if (mode === "corrigir" && !extra.trim()) {
+      const full = await prisma.idea.findUniqueOrThrow({ where: { id: ideaId }, select: { status: true, scriptData: true, returnNotes: true } });
+      if (!revisionDefaults(full).pendingReturn)
+        return { error: "Para corrigir o roteiro, diga no pedido extra o que mudar (ou registre a devolução do Estúdio). Para recomeçar, escolha “história nova”." };
+    }
+    await startScriptJob(ideaId, idea.chosenTitle || idea.theme, pickedTitle(fd), extra, mode);
     refresh(ideaId);
     return { ok: BACKGROUND_OK };
   } catch (e) {
@@ -162,7 +170,7 @@ export async function regenerateWithFormatAction(ideaId: string, _prev: FormStat
   try {
     const f = await assignFormat(ideaId, formatId);
     const idea = await prisma.idea.findUniqueOrThrow({ where: { id: ideaId }, select: { theme: true, chosenTitle: true } });
-    await startScriptJob(ideaId, idea.chosenTitle || idea.theme, pickedTitle(fd), String(fd.get("extra") ?? ""));
+    await startScriptJob(ideaId, idea.chosenTitle || idea.theme, pickedTitle(fd), String(fd.get("extra") ?? ""), "nova");
     refresh(ideaId);
     return { ok: `Formato: ${f.name}. ${BACKGROUND_OK}` };
   } catch (e) {
