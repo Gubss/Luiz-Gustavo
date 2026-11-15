@@ -209,6 +209,7 @@ model MyChannelVideo {
 
 /// Roteiros que o canal já publicou (ou escreveu): exemplos da voz e do formato do canal para o gerador.
 model MyChannelScript {
+  integrity String @default("unknown") // complete | truncated | unknown
   id          String   @id @default(cuid())
   myChannelId String
   title       String
@@ -595,6 +596,14 @@ model ChannelLesson {
 
 /// Status: IDEA | SCRIPT | RETURNED | PRODUCED | PUBLISHED | DISCARDED. Format: short | long (tamanho, não a receita)
 model Idea {
+  projectCode String?
+  currentVersionId String? @unique
+  approvedVersionId String? @unique
+  approvedAt DateTime?
+  currentVersion ScriptVersion? @relation("CurrentVersion", fields: [currentVersionId], references: [id], onDelete: SetNull)
+  approvedVersion ScriptVersion? @relation("ApprovedVersion", fields: [approvedVersionId], references: [id], onDelete: SetNull)
+  versions ScriptVersion[] @relation("IdeaVersions")
+  @@unique([myChannelId, projectCode])
   id               String    @id @default(cuid())
   nicheId          String?
   myChannelId      String?
@@ -637,6 +646,8 @@ model Idea {
 
 /// Registro bruto de cada chamada ao Claude (auditoria, reaproveitamento e controle de gasto).
 model Generation {
+  scriptVersionId String?
+  scriptVersion ScriptVersion? @relation(fields: [scriptVersionId], references: [id], onDelete: SetNull)
   id           String   @id @default(cuid())
   kind         String // "diagnosis" | "comments" | "ideas" | "script" | "playbook" | ...
   model        String
@@ -822,4 +833,26 @@ model Job {
 
   @@index([status])
   @@index([kind, targetId])
+}
+
+/// Immutable snapshots; restoration appends a new version. Approval belongs to Idea.
+model ScriptVersion {
+ id String @id @default(cuid())
+ ideaId String
+ number Int
+ baseVersionId String?
+ content String
+ markdown String
+ request String?
+ category String
+ origin String
+ author String
+ createdAt DateTime @default(now())
+ idea Idea @relation("IdeaVersions", fields: [ideaId], references: [id], onDelete: Restrict)
+ baseVersion ScriptVersion? @relation("VersionBase", fields: [baseVersionId], references: [id], onDelete: Restrict)
+ descendants ScriptVersion[] @relation("VersionBase")
+ currentFor Idea? @relation("CurrentVersion")
+ approvedFor Idea? @relation("ApprovedVersion")
+ generations Generation[]
+ @@unique([ideaId, number])
 }
