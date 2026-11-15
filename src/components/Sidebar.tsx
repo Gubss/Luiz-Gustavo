@@ -48,14 +48,14 @@ export function Sidebar({ quotaUsed, quotaLimit }: { quotaUsed: number; quotaLim
   const path = usePathname();
   const pct = Math.min(100, (quotaUsed / quotaLimit) * 100);
   return (
-    <aside className="sticky top-0 flex h-screen w-56 shrink-0 flex-col border-r border-line bg-ink px-3 py-5">
-      <Link href="/radar" className="mb-6 flex items-center gap-2 px-2">
+    <aside className="flex w-full shrink-0 flex-col border-b border-line bg-ink px-3 py-3 md:sticky md:top-0 md:h-screen md:w-56 md:border-r md:py-5">
+      <Link href="/radar" className="mb-3 flex items-center gap-2 px-2">
         <span className="grid h-7 w-7 place-items-center rounded-md bg-red-600 text-sm font-black">▶</span>
         <span className="text-lg font-bold tracking-tight">YouTube Radar</span>
       </Link>
-      <nav className="flex flex-1 flex-col gap-4 overflow-y-auto">
+      <nav className="flex flex-1 gap-4 overflow-x-auto md:flex-col md:overflow-y-auto">
         {NAV.map((g) => (
-          <div key={g.group}>
+          <div key={g.group} className="shrink-0">
             <div className="mb-1 px-3 text-[11px] font-medium text-zinc-600">{g.group}</div>
             <div className="flex flex-col gap-0.5">
               {g.items.map((item) => {

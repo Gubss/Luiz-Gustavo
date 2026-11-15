@@ -18,9 +18,9 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
   const [settings, used] = await Promise.all([getSettings(), quotaUsedToday()]);
   return (
     <html lang="pt-BR" className="h-full antialiased">
-      <body className="flex min-h-full">
+      <body className="flex min-h-full flex-col md:flex-row">
         <Sidebar quotaUsed={used} quotaLimit={settings.dailyQuota} />
-        <main className="min-w-0 flex-1 px-8 py-6">{children}</main>
+        <main className="min-w-0 flex-1 px-4 py-5 md:px-8 md:py-6">{children}</main>
         <AutoCollect />
         <JobsWatcher />
       </body>

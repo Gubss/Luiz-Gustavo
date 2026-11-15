@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Collapsible } from "@/components/ui";
-import { ClampText } from "@/components/ui-client";
+import { CopyScript, FlowSteps, OpenSection, ReturnInput, WorkSection } from "@/components/workflow";
+import { ClampText, Menu } from "@/components/ui-client";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { fmtDateTime } from "@/lib/format";
@@ -248,7 +249,7 @@ function ScriptView({ c, formatName }: { c: ScriptContent; formatName?: string |
         title={hasOrigin ? "Checklist do formato e da regra geral, fatos para conferir" : "Checklist, fatos para conferir e como a cartilha virou cena"}
         meta={`${c.checklist.filter((x) => x.ok).length} de ${c.checklist.length} itens ok${c.conferirFatos.length ? ` · ${c.conferirFatos.length} fatos para conferir` : ""}`}
         className="rounded-lg border border-line p-4"
-        open={c.checklist.some((x) => !x.ok) || c.conferirFatos.length > 0}
+        
       >
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-4">
@@ -344,13 +345,14 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
   const pending = sd ? scriptPending(sd) : null;
   const allTitles = [...new Set([...(idea.chosenTitle ? [idea.chosenTitle] : []), ...titles])];
   const rev = revisionDefaults(idea);
+  const currentStep = idea.publishedVideo || idea.status === "PUBLISHED" ? 7 : idea.status === "PRODUCED" ? 6 : idea.status === "RETURNED" ? 4 : sd ? 5 : 4;
   const scriptForm = est ? (
             <StateForm
               action={generateScriptAction.bind(null, idea.id)}
-              label={sd ? "Escrever de novo" : "Escrever roteiro"}
+              label={rev.defaultMode === "corrigir" ? "Corrigir roteiro" : sd ? "Escrever história nova" : "Escrever roteiro"}
               busy="Começando…"
               hint={`${estimateHint(est)}${est.basedOn ? ` · pela média ${est.basedOn === 1 ? "do último roteiro" : `dos últimos ${est.basedOn} roteiros`}` : ""}${rev.defaultMode === "corrigir" ? " · corrigindo" : ""} · roda em segundo plano (até 3 min)`}
-              className={sd ? "btn-secondary" : "btn-primary"}
+              className="btn-primary"
             >
               {rev.canRevise && (
                 <div>
@@ -359,7 +361,7 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
                     <label className="flex items-start gap-2">
                       <input type="radio" name="mode" value="corrigir" defaultChecked={rev.defaultMode === "corrigir"} className="mt-1" />
                       <span>
-                        Corrigir só os pontos {rev.pendingReturn ? "da devolução" : "do pedido extra"} e manter o resto
+                        Corrigir roteiro
                         <span className="block text-xs text-zinc-500">mesma história, mesmas cenas e falas onde nada foi apontado</span>
                       </span>
                     </label>
@@ -393,7 +395,7 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
   ) : null;
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="mx-auto max-w-6xl space-y-4">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <Link href={idea.myChannelId ? `/ideias?canal=${idea.myChannelId}` : "/ideias"} className="text-xs text-zinc-500 hover:text-zinc-300">
@@ -401,7 +403,7 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
           </Link>
           <h1 className="text-2xl font-semibold tracking-tight">{idea.chosenTitle || titles[0] || idea.theme}</h1>
           <p className="text-sm text-zinc-400">
-            {idea.theme} · {idea.myChannel ? <Link href={`/meus-canais/${idea.myChannel.id}`} className="hover:underline">{idea.myChannel.name}</Link> : "sem canal"} ·{" "}
+            {idea.myChannel ? <Link href={`/meus-canais/${idea.myChannel.id}`} className="hover:underline">{idea.myChannel.name}</Link> : "sem canal"} ·{" "}
             {idea.format === "long" ? "vídeo longo" : "Short"} · criada {fmtDateTime(idea.createdAt)}
             {idea.niche && ` · nicho ${idea.niche.name}`}
           </p>
@@ -424,13 +426,19 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
         </div>
         <div className="flex items-center gap-2">
           <StatusBadge status={idea.status} />
-          <IdeaStatusSelect action={setIdeaStatus.bind(null, idea.id)} value={idea.status} />
+          <Menu><div className="p-2"><label className="label">Alterar estado</label><IdeaStatusSelect action={setIdeaStatus.bind(null, idea.id)} value={idea.status} /></div></Menu>
         </div>
       </header>
 
+      <FlowSteps current={currentStep} referenceDone={refs.length > 0} />
+      <div className="flex flex-wrap gap-3 text-xs text-zinc-400">
+        <span className="card px-3 py-2">Custo do roteiro <strong className="ml-2 text-zinc-200">{usd(idea.scriptCostUsd)}</strong></span>
+        <span className="card px-3 py-2">Etapa atual <strong className="ml-2 text-zinc-200">{currentStep} de 7</strong></span>
+      </div>
+
       {/* A ideia */}
-      <section className="card space-y-4 p-5 text-sm">
-        <h2 className="text-lg font-semibold">A ideia</h2>
+      <WorkSection id="ideia" title="3 · Ideia">
+        
         {!idea.publishedVideo && <RepeatWarning repeats={repeats} />}
         {d ? (
           <>
@@ -494,12 +502,12 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
             </ul>
           )}
         </Collapsible>
-      </section>
+      </WorkSection>
 
       {/* Roteiro */}
-      <section className="card space-y-4 p-5">
+      <WorkSection id="roteiro" title="4 · Roteiro" open={currentStep === 4} version={idea.status}>
         <header className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-lg font-semibold">Roteiro</h2>
+          <span className="text-sm text-zinc-400">{sd ? "Cenas e falas" : "Escolha o título e escreva o roteiro"}</span>
           {idea.script && (
             <span className="text-xs text-zinc-500">
               {modelLabel(idea.scriptModel)} · custo acumulado {usd(idea.scriptCostUsd)}
@@ -510,14 +518,13 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
         {sd ? (
           <>
             <div className="flex flex-wrap items-center gap-3">
-              <a href={`/api/ideias/${idea.id}/roteiro`} download className="btn-secondary">
-                Baixar roteiro (.md) para o Maestri
+              <CopyScript url={`/api/ideias/${idea.id}/roteiro`} />
+              <a href={`/api/ideias/${idea.id}/roteiro`} download className="btn-secondary btn-sm">
+                Baixar .md
               </a>
-              <span className="text-xs text-zinc-500">
-                No topo vão o formato usado e as pendências; depois o roteiro cena a cena + personagens, estilo visual e tom do canal.
-              </span>
+              
             </div>
-            {sd.voice && <VoicePanel v={sd.voice} />}
+            {sd.voice && <Collapsible title="Conferência das falas"><VoicePanel v={sd.voice} /></Collapsible>}
             <ScriptView c={sd} formatName={sd.meta?.formatName ?? idea.videoFormat?.name} />
             {sd.metrics && (
               <Collapsible title={`Medidas do roteiro × ${recipe ? "receita do formato" : "cartilha"}`} className="rounded-lg border border-line p-4">
@@ -540,7 +547,7 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
         ) : est ? (
           <div className={sd ? "border-t border-line pt-4" : ""}>
             {sd ? (
-              <Collapsible title={<span className="text-sm">Escrever o roteiro de novo</span>}>
+              <Collapsible title={rev.defaultMode === "corrigir" ? "Corrigir roteiro" : "Escrever de novo"} open={rev.defaultMode === "corrigir"}>
                 {scriptForm}
               </Collapsible>
             ) : (
@@ -607,17 +614,19 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
             )}
           </div>
         ) : null}
-      </section>
+      </WorkSection>
 
       {/* Devolução do Estúdio */}
       {idea.myChannelId && (idea.script || idea.lessons.length > 0) && (
-        <section className={`card space-y-3 p-5 ${idea.status === "RETURNED" ? "border-red-800" : ""}`}>
+        <WorkSection id="revisao" title="5 · Revisão do Estúdio" open={currentStep === 5} version={idea.status}>
+          <p className="text-sm text-zinc-400">Leia o roteiro, confira as pendências e leve ao Estúdio.</p>
+          <OpenSection target="roteiro">Ler roteiro</OpenSection>
           <header className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-base font-semibold">Devolução do Estúdio</h2>
+            <span className="text-sm text-zinc-400">A aprovação acontece com você, fora do Radar.</span>
             {idea.returnedAt && <span className="text-xs text-zinc-500">devolvida em {fmtDateTime(idea.returnedAt)}</span>}
           </header>
           {idea.lessons.length > 0 && (
-            <div>
+            <Collapsible title="Histórico de devoluções" meta={`${idea.lessons.length} aprendizados`}>
               <p className="mb-1 text-xs text-zinc-500">
                 Estes pontos viraram aprendizado do canal: entram em toda geração de ideia e roteiro, com peso maior que a receita do formato.
               </p>
@@ -633,27 +642,26 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
                   </li>
                 ))}
               </ul>
-            </div>
+            </Collapsible>
           )}
           <Collapsible
-            title={<span className="text-sm">{idea.lessons.length ? "Colar outra devolução" : "O Estúdio reprovou este roteiro? Cole os pontos aqui"}</span>}
+            title="Devolver"
           >
             <StateForm action={returnIdeaAction.bind(null, idea.id)} label="Registrar devolução" className="btn-secondary">
-              <textarea
-                name="returnNotes"
-                rows={5}
-                className="input"
-                placeholder={"Um ponto por linha. Ex.:\n- O fim usa o carro do pai, que não apareceu antes\n- Texto na tela em cima do rosto da avó\n- Frase longa demais no gancho"}
-              />
-              <p className="text-xs text-zinc-500">Cada linha vira um aprendizado do canal e a ideia fica marcada como devolvida.</p>
+              <ReturnInput />
             </StateForm>
           </Collapsible>
-        </section>
+        </WorkSection>
       )}
 
+      <WorkSection id="producao" title="6 · Produção" open={currentStep === 6} version={idea.status}>
+        <p className="text-sm text-zinc-400">Depois de aprovar o roteiro, leve o .md ao Estúdio para produzir.</p>
+        {idea.script && <a href={`/api/ideias/${idea.id}/roteiro`} download className="btn-secondary btn-sm">Baixar .md</a>}
+        <IdeaStatusSelect action={setIdeaStatus.bind(null, idea.id)} value={idea.status} />
+      </WorkSection>
+
       {/* Virou vídeo? */}
-      <section className="card space-y-3 p-5">
-        <h2 className="text-base font-semibold">Virou vídeo no seu canal?</h2>
+      <WorkSection id="publicacao" title="7 · Virou vídeo no seu canal?" open={currentStep === 7} version={idea.status}>
         {idea.publishedVideo ? (
           <div className="flex flex-wrap items-center gap-3">
             <PublishedNote v={idea.publishedVideo} />
@@ -712,14 +720,13 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
             )}
           </StateForm>
         )}
-      </section>
+      </WorkSection>
 
-      <section className="card space-y-3 p-5">
-        <h2 className="text-base font-semibold">Anotações</h2>
+      <WorkSection id="anotacoes" title="Anotações">
         <StateForm action={saveIdeaNotes.bind(null, idea.id)} label="Salvar" className="btn-secondary">
           <textarea name="notes" rows={3} className="input" defaultValue={idea.notes ?? ""} placeholder="O que mudar, quando gravar, link do vídeo publicado…" />
         </StateForm>
-      </section>
+      </WorkSection>
 
       <div className="flex justify-end">
         <ConfirmDelete action={deleteIdea.bind(null, idea.id)} label="Apagar ideia" message="Apagar esta ideia e o roteiro dela?" />
