@@ -7,7 +7,20 @@ import { prisma } from "@/lib/db";
 import { fmtDateTime } from "@/lib/format";
 import { modelLabel, usdToBrl, type CostEstimate } from "@/lib/claude";
 import { findSimilarTitles } from "@/lib/catalog";
-import { estimateScript, revisionDefaults, scriptPending, type FormatMeta, type IdeaData, type ScriptContent, type ScriptMetrics, type ScriptReview, type VoiceCheck } from "@/lib/generator";
+import {
+  NARRATIVE_CHECKS,
+  estimateScript,
+  revisionDefaults,
+  scriptPending,
+  type FormatMeta,
+  type IdeaData,
+  type ScriptContent,
+  type ScriptMetrics,
+  type ScriptReview,
+  type StoredScript,
+  type VoiceCheck,
+} from "@/lib/generator";
+import { sceneLines, sortedScenes, spokenLines } from "@/lib/script-lines";
 import type { PlaybookStats } from "@/lib/playbook";
 import { formatsOfNiche, isDraft } from "@/lib/formats";
 import type { PlaybookFormat } from "@/lib/playbook";
@@ -48,7 +61,7 @@ import {
   unlinkPublishedAction,
 } from "@/app/gerador/actions";
 import { publishedCandidates } from "@/lib/my-catalog";
-import { IdeaStatusSelect } from "./forms";
+import { IdeaStatusSelect, ScriptTabs } from "./forms";
 import { runningJobsFor } from "@/lib/jobs";
 import { RunningNote } from "@/components/RunningNote";
 
@@ -139,26 +152,47 @@ function MetricsVsPlaybook({ m, st, label }: { m: ScriptMetrics; st: PlaybookSta
 }
 
 /** Segunda passada: leitura de espectador (modelo barato) + conferência de lógica e graça em código. */
+function NarrativeList({ items, title }: { items: NonNullable<ScriptReview["critique"]>["narrativa"]; title: string }) {
+  if (!items?.length) return null;
+  return (
+    <div className="mt-2">
+      <div className="text-xs text-zinc-400">{title}</div>
+      <ul className="mt-0.5 space-y-0.5 text-xs">
+        {items.map((n, i) => (
+          <li key={i} className={n.ok ? "text-zinc-300" : "text-amber-300"}>
+            {n.ok ? "✓" : "✗"} {n.item}. {NARRATIVE_CHECKS[n.item - 1] ?? ""}
+            {!n.ok && n.problema.trim() && <span className="text-zinc-400"> — {n.problema}</span>}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function ReviewPanel({ r }: { r: ScriptReview }) {
-  const left = r.final.problems;
-  const good = !r.error && !left.length;
+  // Roteiro novo: o que sobrou depois da leitura final; antigo: só a conferência em código.
+  const left = r.left ?? r.final.problems;
+  const good = !r.error && !left.length && (r.rewritten || !r.points.length);
+  const U = r.unit === "fala" ? "Fala" : "Cena";
+  const lastRead = r.rewritten && r.recheck ? r.recheck : r.critique;
   return (
     <div className={`rounded-lg border p-3 text-sm ${good ? "border-line" : "border-amber-700 bg-amber-950/30"}`}>
       <div className={good ? "text-emerald-300" : "font-medium text-amber-200"}>
         {r.error
-          ? "⚠ A leitura de espectador falhou: confira o roteiro com atenção."
+          ? `⚠ A leitura de olhos fechados falhou (${r.error}): confira o roteiro com atenção.`
           : r.rewritten
-            ? `Reescrito uma vez depois da leitura (${r.points.length} ${r.points.length === 1 ? "ponto" : "pontos"})${left.length ? ` · ainda ${left.length} para olhar` : " · agora passa"}`
+            ? `Revisado uma vez depois da leitura (${r.points.length} ${r.points.length === 1 ? "ponto" : "pontos"})${left.length ? ` · ainda ${left.length} para olhar` : " · agora passa"}`
             : `✓ Passou de primeira: ${r.laughs} risadas com reação da família`}
       </div>
-      {r.critique && <p className="mt-1 text-xs text-zinc-400">{r.critique.veredito}</p>}
+      {lastRead && <p className="mt-1 text-xs text-zinc-400">{lastRead.veredito}</p>}
+      <NarrativeList items={lastRead?.narrativa ?? []} title={`Revisão narrativa (de olhos fechados${r.rewritten && r.recheck ? ", versão final" : ""}):`} />
       {r.critique && r.critique.risadas.length > 0 && (
         <div className="mt-2">
           <div className="text-xs text-zinc-400">Onde o espectador riu (1ª versão):</div>
           <ul className="mt-0.5 space-y-0.5 text-xs text-zinc-300">
             {r.critique.risadas.map((x, i) => (
               <li key={i}>
-                Cena {x.cena}: esperava {x.esperado}, mas {x.aconteceu}
+                {U} {x.cena}: esperava {x.esperado}, mas {x.aconteceu}
                 {x.reacao.trim() ? <span className="text-zinc-500"> · {x.reacao}</span> : <span className="text-amber-300"> · ninguém reage</span>}
               </li>
             ))}
@@ -167,7 +201,7 @@ function ReviewPanel({ r }: { r: ScriptReview }) {
       )}
       {r.points.length > 0 && (
         <div className="mt-2">
-          <div className="text-xs text-amber-200">{r.rewritten ? "O que mandou reescrever:" : "Pontos:"}</div>
+          <div className="text-xs text-amber-200">{r.rewritten ? "O que mandou revisar (1ª versão):" : "Pontos:"}</div>
           <ul className="mt-0.5 list-disc space-y-0.5 pl-4 text-xs text-zinc-300">
             {r.points.map((p, i) => (
               <li key={i}>{p}</li>
@@ -177,7 +211,7 @@ function ReviewPanel({ r }: { r: ScriptReview }) {
       )}
       {r.rewritten && left.length > 0 && (
         <div className="mt-2">
-          <div className="text-xs text-amber-200">Ainda no roteiro final (conferência em código):</div>
+          <div className="text-xs text-amber-200">Ainda no roteiro final{r.left ? " (leitura final e conferência em código)" : " (conferência em código)"}:</div>
           <ul className="mt-0.5 list-disc space-y-0.5 pl-4 text-xs text-zinc-300">
             {left.map((p, i) => (
               <li key={i}>{p}</li>
@@ -245,8 +279,9 @@ function VoicePanel({ v }: { v: VoiceCheck }) {
 
 type CheckItem = ScriptContent["checklist"][number] & { origem?: string };
 
-function ScriptView({ c, formatName }: { c: ScriptContent; formatName?: string | null }) {
-  const scenes = [...c.cenas].sort((a, b) => a.inicio - b.inicio);
+function ScriptView({ c, formatName }: { c: StoredScript; formatName?: string | null }) {
+  const scenes = sortedScenes(c.cenas);
+  const lines = spokenLines(c);
   const items = c.checklist as CheckItem[];
   const hasOrigin = items.some((x) => x.origem);
   const groups = hasOrigin
@@ -275,41 +310,95 @@ function ScriptView({ c, formatName }: { c: ScriptContent; formatName?: string |
       <ClampText lines={3} className="text-[15px] leading-relaxed text-zinc-200">
         {c.resumo}
       </ClampText>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left text-xs text-zinc-500">
-              <th className="w-20 py-1 font-normal">Tempo</th>
-              <th className="py-1 font-normal">Fala</th>
-              <th className="py-1 font-normal">Na animação</th>
-            </tr>
-          </thead>
-          <tbody>
-            {scenes.map((s, i) => (
-              <tr key={i} className="border-t border-line align-top">
-                <td className="py-2 pr-2 text-xs tabular-nums text-zinc-500">
-                  {mmss(s.inicio)}–{mmss(s.fim)}
-                  <div className={PART_STYLE[s.parte] ?? ""}>{s.parte}</div>
-                </td>
-                <td className="py-2 pr-4">
-                  {s.fala.trim() ? (
-                    <>
-                      <span className="font-semibold text-zinc-100">{s.personagem || "—"}:</span> <span className="text-zinc-200">{s.fala}</span>
-                    </>
-                  ) : (
-                    <span className="text-zinc-600">(sem fala)</span>
-                  )}
-                  {s.textoNaTela.trim() && <div className="mt-1 text-xs text-amber-300">na tela: {s.textoNaTela}</div>}
-                </td>
-                <td className="py-2 text-zinc-400">
-                  {s.acao}
-                  {s.novidade && <div className="mt-1 text-xs text-zinc-500">novo aqui: {s.novidade}</div>}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <ScriptTabs
+        spoken={
+          <div className="space-y-2.5 rounded-lg border border-line p-4">
+            {lines.length ? (
+              lines.map((l) => (
+                <p key={l.n} className="text-[15px] leading-relaxed">
+                  <span className="font-semibold text-zinc-100">{l.who}:</span> <span className="text-zinc-200">{l.text}</span>
+                </p>
+              ))
+            ) : (
+              <p className="text-zinc-500">Este roteiro não tem falas.</p>
+            )}
+          </div>
+        }
+        animation={
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs text-zinc-500">
+                  <th className="w-20 py-1 font-normal">Tempo</th>
+                  <th className="py-1 font-normal">Fala</th>
+                  <th className="py-1 font-normal">Animação e direção</th>
+                </tr>
+              </thead>
+              <tbody>
+                {scenes.map((s, i) => {
+                  const said = sceneLines(c, s);
+                  return (
+                    <tr key={i} className="border-t border-line align-top">
+                      <td className="py-2 pr-2 text-xs tabular-nums text-zinc-500">
+                        {mmss(s.inicio)}–{mmss(s.fim)}
+                        <div className={PART_STYLE[s.parte] ?? ""}>{s.parte}</div>
+                      </td>
+                      <td className="py-2 pr-4">
+                        {said.length ? (
+                          said.map((l, j) => (
+                            <div key={j}>
+                              <span className="font-semibold text-zinc-100">{l.who}:</span> <span className="text-zinc-200">{l.text}</span>
+                            </div>
+                          ))
+                        ) : (
+                          <span className="text-zinc-600">(sem fala)</span>
+                        )}
+                        {s.textoNaTela.trim() && <div className="mt-1 text-xs text-amber-300">na tela: {s.textoNaTela}</div>}
+                      </td>
+                      <td className="py-2 text-zinc-400">
+                        {s.acao}
+                        {s.expressoes?.trim() && <div className="mt-1 text-xs text-zinc-400">expressões: {s.expressoes}</div>}
+                        {s.direcao?.trim() && <div className="mt-1 text-xs text-zinc-400">direção: {s.direcao}</div>}
+                        {s.novidade && <div className="mt-1 text-xs text-zinc-500">novo aqui: {s.novidade}</div>}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        }
+      />
+
+      {(c.espinha?.length || c.regrasPlantadas?.length) && (
+        <Collapsible title="Espinha da história e o que foi plantado" className="rounded-lg border border-line p-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            {c.espinha?.length ? (
+              <div>
+                <H3>Causa e consequência</H3>
+                <ol className="list-decimal space-y-1 pl-5 text-zinc-300">
+                  {c.espinha.map((e, i) => (
+                    <li key={i}>{e}</li>
+                  ))}
+                </ol>
+              </div>
+            ) : null}
+            {c.regrasPlantadas?.length ? (
+              <div>
+                <H3>Plantado antes, pago depois</H3>
+                <ul className="space-y-1.5 text-zinc-300">
+                  {c.regrasPlantadas.map((r, i) => (
+                    <li key={i}>
+                      <span className="text-zinc-100">{r.oQue}</span>
+                      <span className="text-xs text-zinc-500"> · aparece: {r.ondeAparece} · paga: {r.comoPaga}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </div>
+        </Collapsible>
+      )}
 
       <Collapsible
         title={hasOrigin ? "Checklist do formato e da regra geral, fatos para conferir" : "Checklist, fatos para conferir e como a cartilha virou cena"}
@@ -388,7 +477,7 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
   if (!idea) notFound();
   const d = parse<IdeaData>(idea.ideaData);
   const titles = parse<string[]>(idea.titles) ?? [];
-  const sd = parse<ScriptContent & { metrics?: ScriptMetrics; playbookId?: string | null; voice?: VoiceCheck; review?: ScriptReview; meta?: FormatMeta }>(idea.scriptData);
+  const sd = parse<StoredScript & { metrics?: ScriptMetrics; playbookId?: string | null; voice?: VoiceCheck; review?: ScriptReview; meta?: FormatMeta }>(idea.scriptData);
   const refIds = parse<string[]>(idea.referenceIds) ?? [];
   const pbId = sd?.playbookId ?? idea.playbookId;
   const recipeId = sd?.meta?.recipeId ?? idea.recipeId;
@@ -620,7 +709,7 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
       {/* Roteiro */}
       <WorkSection id="roteiro" title="4 · Roteiro" open={currentStep === 4} version={idea.status}>
         <header className="flex flex-wrap items-center justify-between gap-2">
-          <span className="text-sm text-zinc-400">{sd ? "Cenas e falas" : "Escolha o título e escreva o roteiro"}</span>
+          <span className="text-sm text-zinc-400">{sd ? "Roteiro falado e animação" : "Escolha o título e escreva o roteiro"}</span>
           {idea.script && (
             <span className="text-xs text-zinc-500">
               {modelLabel(idea.scriptModel)} · custo acumulado {usd(idea.scriptCostUsd)}
@@ -637,7 +726,7 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
               </a>
               
             </div>
-            {sd.review && <Collapsible title="Leitura de espectador (lógica e graça)"><ReviewPanel r={sd.review} /></Collapsible>}
+            {sd.review && <Collapsible title={sd.review.unit === "fala" ? "Leitura de olhos fechados (história, lógica e graça)" : "Leitura de espectador (lógica e graça)"}><ReviewPanel r={sd.review} /></Collapsible>}
             {sd.voice && <Collapsible title="Conferência das falas"><VoicePanel v={sd.voice} /></Collapsible>}
             <ScriptView c={sd} formatName={sd.meta?.formatName ?? idea.videoFormat?.name} />
             {sd.metrics && (

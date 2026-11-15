@@ -29,7 +29,8 @@ export async function generateIdeasAction(req: Omit<IdeasRequest, "ponto">, _pre
       { kind: "ideas", targetId: req.myChannelId, label: `${req.count} ideias para ${ch.name}`, href: `/gerador?canal=${req.myChannelId}`, expectedSec: 40 + 10 * req.count },
       async () => {
         const r = await generateIdeas({ ...req, ponto });
-        return `${r.ideas.length} ideias novas. Custo: ${money(r.costUsd)}.`;
+        const out = r.discarded.length ? ` ${r.discarded.length} descartada${r.discarded.length === 1 ? "" : "s"} por não sustentar uma história inteira.` : "";
+        return `${r.ideas.length} ideias novas.${out} Custo: ${money(r.costUsd)}.`;
       },
     );
     refresh();
