@@ -11,6 +11,10 @@ test("context excludes unknown, wrong-format and cut voice; preserves complete s
  assert.equal(completeSample("Era uma vez alguma coisa… (cortado)"),false);
  assert.match(scopedRules("Mãe só braço.\nSempre inscrição\nPai só pernas."),/Mãe só braço/);
  assert.doesNotMatch(scopedRules("Sempre inscrição"),/inscrição/);
+ // Cotas saem; regras contra repetição ficam ("publicado" contém "cada").
+ assert.match(scopedRules("- Nunca: repetir frase ou bordão de vídeo publicado."),/publicado/);
+ assert.match(scopedRules("O bordão muda a cada episódio."),/episódio/);
+ assert.doesNotMatch(scopedRules("Bordão a cada 20–30 s.\nBordão no máximo 2 vezes."),/Bordão/);
  assert.match(recipeEvidence('{"motor":[{"passo":"causa e consequência"}]}','["video"]'),/1 exemplo, não é regra/);
  assert.equal(narrationWarnings([{personagem:"Narrador",fala:"Eu caí. O menino sentou."}]).length,1);
 });
