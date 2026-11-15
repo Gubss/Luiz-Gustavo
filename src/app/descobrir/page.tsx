@@ -22,6 +22,7 @@ import { estimateLinkCost } from "@/lib/discover";
 import { runningJobsFor } from "@/lib/jobs";
 import { RunningNote } from "@/components/RunningNote";
 import { StateForm } from "@/components/StateForm";
+import { WorkSection } from "@/components/workflow";
 
 type SP = Record<string, string | string[] | undefined>;
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
@@ -125,6 +126,7 @@ export default async function DiscoverPage({ searchParams }: PageProps<"/descobr
     return `/descobrir?${p}`;
   };
   const featuredCost = estimateFeaturedCost(niche._count.channels);
+  const pending = countOf("new");
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -176,10 +178,23 @@ export default async function DiscoverPage({ searchParams }: PageProps<"/descobr
 
       {discoverJob && <RunningNote job={discoverJob} what={`${discoverJob.label}${discoverJob.step ? ` · ${discoverJob.step}` : ""}`} />}
 
-      <section className="card p-5">
-        <h2 className="mb-3 text-base font-semibold">
-          Nova busca <span className="font-normal text-zinc-500">em {niche.name}</span>
-        </h2>
+      <section className="flex flex-wrap items-center gap-3 rounded-lg bg-emerald-500/5 p-4 ring-1 ring-emerald-500/20">
+        <div className="min-w-0 flex-1">
+          <h2 className="text-sm font-semibold text-zinc-300">O que fazer agora</h2>
+          <p className="text-sm text-zinc-200">
+            {pending > 0
+              ? `${pending} ${pending === 1 ? "canal novo espera" : "canais novos esperam"} você decidir. Abra, olhe os vídeos e aperte Monitorar nos que parecem com o seu canal; os outros, Ignorar (no menu ⋯).`
+              : "Nenhum canal esperando. Faça uma busca: escreva 1 ou 2 palavras do assunto dos seus vídeos."}
+          </p>
+        </div>
+        {pending > 0 && status !== "new" && (
+          <Link href={href({ status: "new", page: undefined })} className="btn-primary btn-sm">
+            Ver os novos
+          </Link>
+        )}
+      </section>
+
+      <WorkSection id="descobrir-busca" title={`Nova busca em ${niche.name}`} open={pending === 0}>
         <MethodTabs
           tabs={[
             {
@@ -259,7 +274,7 @@ export default async function DiscoverPage({ searchParams }: PageProps<"/descobr
             },
           ]}
         />
-      </section>
+      </WorkSection>
 
       {/* Lista */}
       <section className="space-y-4">
@@ -286,6 +301,7 @@ export default async function DiscoverPage({ searchParams }: PageProps<"/descobr
                 Todos <span className="text-zinc-500">{counts.all}</span>
               </FilterChip>
             </FilterRow>
+            <Collapsible title={<span className="text-xs text-zinc-400">Mais filtros</span>} meta={origin ? "filtrando por busca" : undefined} open={!!origin || sort !== "score"} bodyClassName="mt-2 space-y-2">
             {(origins.size > 0 || featuredCount > 0) && (
               <FilterRow label="Veio da busca">
                 <FilterChip href={href({ origem: undefined, page: undefined })} active={!origin}>
@@ -312,6 +328,7 @@ export default async function DiscoverPage({ searchParams }: PageProps<"/descobr
                 </FilterChip>
               ))}
             </FilterRow>
+            </Collapsible>
           </div>
           <SearchBox action="/descobrir" q={text} keep={{ niche: niche.id, status, format, sort, origem: origin }} placeholder="Buscar canal pelo nome" />
         </div>
@@ -351,7 +368,7 @@ export default async function DiscoverPage({ searchParams }: PageProps<"/descobr
               return (
                 <article key={c.id} className="card p-4">
                   <div className="flex flex-wrap items-start gap-x-4 gap-y-2">
-                    <a href={channelUrl(c)} target="_blank" rel="noreferrer" className="flex min-w-0 flex-1 items-center gap-3">
+                    <a href={channelUrl(c)} target="_blank" rel="noreferrer" className="flex min-w-[14rem] flex-1 items-center gap-3">
                       {c.thumbnailUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={c.thumbnailUrl} alt="" className="h-11 w-11 shrink-0 rounded-full bg-zinc-800" />
@@ -373,13 +390,13 @@ export default async function DiscoverPage({ searchParams }: PageProps<"/descobr
                         </span>
                       </span>
                     </a>
-                    <div className="flex items-center gap-3">
+                    <div className="ml-auto flex items-center gap-3">
                       {c.bestRatio != null && (
-                        <div className="text-right" title="Views do melhor vídeo encontrado ÷ inscritos do canal">
+                        <div className="text-right" title="Views do melhor vídeo ÷ inscritos. Acima de 10x: o assunto passa muito de quem já segue o canal, bom sinal.">
                           <div className="text-lg leading-none font-semibold text-red-300 tabular-nums">
                             {c.bestRatio >= 10 ? Math.round(c.bestRatio) : c.bestRatio.toFixed(1).replace(".", ",")}x
                           </div>
-                          <div className="text-[11px] text-zinc-500">views / inscritos</div>
+                          <div className="text-[11px] text-zinc-500">views ÷ inscritos</div>
                         </div>
                       )}
                       {status !== "monitored" && (
