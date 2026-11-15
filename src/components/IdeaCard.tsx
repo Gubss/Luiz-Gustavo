@@ -100,7 +100,8 @@ export function IdeaCard({
   const d = parse<IdeaData>(idea.ideaData);
   const titles = parse<string[]>(idea.titles) ?? [];
   const title = idea.chosenTitle || titles[0] || idea.theme;
-  const otherTitles = d ? d.titulos.filter((t) => t.titulo !== title) : titles.filter((t) => t !== title).map((t) => ({ titulo: t, formula: "" }));
+  // Ideias importadas/legadas podem ter ideaData parcial (sem titulos/adaptacao).
+  const otherTitles = d?.titulos ? d.titulos.filter((t) => t.titulo !== title) : titles.filter((t) => t !== title).map((t) => ({ titulo: t, formula: "" }));
   return (
     <article className="card flex flex-col gap-3 p-4">
       <div className="flex items-start justify-between gap-3">
@@ -145,11 +146,11 @@ export function IdeaCard({
           <div className="grid gap-2 text-xs md:grid-cols-2">
             <div className="rounded-lg bg-ink/70 p-2">
               <div className="mb-0.5 text-zinc-500">{idea.formatId ? "Da receita do formato" : "Da cartilha"}</div>
-              <div className="text-zinc-300">{d.adaptacao.daCartilha}</div>
+              <div className="text-zinc-300">{d.adaptacao?.daCartilha}</div>
             </div>
             <div className="rounded-lg bg-ink/70 p-2">
               <div className="mb-0.5 text-zinc-500">Do seu canal</div>
-              <div className="text-zinc-300">{d.adaptacao.doCanal}</div>
+              <div className="text-zinc-300">{d.adaptacao?.doCanal}</div>
             </div>
           </div>
           {otherTitles.length > 0 && (
