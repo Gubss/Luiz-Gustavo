@@ -67,6 +67,10 @@ async function client(): Promise<Anthropic> {
   return cached.client;
 }
 
+/** Limite de saída padrão (raciocínio + JSON). Com streaming dá para ir alto; só paga o que usar. */
+export const DEFAULT_MAX_TOKENS = 32000;
+const fmtTokens = (n: number) => n.toLocaleString("pt-BR");
+
 export type StructuredResult<T> = {
   data: T;
   model: string;
@@ -94,15 +98,20 @@ export async function callStructured<S extends z.ZodType>(opts: {
   maxTokens?: number;
 }): Promise<StructuredResult<z.infer<S>>> {
   const anthropic = await client();
+  // O formato vai sem o `parse` do SDK: assim o SDK não tenta ler um JSON cortado (e lançar SyntaxError)
+  // antes de a gente ver o stop_reason. A leitura e a validação são feitas aqui embaixo.
+  const { parse: parseOutput, ...format } = betaZodOutputFormat(opts.schema);
   let msg;
   try {
-    msg = await anthropic.beta.messages.parse({
+    // Streaming: sem ele o SDK recusa max_tokens alto (acima de ~21 mil) e o raciocínio adaptativo
+    // pode gastar quase todo o limite antes do JSON.
+    const stream = anthropic.beta.messages.stream({
       model: opts.model,
-      max_tokens: opts.maxTokens ?? 16000,
+      max_tokens: opts.maxTokens ?? DEFAULT_MAX_TOKENS,
       betas: ["server-side-fallback-2026-07-01"],
       fallbacks: "default",
       thinking: { type: "adaptive" },
-      output_config: { effort: opts.effort ?? "medium", format: betaZodOutputFormat(opts.schema) },
+      output_config: { effort: opts.effort ?? "medium", format },
       system: opts.system,
       messages: [
         {
@@ -114,6 +123,7 @@ export async function callStructured<S extends z.ZodType>(opts: {
         },
       ],
     });
+    msg = await stream.finalMessage();
   } catch (e) {
     if (e instanceof Anthropic.AuthenticationError) throw new ClaudeError("Chave da Anthropic inválida. Confira em Configurações.");
     if (e instanceof Anthropic.PermissionDeniedError)
@@ -133,6 +143,21 @@ export async function callStructured<S extends z.ZodType>(opts: {
   const outputTokens = msg.usage.output_tokens ?? 0;
   const servedBy = msg.model || opts.model;
   const cost = costUsd(servedBy, inputTokens, outputTokens);
+  const text = msg.content
+    .filter((b): b is Extract<typeof b, { type: "text" }> => b.type === "text")
+    .map((b) => b.text)
+    .join("");
+
+  // Só lê o JSON se a resposta veio inteira; resposta cortada ou recusada vira mensagem em português.
+  let parsed: z.infer<S> | null = null;
+  let parseError: unknown = null;
+  if (msg.stop_reason !== "max_tokens" && msg.stop_reason !== "refusal" && text) {
+    try {
+      parsed = parseOutput(text) as z.infer<S>;
+    } catch (e) {
+      parseError = e;
+    }
+  }
 
   await prisma.generation.create({
     data: {
@@ -140,7 +165,7 @@ export async function callStructured<S extends z.ZodType>(opts: {
       model: servedBy,
       videoId: opts.videoId ?? null,
       input: JSON.stringify({ system: opts.system, user: opts.user, image: opts.image, effort: opts.effort ?? "medium" }),
-      output: JSON.stringify(msg.parsed_output ?? msg.content),
+      output: parsed != null ? JSON.stringify(parsed) : JSON.stringify({ stop_reason: msg.stop_reason, text }),
       inputTokens,
       outputTokens,
       costUsd: cost,
@@ -148,10 +173,14 @@ export async function callStructured<S extends z.ZodType>(opts: {
   });
 
   if (msg.stop_reason === "refusal") throw new ClaudeError("O Claude recusou analisar esse conteúdo.");
-  if (msg.stop_reason === "max_tokens") throw new ClaudeError("A resposta ficou grande demais e foi cortada. Tente de novo.");
-  if (msg.parsed_output == null) throw new ClaudeError("O Claude não devolveu a resposta no formato esperado. Tente de novo.");
+  if (msg.stop_reason === "max_tokens")
+    throw new ClaudeError(`A resposta ficou grande demais e foi cortada (limite de ${fmtTokens(opts.maxTokens ?? DEFAULT_MAX_TOKENS)} tokens). Tente de novo.`);
+  if (parsed == null)
+    throw new ClaudeError(
+      `O Claude não devolveu a resposta no formato esperado. Tente de novo.${parseError instanceof Error ? ` (${parseError.message.slice(0, 200)})` : ""}`,
+    );
 
-  return { data: msg.parsed_output as z.infer<S>, model: servedBy, inputTokens, outputTokens, costUsd: cost };
+  return { data: parsed, model: servedBy, inputTokens, outputTokens, costUsd: cost };
 }
 
 /** Gasto com o Claude no mês corrente (fuso de São Paulo, aproximado pelo UTC-3). */

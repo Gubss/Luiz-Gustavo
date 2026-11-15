@@ -4,6 +4,7 @@
  */
 import { test, before } from "node:test";
 import assert from "node:assert/strict";
+import { withSse } from "./anthropic-sse";
 import { execSync } from "node:child_process";
 import { rmSync } from "node:fs";
 
@@ -87,7 +88,7 @@ const RULE = {
 const bodies: { system: string; messages: { content: { text?: string }[] }[] }[] = [];
 
 before(() => {
-  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+  globalThis.fetch = withSse(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(input instanceof Request ? input.url : String(input));
     if (url.hostname === "api.anthropic.com") {
       const body = JSON.parse(String(init?.body));

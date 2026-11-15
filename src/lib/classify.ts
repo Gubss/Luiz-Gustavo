@@ -142,7 +142,7 @@ export async function classifyStudy(videoId: string, nicheId: string, cands?: Ca
     system: SYSTEM,
     user: `${candidatesBlock(candidates)}\n\n${studyBlock(v)}`,
     schema: classifySchema(candidates.map((c) => c.name)),
-    maxTokens: 4000,
+    maxTokens: 8000,
   });
   const label = r.data.formato;
   const format =
@@ -367,7 +367,7 @@ export async function findGaps(formatId: string) {
       "Você ajuda a completar um formato de vídeo (um motor de história) com mais exemplos para estudar. Diga que tipo de vídeo falta e aponte, só pelo título, os outliers da lista que parecem seguir o mesmo motor. Não invente vídeos fora da lista. Responda em português do Brasil.",
     user: prompt,
     schema: GapSchema,
-    maxTokens: 4000,
+    maxTokens: 8000,
   });
   const hint: GapHint = {
     createdAt: new Date().toISOString(),

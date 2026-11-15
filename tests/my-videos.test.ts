@@ -5,6 +5,7 @@
  */
 import { test, before } from "node:test";
 import assert from "node:assert/strict";
+import { withSse } from "./anthropic-sse";
 import { execSync } from "node:child_process";
 import { rmSync } from "node:fs";
 
@@ -81,7 +82,7 @@ function ytVideo(id: string) {
 }
 
 before(() => {
-  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+  globalThis.fetch = withSse(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(input instanceof Request ? input.url : String(input));
     const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { "content-type": "application/json" } });
     calls.push(`${url.hostname}${url.pathname}`);

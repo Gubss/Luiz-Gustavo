@@ -107,7 +107,7 @@ export async function analyzeComments(videoId: string) {
     system: SYSTEM,
     user: commentsPrompt(v.title, comments),
     schema: CommentsSchema,
-    maxTokens: 12000,
+    maxTokens: 16000,
   });
   await prisma.diagnosis.update({
     where: { videoId },
