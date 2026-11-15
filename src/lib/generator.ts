@@ -12,6 +12,7 @@ import { z } from "zod";
 import { scopedRules, channelIdentity, completeSample, recipeEvidence } from "./script-context";
 import { appendVersion, ensureProjectCode, changeCategory } from "./script-versions";
 import { ideaExport, exportScript } from "./script-export";
+import { normalizeSpokenEntries } from "./script-normalize";
 import { spokenLines } from "./script-lines";
 import type { MyChannel, MyChannelScript } from "@prisma/client";
 import { prisma } from "./db";
@@ -905,7 +906,7 @@ export async function generateScript(ideaId:string,opts:{title?:string;extra?:st
  const version=await appendVersion({ideaId,expectedVersionId:idea.currentVersionId,content:JSON.stringify({...data,meta:ctx.meta,channelReference:ref}),markdown:(code,n)=>exportScript(data,ref,code,n,ctx.meta),category:"história",origin:"generation",generationId:r.generationId,model:r.model,costUsd:r.costUsd,title:data.titulo});
  return {...r,data,idea:await prisma.idea.findUniqueOrThrow({where:{id:ideaId}}),version,mode:"nova"};
 }
-const CorrectionSchema=z.object({fala:z.string().min(1),pendencias:z.array(z.string())});
+const CorrectionSchema=z.object({falado:z.array(z.object({personagem:z.string(),fala:z.string().min(1)})).min(1),pendencias:z.array(z.string())});
 export async function correctScript(ideaId:string,versionId:string,lineNumber:number,request:string,category:string,endLineNumber=lineNumber) {
  const {idea,ctx}=await ideaContext(ideaId);
  if(!request.trim()||request.length>4000) throw new GeneratorError("Descreva a correção em até 4.000 caracteres.");
@@ -917,9 +918,10 @@ export async function correctScript(ideaId:string,versionId:string,lineNumber:nu
  const lines=spokenLines(data); const line=lines[lineNumber-1];
  if(!Number.isInteger(lineNumber)||!line||!Number.isInteger(endLineNumber)||endLineNumber<lineNumber||endLineNumber>lines.length) throw new GeneratorError("Selecione um intervalo de falas válido.");
  const s=await getSettings();
- const options={kind:"script-correction",model:s.modelDeep,effort:"low" as const,system:BASE_RULES+"\nCorrija somente o trecho selecionado conforme o pedido explícito. Preserve a premissa e a regra central. Não altere as falas fora da seleção. Dentro de um intervalo você pode reorganizar, inserir ou retirar falas quando o pedido exigir. Pendências: somente dúvidas reais desta correção; não invente problemas já resolvidos.",user:scriptPrompt(ctx,idea,idea.chosenTitle||idea.theme,"")+"\nRoteiro para contexto: "+JSON.stringify(lines)+"\nTrecho selecionado: falas "+lineNumber+" a "+endLineNumber+"\nPedido: "+request,maxTokens:8000};
- const r=endLineNumber===lineNumber?await callStructured({...options,schema:CorrectionSchema}):await callStructured({...options,schema:z.object({falado:z.array(z.object({personagem:z.string(),fala:z.string()})).min(1),pendencias:z.array(z.string())})});
- const replacement="falado" in r.data?r.data.falado:[{personagem:line.who,fala:r.data.fala}];
+ const options={kind:"script-correction",model:s.modelDeep,effort:"low" as const,system:BASE_RULES+"\nCorrija somente o trecho selecionado conforme o pedido explícito. Preserve a premissa e a regra central. Não altere as falas fora da seleção. Mesmo selecionando uma única fala, você pode inserir novas falas quando o pedido exigir. Retorne cada fala em um objeto separado de falado, com personagem e fala. Nunca junte falas com quebras de linha nem inclua rótulos como Menino: dentro de fala. Fala nova sem personagem explícito herda o personagem da fala corrigida. Dentro de um intervalo você pode reorganizar, inserir ou retirar falas quando o pedido exigir. Pendências: somente dúvidas reais desta correção; não invente problemas já resolvidos.",user:scriptPrompt(ctx,idea,idea.chosenTitle||idea.theme,"")+"\nRoteiro para contexto: "+JSON.stringify(lines)+"\nTrecho selecionado: falas "+lineNumber+" a "+endLineNumber+"\nPedido: "+request,maxTokens:8000};
+ const r=await callStructured({...options,schema:CorrectionSchema});
+ const replacement=normalizeSpokenEntries(r.data.falado,line.who);
+ if(!replacement.length) throw new GeneratorError("A correção retornou somente falas vazias.");
  const original=lines.map(l=>({personagem:l.who,fala:l.text}));
  const updated={...data,falado:[...original.slice(0,lineNumber-1),...replacement,...original.slice(endLineNumber)],cenas:data.cenas??[],pendencias:Array.from(new Set([...(data.pendencias??[]),...r.data.pendencias,...(data.cenas?.length&&replacement.length!==endLineNumber-lineNumber+1?["A correção alterou a quantidade de falas; revisar vínculos e tempos da direção legada antes de produzir."]:[])]))};
  const ref=await referenceFor(ctx);

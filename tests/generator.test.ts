@@ -17,6 +17,7 @@ const G = () => import("../src/lib/generator");
 
 type Body = { system: string; model?: string; messages: { content: { text?: string }[] }[] };
 const bodies: Body[] = [];
+let correctionReply: {falado:{personagem:string;fala:string}[];pendencias:string[]}|undefined;
 const isScriptBody = (b: Body) => String(b.system).includes("TAREFA: escrever o roteiro");
 /** Último pedido de roteiro (a leitura de espectador vem depois dele). */
 const lastScript = () => bodies.filter(isScriptBody).at(-1)!;
@@ -87,7 +88,7 @@ before(() => {
     if (url.hostname === "api.anthropic.com") {
       const body = JSON.parse(String(init?.body));
       bodies.push(body);
-      const reply = body.system.includes("Corrija somente") ? (textOf(body).includes("Trecho selecionado: falas 1 a 2")?{falado:[{personagem:"Menino",fala:"Eu contei esse trecho de outro jeito."}],pendencias:[]}:{fala:"Pai, eu achei que ele rugia!",pendencias:[]}) : body.system.includes("Crítica solicitada") ? {observacoes:["Premissa preservada"],hipoteses:[],pendencias:[]} : isScriptBody(body) ? {titulo:SCRIPT.titulo,duracaoSeg:SCRIPT.duracaoSeg,falado:SCRIPT.cenas.filter(c=>c.fala).map(c=>({personagem:c.personagem,fala:c.fala})),pendencias:SCRIPT.conferirFatos} : {ideias:IDEAS.ideias.map(i=>({titulo:i.titulos[0].titulo,premissa:i.premissa,gancho:i.gancho,formato:i.formatoDeHistoria,interesse:i.porQueVaiFuncionar}))};
+      const reply = body.system.includes("Corrija somente") ? correctionReply ?? (textOf(body).includes("Trecho selecionado: falas 1 a 2")?{falado:[{personagem:"Menino",fala:"Eu contei esse trecho de outro jeito."}],pendencias:[]}:{falado:[{personagem:"Theo",fala:"Pai, eu achei que ele rugia!"}],pendencias:[]}) : body.system.includes("Crítica solicitada") ? {observacoes:["Premissa preservada"],hipoteses:[],pendencias:[]} : isScriptBody(body) ? {titulo:SCRIPT.titulo,duracaoSeg:SCRIPT.duracaoSeg,falado:SCRIPT.cenas.filter(c=>c.fala).map(c=>({personagem:c.personagem,fala:c.fala})),pendencias:SCRIPT.conferirFatos} : {ideias:IDEAS.ideias.map(i=>({titulo:i.titulos[0].titulo,premissa:i.premissa,gancho:i.gancho,formato:i.formatoDeHistoria,interesse:i.porQueVaiFuncionar}))};
       return new Response(
         JSON.stringify({
           id: "msg_test",
@@ -319,6 +320,27 @@ test("gerador: formato obrigatório; receita + regra geral + perfil viram ideias
   assert.deepEqual(rangedData.cenas,after.cenas);
   assert.match(rangedData.pendencias.join(" "),/quantidade de falas/);
   await assert.rejects(()=>correctScript(s.idea.id,ranged.id,2,"inválido","voz",1),/intervalo/);
+  // Mesmo uma seleção única pode inserir falas: retorno imperfeito e estruturado.
+  let current=ranged;
+  for(const replacement of [
+   [{personagem:"Menino",fala:"Mas parece.\nKachau!"}],
+   [{personagem:"Menino",fala:"**Menino:** Menino: Botei o pé.\nAvó: Taca-lhe pau!"}],
+   [{personagem:"Menino",fala:"Botei o pé."},{personagem:"Avó",fala:"Taca-lhe pau!"}],
+  ]) {
+   const old=JSON.parse(current.content);
+   correctionReply={falado:replacement,pendencias:[]};
+   const next=await correctScript(s.idea.id,current.id,2,"Acrescente a fala pedida","voz");
+   const result=JSON.parse(next.content);
+   assert.deepEqual(result.falado.slice(0,1),old.falado.slice(0,1));
+   assert.deepEqual(result.falado.slice(3),old.falado.slice(2));
+   assert.equal(result.falado[1].personagem,"Menino");
+   assert.equal(result.falado[2].personagem,replacement[0].fala.includes("Kachau")?"Menino":"Avó");
+   assert.doesNotMatch(result.falado[1].fala,/Menino:/);
+   assert.equal((await prisma.scriptVersion.findUniqueOrThrow({where:{id:current.id}})).content,current.content);
+   assert.match(bodies.at(-1)!.system,/cada fala em um objeto separado/);
+   current=next;
+  }
+  correctionReply=undefined;
   // Formato sem receita: não escreve sem a confirmação.
   const fSem = await prisma.videoFormat.create({ data: { nicheId: niche.id, name: "Sem receita ainda" } });
   const ideaSem = await prisma.idea.create({ data: { myChannelId: ch.id, nicheId: niche.id, formatId: fSem.id, format: "short", theme: "balões", titles: "[]" } });

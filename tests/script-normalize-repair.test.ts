@@ -1,0 +1,37 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { rmSync } from "node:fs";
+process.env.DATABASE_URL="file:./test-normalize-repair.db";
+for(const suffix of ["","-journal","-wal","-shm"]) rmSync("prisma/test-normalize-repair.db"+suffix,{force:true});
+execFileSync(process.execPath,["node_modules/prisma/build/index.js","db","push","--skip-generate"],{stdio:"ignore",env:process.env,windowsHide:true});
+
+test("reparo CLI: prévia não grava; aplicação cria versão sem alterar origem ou aprovação",async()=>{
+ const {prisma}=await import("../src/lib/db");
+ const {appendVersion,approveVersion}=await import("../src/lib/script-versions");
+ const idea=await prisma.idea.create({data:{format:"short",theme:"Reparo",titles:"[]",projectCode:"PQEA-TEST"}});
+ const falado=[{personagem:"Menino",fala:"Antes."},{personagem:"Menino",fala:"Menino: Botei o pé.\nAvó: Taca-lhe pau!"},{personagem:"Menino",fala:"Mas parece.\nKachau!"},{personagem:"Avó",fala:"Fim."}];
+ const content=JSON.stringify({falado,cenas:[],pendencias:["Pendência original"],meta:{recipeVersion:2}});
+ const original=await appendVersion({ideaId:idea.id,expectedVersionId:null,content,markdown:()=>"# Teste\n**Projeto:** PQEA-TEST · versão 1\n\n## Pendências\nOriginal\n\n## Roteiro falado\n\n"+falado.map(l=>"**"+l.personagem+":** "+l.fala).join("\n\n")+"\n\n## Animação e direção\nPreservar.",category:"voz",origin:"test"});
+ await approveVersion(idea.id,original.id);
+ const run=(...args:string[])=>execFileSync(process.execPath,["node_modules/tsx/dist/cli.mjs","scripts/normalizar-falas.ts","--idea",idea.id,"--version","1",...args],{encoding:"utf8",env:process.env,windowsHide:true});
+ const before=await prisma.idea.findUniqueOrThrow({where:{id:idea.id}});
+ assert.match(run("--dry-run"),/DRY-RUN/);
+ assert.deepEqual(await prisma.idea.findUniqueOrThrow({where:{id:idea.id}}),before);
+ assert.equal(await prisma.scriptVersion.count({where:{ideaId:idea.id}}),1);
+ assert.match(run(),/Criada versão 2/);
+ const after=await prisma.idea.findUniqueOrThrow({where:{id:idea.id}});
+ assert.equal(after.approvedVersionId,original.id);
+ const next=await prisma.scriptVersion.findUniqueOrThrow({where:{id:after.currentVersionId!}});
+ assert.equal(next.baseVersionId,original.id);
+ assert.deepEqual(await prisma.scriptVersion.findUniqueOrThrow({where:{id:original.id}}),original);
+ const parsed=JSON.parse(next.content);
+ assert.deepEqual(parsed.falado,[falado[0],{personagem:"Menino",fala:"Botei o pé."},{personagem:"Avó",fala:"Taca-lhe pau!"},{personagem:"Menino",fala:"Mas parece."},{personagem:"Menino",fala:"Kachau!"},falado[3]]);
+ assert.deepEqual({...parsed,falado},JSON.parse(content));
+ assert.match(next.markdown,/versão 2/);
+ assert.match(next.markdown,/## Pendências\nOriginal/);
+ assert.match(next.markdown,/## Animação e direção\nPreservar\.$/);
+ assert.equal(await prisma.generation.count(),0);
+ assert.throws(()=>run("--dry-run"),/versão atual mudou/);
+ await prisma.$disconnect();
+});
