@@ -549,7 +549,7 @@ export default async function VideoStudyPage({ params }: PageProps<"/video/[id]"
             {studyJob ? (
               <RunningNote job={studyJob} what={`Estudo completo · ${studyJob.step ?? ""}`} />
             ) : diagJob || comJob ? (
-              <p className="text-xs text-zinc-500">Tem uma etapa rodando abaixo; o “Estudar tudo” libera quando ela terminar.</p>
+              <p className="text-xs text-zinc-500">Tem uma etapa rodando abaixo; o “Estudar este vídeo” libera quando ela terminar.</p>
             ) : (
               <ActionButton
                 action={studyAllAction.bind(null, v.id)}

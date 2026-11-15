@@ -26,6 +26,7 @@ import { ActionButton } from "@/app/video/[id]/forms";
 import { ConfirmDelete } from "@/app/nichos/[id]/forms";
 import { StateForm } from "@/components/StateForm";
 import { Collapsible } from "@/components/ui";
+import { WorkSection } from "@/components/workflow";
 import { ClampText } from "@/components/ui-client";
 import {
   addVideoToFormatAction,
@@ -79,9 +80,6 @@ function RecipeView({ c, videoIds }: { c: RecipeContent; videoIds: string[] }) {
   const box = "rounded-lg border border-line p-4";
   return (
     <div className="space-y-4 text-sm">
-      <ClampText lines={4} className="text-[15px] leading-relaxed text-zinc-200">
-        {c.resumo}
-      </ClampText>
       <div className="grid gap-4 md:grid-cols-2">
         <div className={box}>
           <H3>Como abre{R(c.abertura.estudos)}</H3>
@@ -250,6 +248,18 @@ export default async function FormatPage({ params, searchParams }: PageProps<"/f
   // Canais do mesmo nicho primeiro
   const myChannels = [...channels].sort((a, b) => Number(b.nicheId === f.nicheId) - Number(a.nicheId === f.nicheId));
   const howOf = new Map(f.channels.map((c) => [c.myChannelId, c.howText]));
+  const missingHow = myChannels.some((c) => c.nicheId === f.nicheId && !howOf.get(c.id));
+  // Uma ação principal por vez, na ordem do trabalho.
+  const next =
+    studies.length < MIN_FORMAT_VIDEOS
+      ? { text: `Ponha mais ${MIN_FORMAT_VIDEOS - studies.length} ${MIN_FORMAT_VIDEOS - studies.length === 1 ? "vídeo estudado" : "vídeos estudados"} que contam do mesmo jeito. Com ${MIN_FORMAT_VIDEOS} a receita fica confiável.`, href: "#fmt-videos", cta: "Pôr vídeos" }
+      : !content
+        ? { text: "Os vídeos já bastam. Gere a receita: o passo a passo que o roteiro vai seguir.", href: "#fmt-receita", cta: "Ir para a receita" }
+        : hasChanges
+          ? { text: "Os vídeos mudaram desde a receita. Gere de novo para ela valer para os vídeos atuais.", href: "#fmt-receita", cta: "Ir para a receita" }
+          : missingHow
+            ? { text: "A receita está pronta. Falta escrever como o seu canal faz este formato (quem narra, o que nunca pode).", href: "#fmt-meu-jeito", cta: "Escrever o meu jeito" }
+            : { text: "Receita pronta. Gere ideias neste formato.", href: `/gerador?niche=${f.nicheId}&format=${length}&formato=${f.id}`, cta: "Gerar ideias" };
 
   return (
     <div className="mx-auto max-w-6xl space-y-5">
@@ -268,14 +278,31 @@ export default async function FormatPage({ params, searchParams }: PageProps<"/f
         </p>
       </header>
 
-      {/* Vídeos */}
       <section className="card space-y-3 p-5">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="text-lg font-semibold">Vídeos do formato</h2>
-          <span className="text-xs text-zinc-500">
-            {studies.length} de {MIN_FORMAT_VIDEOS} a {MAX_FORMAT_VIDEOS} · um vídeo fica em um formato só por nicho
-          </span>
+        <h2 className="text-base font-semibold">O que isso quer dizer pra você</h2>
+        {content ? (
+          <ClampText lines={3} className="text-[15px] leading-relaxed text-zinc-200">
+            {content.resumo}
+          </ClampText>
+        ) : (
+          <p className="text-sm text-zinc-300">Formato é um jeito de contar que se repete no nicho. A receita, tirada dos vídeos abaixo, é o passo a passo que o roteiro segue.</p>
+        )}
+        <div className="flex flex-wrap items-center gap-3 rounded-lg bg-emerald-500/5 p-4 ring-1 ring-emerald-500/20">
+          <div className="min-w-0 flex-1">
+            <h3 className="text-sm font-semibold text-zinc-300">O que fazer agora</h3>
+            <p className="text-sm text-zinc-200">{next.text}</p>
+          </div>
+          <Link href={next.href} className="btn-primary btn-sm">
+            {next.cta}
+          </Link>
         </div>
+      </section>
+
+      {/* Vídeos */}
+      <WorkSection id="fmt-videos" title={`1 · Vídeos do formato (${studies.length})`} open={studies.length < MIN_FORMAT_VIDEOS}>
+        <p className="-mt-2 text-xs text-zinc-500">
+          De {MIN_FORMAT_VIDEOS} a {MAX_FORMAT_VIDEOS} vídeos. Cada vídeo fica em um formato só por nicho.
+        </p>
         {studies.length === 0 ? (
           <p className="text-sm text-zinc-400">Nenhum ainda. Escolha abaixo os vídeos estudados que seguem esta mesma estrutura.</p>
         ) : (
@@ -345,12 +372,11 @@ export default async function FormatPage({ params, searchParams }: PageProps<"/f
             </ul>
           )}
         </Collapsible>
-      </section>
+      </WorkSection>
 
       {/* Receita */}
-      <section className="card space-y-4 p-5">
-        <header className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-lg font-semibold">Receita do formato</h2>
+      <WorkSection id="fmt-receita" title="2 · Receita (o passo a passo do formato)" open={studies.length >= MIN_FORMAT_VIDEOS}>
+        <header>
           {recipe && (
             <span className="text-xs text-zinc-500">
               v{recipe.version} · {modelLabel(recipe.model)} · {fmtDateTime(recipe.createdAt)} · {recipeVideoIds.length} {recipeVideoIds.length === 1 ? "vídeo" : "vídeos"} · custou{" "}
@@ -410,7 +436,7 @@ export default async function FormatPage({ params, searchParams }: PageProps<"/f
               action={generateRecipeAction.bind(null, f.id)}
               label={content ? (hasChanges ? "Gerar de novo com os vídeos atuais" : "Gerar de novo") : "Gerar receita"}
               busy="Começando…"
-              hint={`${estimateHint(est)} · roda em segundo plano`}
+              hint={`${estimateHint(est)}. Roda em segundo plano; pode sair da página.`}
               className={content && !hasChanges ? "btn-secondary" : "btn-primary"}
             />
           </div>
@@ -433,17 +459,15 @@ export default async function FormatPage({ params, searchParams }: PageProps<"/f
             </ul>
           </details>
         )}
-      </section>
+      </WorkSection>
 
       {/* Medidas de fala */}
       {speech.perVideo.length > 0 && (
-        <section className="card space-y-3 p-5">
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <h2 className="text-base font-semibold">O que se repete nos vídeos (medido nas transcrições)</h2>
-            <span className="text-xs text-zinc-500">
-              sem custo · {num(speech.sentence.wordsPerSentence)} palavras por frase · {speech.sentence.shortPct ?? "—"}% das frases com 1 a 3 palavras
-            </span>
-          </div>
+        <WorkSection id="fmt-fala" title="Frases que se repetem nos vídeos">
+          <p className="-mt-2 text-xs text-zinc-500">
+            Contado nas legendas, sem custo. {num(speech.sentence.wordsPerSentence)} palavras por frase em média; {speech.sentence.shortPct ?? "—"}% das frases têm 1 a 3
+            palavras (frase curta prende mais em Short).
+          </p>
           <ul className="space-y-2 text-sm">
             {speech.perVideo.map((v) => (
               <li key={v.id}>
@@ -463,15 +487,13 @@ export default async function FormatPage({ params, searchParams }: PageProps<"/f
           {speech.shared.length > 0 && (
             <p className="text-xs text-zinc-400">Aparece em 2 ou mais vídeos: {speech.shared.slice(0, 10).map((x) => `“${x.phrase}” (${x.videos})`).join(", ")}</p>
           )}
-        </section>
+        </WorkSection>
       )}
 
       {/* Como o meu canal faz */}
-      <section className="card space-y-3 p-5">
-        <h2 className="text-lg font-semibold">Como o meu canal faz este formato</h2>
-        <p className="text-sm text-zinc-400">
-          O seu jeito de fazer: quem da família entra, quem narra e em que pessoa, o motor na ordem, bordões, fecho e o que nunca pode. Entra em toda
-          ideia e roteiro deste formato e vale mais que a receita quando os dois conflitam.
+      <WorkSection id="fmt-meu-jeito" title="3 · Como o meu canal faz este formato" open={missingHow}>
+        <p className="-mt-2 text-sm text-zinc-400">
+          Quem da família entra, quem narra, a ordem, bordões, fecho e o que nunca pode. Vale mais que a receita quando os dois discordam.
         </p>
         {myChannels.length === 0 ? (
           <p className="text-sm text-zinc-500">
@@ -501,7 +523,7 @@ export default async function FormatPage({ params, searchParams }: PageProps<"/f
             </Collapsible>
           ))
         )}
-      </section>
+      </WorkSection>
 
       {/* Editar */}
       <Collapsible title="Editar nome e descrição, ou apagar o formato" className="card p-4">

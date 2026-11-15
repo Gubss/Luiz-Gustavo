@@ -34,7 +34,7 @@ export function FormatGaps({ formatId, videos, gaps }: { formatId: string; video
                   <span className="text-xs text-zinc-500">
                     {c.channel} · {c.mult} a média
                   </span>
-                  <p className="text-xs text-zinc-400">{c.motivo} Abra e aperte “Estudar tudo”: o formato é sugerido no fim.</p>
+                  <p className="text-xs text-zinc-400">{c.motivo} Abra e aperte “Estudar este vídeo”: o formato é sugerido no fim.</p>
                 </li>
               ))}
             </ul>

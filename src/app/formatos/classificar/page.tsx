@@ -140,7 +140,7 @@ export default async function ClassifyPage({ searchParams }: PageProps<"/formato
           )}
         </div>
         <p className="text-xs text-zinc-500">
-          Vídeo em outra língua se classifica igual, pela transcrição no idioma original. Estudo novo (Estudar tudo / Diagnóstico) já ganha a sugestão sozinho
+          Vídeo em outra língua se classifica igual, pela transcrição no idioma original. Estudo novo (Estudar este vídeo / Diagnóstico) já ganha a sugestão sozinho
           quando o nicho tem formatos.
         </p>
       </section>
