@@ -792,8 +792,12 @@ function scriptPrompt(ctx: GeneratorContext, idea: { theme: string; chosenTitle:
     .join("\n");
 }
 
-/** Limite de saída do roteiro: raciocínio adaptativo + roteiro inteiro (a chamada é em streaming). */
-export const SCRIPT_MAX_TOKENS = 32000;
+/**
+ * Limite de saída do roteiro: raciocínio adaptativo + roteiro inteiro (a chamada é em streaming).
+ * 48 mil desde 15/11/2026: pensar espinha, plantados, falado e cenas antes de escrever passou de 32 mil no 1º teste real
+ * (≈27 mil de raciocínio + 5 mil de roteiro) e o roteiro foi cortado.
+ */
+export const SCRIPT_MAX_TOKENS = 48000;
 /** Saída típica sem histórico (o raciocínio conta como saída): roteiros reais de nov/2026 ficaram entre 26 e 31 mil. */
 const SCRIPT_OUT = { short: 26000, long: 28000 } as const;
 

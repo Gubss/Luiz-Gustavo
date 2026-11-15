@@ -301,7 +301,7 @@ test("gerador: formato obrigatório; receita + regra geral + perfil viram ideias
   assert.ok(sEst.usd > 0);
   assert.equal(sEst.basedOn, 0, "sem roteiro real ainda: usa a saída típica");
   assert.equal(sEst.outputTokens, 26000, "raciocínio adaptativo conta como saída");
-  assert.ok(Math.abs(sEst.script.usdMax - (sEst.inputTokens * 4 + 32000 * 20) / 1e6) < 1e-9, "teto do roteiro = limite de 32 mil tokens");
+  assert.ok(Math.abs(sEst.script.usdMax - (sEst.inputTokens * 4 + 48000 * 20) / 1e6) < 1e-9, "teto do roteiro = limite de 48 mil tokens");
   assert.ok(sEst.critic.usd > 0 && sEst.critic.usd < sEst.script.usd / 5, "leitura de espectador é barata");
   assert.ok(Math.abs(sEst.usd - (sEst.script.usd + sEst.critic.usd)) < 1e-9, "estimativa mostrada inclui a leitura");
   assert.ok(Math.abs(sEst.usdMax - (sEst.script.usdMax + sEst.critic.usdMax + sEst.rewriteMaxUsd)) < 1e-9, "teto inclui uma reescrita");
@@ -325,7 +325,7 @@ test("gerador: formato obrigatório; receita + regra geral + perfil viram ideias
   assert.match(bodies[1].system, /CAMADA NARRATIVA COMUM/);
   assert.match(bodies[1].system, /desastre em cadeia/i);
   assert.match(bodies[1].system, /Nenhum texto em cima de rosto/);
-  assert.equal((bodies[1] as unknown as { max_tokens: number }).max_tokens, 32000, "roteiro tem limite de 32 mil tokens");
+  assert.equal((bodies[1] as unknown as { max_tokens: number }).max_tokens, 48000, "roteiro tem limite de 48 mil tokens");
   assert.equal((bodies[1] as unknown as { stream: boolean }).stream, true, "roteiro vem por streaming");
   const sUser = bodies[1].messages[0].content.map((c) => c.text ?? "").join("");
   assert.match(sUser, /Premissa: Theo jura/);
