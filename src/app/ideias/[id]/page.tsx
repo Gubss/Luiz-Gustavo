@@ -8,7 +8,29 @@ import { modelLabel, usdToBrl, type CostEstimate } from "@/lib/claude";
 import { findSimilarTitles } from "@/lib/catalog";
 import { estimateScript, scriptPending, type FormatMeta, type IdeaData, type ScriptContent, type ScriptMetrics, type VoiceCheck } from "@/lib/generator";
 import type { PlaybookStats } from "@/lib/playbook";
-import { formatsOfNiche } from "@/lib/formats";
+import { formatsOfNiche, isDraft } from "@/lib/formats";
+import type { PlaybookFormat } from "@/lib/playbook";
+
+/** Formatos do nicho para regenerar uma ideia sem formato: prontos primeiro, cada um com uma linha de descrição. */
+async function formatChoicesFor(nicheId: string, length: PlaybookFormat) {
+  const formats = await formatsOfNiche(nicheId, length);
+  const recipes = await prisma.formatRecipe.findMany({
+    where: { id: { in: formats.flatMap((f) => f.recipes.map((r) => r.id)) } },
+    select: { id: true, content: true },
+  });
+  const resumo = new Map(recipes.map((r) => [r.id, parse<{ resumo?: string }>(r.content)?.resumo ?? ""]));
+  const oneLine = (t: string) => {
+    const first = t.split(/(?<=[.!?])\s/)[0] ?? t;
+    return first.length > 180 ? first.slice(0, 178) + "…" : first;
+  };
+  const rows = formats.map((f) => ({
+    ...f,
+    ready: !isDraft(f._count.videos) && f.recipes.length > 0,
+    line: oneLine(f.description || resumo.get(f.recipes[0]?.id ?? "") || ""),
+  }));
+  const ready = rows.filter((r) => r.ready);
+  return ready.length ? ready : rows;
+}
 import { StateForm } from "@/components/StateForm";
 import { FormatTag, PublishedNote, RepeatWarning, StatusBadge } from "@/components/IdeaCard";
 import { repeatsForIdeas } from "@/lib/my-catalog";
@@ -20,7 +42,7 @@ import {
   linkPublishedAction,
   returnIdeaAction,
   saveIdeaNotes,
-  setIdeaFormatAction,
+  regenerateWithFormatAction,
   setIdeaStatus,
   unlinkPublishedAction,
 } from "@/app/gerador/actions";
@@ -312,7 +334,7 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
     findSimilarTitles(`${idea.theme} ${idea.chosenTitle ?? ""}`, { nicheId: idea.nicheId ?? undefined, limit: 5 }),
     idea.myChannelId && idea.formatId ? estimateScript(idea.id) : null,
     runningJobsFor([idea.id]),
-    !idea.formatId && nicheForFormats ? formatsOfNiche(nicheForFormats, idea.format === "long" ? "long" : "short") : Promise.resolve([]),
+    !idea.formatId && nicheForFormats ? formatChoicesFor(nicheForFormats, idea.format === "long" ? "long" : "short") : Promise.resolve([]),
   ]);
   const scriptJob = jobs.find((j) => j.kind === "script");
   const repeats = (await repeatsForIdeas([idea])).get(idea.id) ?? [];
@@ -506,19 +528,52 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
         ) : !idea.myChannelId ? (
           <p className="text-sm text-amber-300">Essa ideia não está ligada a um canal seu, então não dá para escrever o roteiro.</p>
         ) : !idea.formatId ? (
-          <div className="space-y-2 border-t border-line pt-4">
-            <p className="text-sm text-amber-300">Esta ideia é de antes dos formatos. Escolha o formato para escrever o roteiro (ele segue a receita de um formato só).</p>
+          <div className="space-y-3 border-t border-line pt-4">
+            <p className="text-sm text-amber-300">
+              Esta ideia é de antes dos formatos. Para {sd ? "regenerar" : "escrever"} o roteiro, escolha primeiro o formato: o tema da ideia fica, só o jeito de
+              contar muda (segue o motor da receita do formato).
+            </p>
             {formatChoices.length ? (
-              <StateForm action={setIdeaFormatAction.bind(null, idea.id)} label="Usar este formato" className="btn-secondary">
-                <select name="formatId" className="input w-auto" defaultValue="">
-                  <option value="">— escolha —</option>
-                  {formatChoices.map((f) => (
-                    <option key={f.id} value={f.id}>
-                      {f.name}
-                      {f._count.videos < 3 ? " (rascunho)" : ""}
-                    </option>
-                  ))}
-                </select>
+              <StateForm
+                action={regenerateWithFormatAction.bind(null, idea.id)}
+                label={sd ? "Regenerar neste formato" : "Escrever neste formato"}
+                busy="Começando…"
+                hint="Opus · mesmo custo de escrever um roteiro · roda em segundo plano (até 3 min)"
+              >
+                <fieldset>
+                  <legend className="label">Qual formato usar?</legend>
+                  <div className="space-y-2">
+                    {formatChoices.map((f) => (
+                      <label key={f.id} className="flex items-start gap-2 rounded-lg border border-line p-2 text-sm hover:border-zinc-500">
+                        <input type="radio" name="formatId" value={f.id} required className="mt-1" />
+                        <span>
+                          <span className="font-medium text-zinc-100">{f.name}</span>
+                          {!f.ready && <span className="badge ml-2 bg-amber-600/30 text-amber-200">{f.recipes.length ? "rascunho" : "sem receita"}</span>}
+                          <span className="block text-xs text-zinc-400">{f.line || "Sem descrição."}</span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                  {!formatChoices.some((f) => f.ready) && (
+                    <p className="mt-1 text-xs text-amber-300">Nenhum formato pronto ainda (3+ vídeos e receita); estes ainda são rascunho.</p>
+                  )}
+                </fieldset>
+                <div>
+                  <label className="label">Título</label>
+                  <div className="space-y-1 text-sm">
+                    {allTitles.map((t, i) => (
+                      <label key={t} className="flex items-center gap-2">
+                        <input type="radio" name="title" value={t} defaultChecked={i === 0} />
+                        <span>{t}</span>
+                      </label>
+                    ))}
+                    <input name="customTitle" className="input mt-1" placeholder="…ou escreva outro título (opcional)" />
+                  </div>
+                </div>
+                <div>
+                  <label className="label">Pedido extra (opcional)</label>
+                  <textarea name="extra" rows={2} className="input" placeholder="Ex.: mais curto, até 35s · coloca a avó no final" />
+                </div>
               </StateForm>
             ) : (
               <p className="text-sm text-zinc-400">

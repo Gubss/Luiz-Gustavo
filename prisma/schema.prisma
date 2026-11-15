@@ -54,15 +54,16 @@ model Niche {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  channels   NicheChannel[]
-  myChannels MyChannel[]
-  playbooks  NichePlaybook[]
-  ideas      Idea[]
-  discovered DiscoveredChannel[]
-  searches   DiscoverySearch[]
-  studied    Video[]             @relation("StudyNiche")
-  formats    VideoFormat[]
-  rules      NicheRule[]
+  channels    NicheChannel[]
+  myChannels  MyChannel[]
+  playbooks   NichePlaybook[]
+  ideas       Idea[]
+  discovered  DiscoveredChannel[]
+  searches    DiscoverySearch[]
+  studied     Video[]             @relation("StudyNiche")
+  formats     VideoFormat[]
+  rules       NicheRule[]
+  suggestions FormatSuggestion[]
 }
 
 /// Canal de terceiros monitorado. Pode estar em vários nichos.
@@ -174,12 +175,12 @@ model MyChannel {
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
-  niche   Niche?            @relation(fields: [nicheId], references: [id], onDelete: SetNull)
-  videos  MyVideo[]
-  ideas   Idea[]
-  scripts MyChannelScript[]
-  reports MyChannelReport[]
-  catalog MyChannelVideo[]
+  niche       Niche?            @relation(fields: [nicheId], references: [id], onDelete: SetNull)
+  videos      MyVideo[]
+  ideas       Idea[]
+  scripts     MyChannelScript[]
+  reports     MyChannelReport[]
+  catalog     MyChannelVideo[]
   formatNotes ChannelFormat[]
   lessons     ChannelLesson[]
 }
@@ -310,15 +311,16 @@ model Video {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  channel    Channel          @relation(fields: [channelId], references: [id], onDelete: Cascade)
-  studyNiche Niche?           @relation("StudyNiche", fields: [studyNicheId], references: [id], onDelete: SetNull)
-  snapshots  VideoSnapshot[]
-  favorite   Favorite?
-  transcript Transcript?
-  diagnosis  Diagnosis?
-  structure  ScriptStructure?
-  inspired   MyVideo[]
-  formats    FormatVideo[]
+  channel     Channel            @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  studyNiche  Niche?             @relation("StudyNiche", fields: [studyNicheId], references: [id], onDelete: SetNull)
+  snapshots   VideoSnapshot[]
+  favorite    Favorite?
+  transcript  Transcript?
+  diagnosis   Diagnosis?
+  structure   ScriptStructure?
+  inspired    MyVideo[]
+  formats     FormatVideo[]
+  suggestions FormatSuggestion[]
 
   @@unique([platform, externalId])
   @@index([channelId, publishedAt])
@@ -457,18 +459,47 @@ model VideoFormat {
   name        String
   description String?
   length      String   @default("short") // "short" | "long"
+  // O que falta quando o formato tem menos de 3 vídeos: JSON GapHint (tipo de vídeo, palavras para procurar, candidatos do radar)
+  gaps        String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  niche    Niche             @relation(fields: [nicheId], references: [id], onDelete: Cascade)
-  videos   FormatVideo[]
-  recipes  FormatRecipe[]
-  ideas    Idea[]
-  scripts  MyChannelScript[]
-  channels ChannelFormat[]
-  lessons  ChannelLesson[]
+  niche       Niche              @relation(fields: [nicheId], references: [id], onDelete: Cascade)
+  suggestions FormatSuggestion[]
+  videos      FormatVideo[]
+  recipes     FormatRecipe[]
+  ideas       Idea[]
+  scripts     MyChannelScript[]
+  channels    ChannelFormat[]
+  lessons     ChannelLesson[]
 
   @@index([nicheId])
+}
+
+/// Sugestão automática de formato para um estudo (pela transcrição e pelo diagnóstico). Uma por vídeo e nicho.
+/// `label` é o nome do formato sugerido ou "nenhum". status: pending (esperando eu) | confirmed (aceitei) | changed (troquei).
+model FormatSuggestion {
+  id         String    @id @default(cuid())
+  videoId    String
+  nicheId    String
+  label      String
+  formatId   String?
+  reason     String
+  confidence String // "alta" | "média" | "baixa"
+  model      String
+  costUsd    Float?
+  status     String    @default("pending")
+  chosen     String? // o que eu escolhi no fim (nome do formato ou "nenhum")
+  decidedAt  DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  video  Video        @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  niche  Niche        @relation(fields: [nicheId], references: [id], onDelete: Cascade)
+  format VideoFormat? @relation(fields: [formatId], references: [id], onDelete: SetNull)
+
+  @@unique([videoId, nicheId])
+  @@index([nicheId, status])
 }
 
 /// Vídeo estudado escolhido para um formato. Um vídeo entra em no máximo um formato por nicho (para não misturar receitas).
@@ -563,7 +594,7 @@ model ChannelLesson {
 
 /// Status: IDEA | SCRIPT | RETURNED | PRODUCED | PUBLISHED | DISCARDED. Format: short | long (tamanho, não a receita)
 model Idea {
-  id               String   @id @default(cuid())
+  id               String    @id @default(cuid())
   nicheId          String?
   myChannelId      String?
   format           String
@@ -571,7 +602,7 @@ model Idea {
   justification    String?
   titles           String // JSON array de títulos
   chosenTitle      String?
-  status           String   @default("IDEA")
+  status           String    @default("IDEA")
   script           String?
   scriptModel      String?
   referenceIds     String? // JSON array de Video.id usados como referência
@@ -592,8 +623,8 @@ model Idea {
   // Devolução do Estúdio (roteiro reprovado no filtro de produção)
   returnNotes      String?
   returnedAt       DateTime?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   niche          Niche?          @relation(fields: [nicheId], references: [id], onDelete: SetNull)
   myChannel      MyChannel?      @relation(fields: [myChannelId], references: [id], onDelete: SetNull)

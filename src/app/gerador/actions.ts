@@ -39,19 +39,26 @@ export async function generateIdeasAction(req: Omit<IdeasRequest, "ponto">, _pre
   }
 }
 
-export async function generateScriptAction(ideaId: string, _prev: FormState, fd: FormData): Promise<FormState> {
+function startScriptJob(ideaId: string, label: string, title: string, extra: string) {
+  return startJob(
+    { kind: "script", targetId: ideaId, label: `Roteiro: ${label}`, href: `/ideias/${ideaId}`, expectedSec: 90 },
+    async () => {
+      const r = await generateScript(ideaId, { title, extra });
+      return `${r.metrics.scenes} cenas, ~${r.metrics.durationSec}s. Custo: ${money(r.costUsd)}.`;
+    },
+  );
+}
+
+const pickedTitle = (fd: FormData) => {
   const picked = String(fd.get("title") ?? "");
   const custom = String(fd.get("customTitle") ?? "").trim();
+  return custom || (picked === "__custom" ? "" : picked);
+};
+
+export async function generateScriptAction(ideaId: string, _prev: FormState, fd: FormData): Promise<FormState> {
   try {
     const idea = await prisma.idea.findUniqueOrThrow({ where: { id: ideaId }, select: { theme: true, chosenTitle: true } });
-    const extra = String(fd.get("extra") ?? "");
-    await startJob(
-      { kind: "script", targetId: ideaId, label: `Roteiro: ${idea.chosenTitle || idea.theme}`, href: `/ideias/${ideaId}`, expectedSec: 90 },
-      async () => {
-        const r = await generateScript(ideaId, { title: custom || (picked === "__custom" ? "" : picked), extra });
-        return `${r.metrics.scenes} cenas, ~${r.metrics.durationSec}s. Custo: ${money(r.costUsd)}.`;
-      },
-    );
+    await startScriptJob(ideaId, idea.chosenTitle || idea.theme, pickedTitle(fd), String(fd.get("extra") ?? ""));
     refresh(ideaId);
     return { ok: BACKGROUND_OK };
   } catch (e) {
@@ -109,15 +116,58 @@ export async function deleteIdea(ideaId: string) {
   redirect("/ideias");
 }
 
-/** Escolhe o formato de uma ideia antiga (gerada antes dos formatos), para poder escrever o roteiro. */
+/**
+ * Põe uma ideia antiga (de antes dos formatos) num formato. O tema fica; a ideia é marcada para ser recontada
+ * no motor desse formato (gancho e estrutura antigos deixam de valer).
+ */
+async function assignFormat(ideaId: string, formatId: string) {
+  const [f, idea] = await Promise.all([
+    prisma.videoFormat.findUnique({ where: { id: formatId } }),
+    prisma.idea.findUniqueOrThrow({ where: { id: ideaId }, select: { ideaData: true, nicheId: true, myChannel: { select: { nicheId: true } } } }),
+  ]);
+  if (!f) throw new Error("Esse formato não existe mais.");
+  const nicheId = idea.nicheId ?? idea.myChannel?.nicheId;
+  if (nicheId && nicheId !== f.nicheId) throw new Error("Esse formato é de outro nicho.");
+  let ideaData = idea.ideaData;
+  if (ideaData) {
+    try {
+      const d = JSON.parse(ideaData) as Record<string, unknown>;
+      d.recontar = { formatId: f.id, formatName: f.name, at: new Date().toISOString() };
+      ideaData = JSON.stringify(d);
+    } catch {
+      /* ideaData estragado: segue só com o tema */
+    }
+  }
+  await prisma.idea.update({ where: { id: ideaId }, data: { formatId: f.id, nicheId: f.nicheId, format: f.length, ideaData } });
+  return f;
+}
+
+/** Escolhe o formato de uma ideia antiga, sem escrever o roteiro ainda. */
 export async function setIdeaFormatAction(ideaId: string, _prev: FormState, fd: FormData): Promise<FormState> {
   const formatId = String(fd.get("formatId") ?? "");
   if (!formatId) return { error: "Escolha um formato." };
-  const f = await prisma.videoFormat.findUnique({ where: { id: formatId } });
-  if (!f) return { error: "Esse formato não existe mais." };
-  await prisma.idea.update({ where: { id: ideaId }, data: { formatId, nicheId: f.nicheId, format: f.length } });
-  refresh(ideaId);
-  return { ok: `Formato: ${f.name}.` };
+  try {
+    const f = await assignFormat(ideaId, formatId);
+    refresh(ideaId);
+    return { ok: `Formato: ${f.name}.` };
+  } catch (e) {
+    return { error: errMsg(e) };
+  }
+}
+
+/** Regenerar uma ideia sem formato: primeiro escolhe o formato (pergunta obrigatória), depois escreve o roteiro nele. */
+export async function regenerateWithFormatAction(ideaId: string, _prev: FormState, fd: FormData): Promise<FormState> {
+  const formatId = String(fd.get("formatId") ?? "");
+  if (!formatId) return { error: "Escolha o formato antes: o roteiro segue a receita de um formato só." };
+  try {
+    const f = await assignFormat(ideaId, formatId);
+    const idea = await prisma.idea.findUniqueOrThrow({ where: { id: ideaId }, select: { theme: true, chosenTitle: true } });
+    await startScriptJob(ideaId, idea.chosenTitle || idea.theme, pickedTitle(fd), String(fd.get("extra") ?? ""));
+    refresh(ideaId);
+    return { ok: `Formato: ${f.name}. ${BACKGROUND_OK}` };
+  } catch (e) {
+    return { error: errMsg(e) };
+  }
 }
 
 /** Devolução do Estúdio: o roteiro foi reprovado no filtro de produção. Cada ponto vira aprendizado do canal e a ideia fica "devolvida". */

@@ -377,7 +377,16 @@ export const IdeasSchema = z.object({
   ),
 });
 export type IdeasContent = z.infer<typeof IdeasSchema>;
-export type IdeaData = IdeasContent["ideias"][number] & { leitura?: string; ponto?: string; jaFeito?: OwnMatch[] };
+export type IdeaData = IdeasContent["ideias"][number] & {
+  leitura?: string;
+  ponto?: string;
+  jaFeito?: OwnMatch[];
+  /** Ideia de antes dos formatos que ganhou formato depois: o tema fica, o jeito de contar segue este formato. */
+  recontar?: { formatId: string; formatName: string; at: string };
+};
+
+/** A ideia foi pensada antes do formato (ou para outro) e vai ser recontada no formato escolhido? */
+export const isRetell = (d: Partial<IdeaData> | null, formatId: string) => d?.recontar?.formatId === formatId;
 
 const IDEAS_TASK = `TAREFA: sugerir ideias de vídeo para o meu canal, TODAS no formato escolhido.
 - Cada ideia segue o motor da receita, com os personagens e cenários do perfil.
@@ -540,16 +549,29 @@ TELA E PRODUÇÃO:
 
 function scriptPrompt(ctx: GeneratorContext, idea: { theme: string; chosenTitle: string | null; ideaData: string | null }, title: string, extra: string) {
   const d = parse<IdeaData>(idea.ideaData);
-  const ideaTxt = d
-    ? [
-        `Tema: ${d.tema}`,
-        `Premissa: ${d.premissa}`,
-        `Como segue o motor do formato: ${d.formatoDeHistoria}`,
-        `Gancho sugerido: ${d.gancho} (abertura: ${d.ganchoPadrao})`,
-        `Adaptação: da receita = ${d.adaptacao.daCartilha} · do canal = ${d.adaptacao.doCanal}`,
-        `Risco apontado: ${d.risco}`,
-      ].join("\n")
-    : `Tema: ${idea.theme}`;
+  const retell = isRetell(d, ctx.videoFormat.id);
+  const ideaTxt = !d
+    ? `Tema: ${idea.theme}`
+    : retell
+      ? [
+          `Tema: ${d.tema || idea.theme}`,
+          `Premissa (pensada antes do formato): ${d.premissa}`,
+          d.risco ? `Risco apontado: ${d.risco}` : "",
+          "",
+          `RECONTAR NO FORMATO: esta ideia foi criada antes dos formatos. O TEMA fica (o assunto, a situação de partida e quem está envolvido).`,
+          `Só muda o jeito de contar: siga o motor da receita de "${ctx.videoFormat.name}" passo a passo, com a abertura, as repetições, a tensão e o fecho dela.`,
+          `Gancho, estrutura e "formato de história" antigos não valem; se a premissa antiga atrapalhar o motor, ajuste a premissa e mantenha o tema.`,
+        ]
+          .filter((x) => x !== "")
+          .join("\n")
+      : [
+          `Tema: ${d.tema}`,
+          `Premissa: ${d.premissa}`,
+          `Como segue o motor do formato: ${d.formatoDeHistoria}`,
+          `Gancho sugerido: ${d.gancho} (abertura: ${d.ganchoPadrao})`,
+          `Adaptação: da receita = ${d.adaptacao.daCartilha} · do canal = ${d.adaptacao.doCanal}`,
+          `Risco apontado: ${d.risco}`,
+        ].join("\n");
   const target =
     ctx.channel.durationSec ?? (ctx.recipeStats?.durationSec.value != null ? Math.round(ctx.recipeStats.durationSec.value) : null);
   return [
@@ -557,7 +579,7 @@ function scriptPrompt(ctx: GeneratorContext, idea: { theme: string; chosenTitle:
     "",
     "# IDEIA PARA ROTEIRIZAR",
     ideaTxt,
-    `Título escolhido: ${title}`,
+    `Título escolhido: ${title}${retell ? " (pode trocar por um título no jeito do formato, sem mudar o tema)" : ""}`,
     `Formato: "${ctx.videoFormat.name}" · ${formatLabel(ctx.format)}${target ? ` · duração alvo ≈ ${target}s` : ""}`,
     extra.trim() ? `Pedido extra: ${extra.trim()}` : "",
   ]

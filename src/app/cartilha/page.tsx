@@ -458,6 +458,10 @@ export default async function PlaybookPage({ searchParams }: PageProps<"/cartilh
         Agora cada formato tem a sua receita e o nicho tem uma regra geral (só o que é comum a todos os formatos).{" "}
         <Link href={`/formatos?niche=${niche.id}&format=${format}`} className="underline">
           Abrir Formatos do nicho
+        </Link>{" "}
+        ·{" "}
+        <Link href={`/formatos/limpeza?niche=${niche.id}`} className="underline">
+          Apagar a cartilha antiga e as ideias sem formato (com cópia de segurança antes)
         </Link>
       </p>
 

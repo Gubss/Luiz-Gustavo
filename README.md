@@ -147,6 +147,21 @@ falas copiadas das transcrições aparecem num aviso na tela da ideia. O checkli
 
 e o bloco "Referência do canal" ganha "Formato usado" com o texto de como o canal faz esse formato.
 
+**Classificação automática.** Em *Formatos do nicho → Classificar estudos automaticamente* o Radar lê a transcrição (em
+qualquer língua) e o diagnóstico de cada estudo e sugere o formato (ou "nenhum") com uma frase de motivo (Sonnet, centavos por
+estudo). Nada é gravado até você conferir a lista e apertar **Gravar e gerar as receitas**: aí os formatos que faltam são
+criados, cada vídeo entra no escolhido (até 5; o resto fica de reserva) e as receitas são geradas. Formato que ficou com menos
+de 3 vídeos ganha a lista **do que falta**: que tipo de vídeo procurar, palavras para buscar e outliers do radar ainda não
+estudados que parecem seguir o mesmo motor. Estudo novo (Estudar tudo / Diagnóstico) já sai com a sugestão na tela do estudo,
+com **Confirmar** ou trocar.
+
+**Limpeza** (*Formatos do nicho → Limpeza*, também em Configurações → Cópia de segurança): apaga a cartilha antiga do nicho
+e as ideias/roteiros sem formato. Faz a cópia de segurança do banco **antes**; se a cópia falhar, nada é apagado. Estudos e
+roteiros aprovados do perfil nunca entram. A ideia dos balões fica de fora.
+
+**Ideia sem formato:** para escrever ou regenerar o roteiro, a tela da ideia pergunta primeiro o formato (os prontos do nicho,
+com uma linha de descrição). O tema fica; o roteiro reconta a ideia no motor da receita (gancho e estrutura antigos não valem).
+
 **Devolução do Estúdio:** na tela da ideia, cole os pontos em que o roteiro foi reprovado no filtro de produção (um por linha).
 A ideia fica **Devolvida** e cada ponto vira aprendizado do canal, que entra em toda ideia e roteiro com peso maior que a receita
 (lista também no perfil do canal, com *tirar*).

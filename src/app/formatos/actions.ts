@@ -8,6 +8,8 @@ import { startJob } from "@/lib/jobs";
 import { formatLabel, type PlaybookFormat } from "@/lib/playbook";
 import { FormatError, MAX_FORMAT_VIDEOS, generateRecipe, generateRule, setVideoFormat } from "@/lib/formats";
 import type { FormState } from "@/app/video/actions";
+import { runCleanup } from "@/lib/cleanup";
+import { NONE, applyChoices, classifyMany, findGaps, nicheStudiesForClassify, recipesAndGaps, sameName } from "@/lib/classify";
 
 const money = (usd: number) => `US$ ${usd.toFixed(usd < 0.1 ? 3 : 2).replace(".", ",")} (≈ R$ ${(usd * usdToBrl()).toFixed(2).replace(".", ",")})`;
 const errMsg = (e: unknown) => (e instanceof Error ? e.message : "Erro inesperado.");
@@ -70,6 +72,7 @@ export async function setVideoFormatAction(videoId: string, nicheId: string, _pr
       if (count >= MAX_FORMAT_VIDEOS) return { error: `Esse formato já tem ${MAX_FORMAT_VIDEOS} vídeos. Tire um antes de pôr outro.` };
     }
     await setVideoFormat(videoId, nicheId, formatId);
+    await markSuggestion(videoId, nicheId, formatId);
   } catch (e) {
     return { error: errMsg(e) };
   }
@@ -124,5 +127,149 @@ export async function generateRuleAction(nicheId: string, length: PlaybookFormat
     return { ok: BACKGROUND_OK };
   } catch (e) {
     return { error: e instanceof FormatError ? e.message : errMsg(e) };
+  }
+}
+
+/** Escolha feita à mão na tela do estudo: a sugestão automática conta como confirmada (se bateu) ou trocada. */
+async function markSuggestion(videoId: string, nicheId: string, formatId: string | null) {
+  const sug = await prisma.formatSuggestion.findUnique({ where: { videoId_nicheId: { videoId, nicheId } } });
+  if (!sug) return;
+  const chosen = formatId ? ((await prisma.videoFormat.findUnique({ where: { id: formatId }, select: { name: true } }))?.name ?? NONE) : NONE;
+  await prisma.formatSuggestion.update({
+    where: { id: sug.id },
+    data: { status: sameName(sug.label, chosen) ? "confirmed" : "changed", chosen, decidedAt: new Date() },
+  });
+}
+
+// ---------- Classificação automática ----------
+
+const classifyHref = (nicheId: string) => `/formatos/classificar?niche=${nicheId}`;
+
+function refreshClassify(nicheId: string) {
+  refresh();
+  revalidatePath("/formatos/classificar");
+  revalidatePath(classifyHref(nicheId));
+}
+
+/** Sugere o formato de todos os estudos do nicho (só dos que ainda não têm sugestão, ou de todos de novo). Não grava formato nenhum. */
+export async function classifyNicheAction(nicheId: string, redo: boolean): Promise<FormState> {
+  try {
+    const n = await prisma.niche.findUniqueOrThrow({ where: { id: nicheId } });
+    const rows = await nicheStudiesForClassify(nicheId);
+    const ids = rows.filter((r) => redo || !r.suggestion).map((r) => r.study.id);
+    if (!ids.length) return { ok: "Todos os estudos do nicho já têm sugestão." };
+    await startJob(
+      { kind: "classify", targetId: `classify:${nicheId}`, label: `Sugerir formatos: ${n.name} (${ids.length} estudos)`, href: classifyHref(nicheId), expectedSec: 8 * ids.length },
+      async (report) => {
+        const r = await classifyMany(nicheId, ids, (done, total) => report((done / total) * 100, `${done} de ${total}`));
+        const err = r.errors.length ? ` ${r.errors.length} falharam (${r.errors[0]}).` : "";
+        return `${r.ok} sugestões prontas para conferir.${err} Custo: ${money(r.costUsd)}.`;
+      },
+      ["recipes-batch"],
+    );
+    refreshClassify(nicheId);
+    return { ok: BACKGROUND_OK };
+  } catch (e) {
+    return { error: errMsg(e) };
+  }
+}
+
+/** Grava o que eu confirmei na lista, cria os formatos que faltam e começa a gerar as receitas (e o que falta nos rascunhos). */
+export async function applyChoicesAction(nicheId: string, _prev: FormState, fd: FormData): Promise<FormState> {
+  const choices = [...fd.entries()]
+    .filter(([k]) => k.startsWith("pick:"))
+    .map(([k, v]) => ({ videoId: k.slice(5), label: String(v) }));
+  if (!choices.some((c) => c.label)) return { error: "Nenhuma escolha para gravar (todas estão em “decidir depois”)." };
+  let res;
+  try {
+    res = await applyChoices(nicheId, choices);
+  } catch (e) {
+    return { error: errMsg(e) };
+  }
+  const touched = res.placed.filter((p) => p.total > 0).map((p) => p.formatId);
+  const lines = [
+    res.created.length ? `Formatos criados: ${res.created.join(", ")}.` : "",
+    ...res.placed.map(
+      (p) =>
+        `${p.name} (${formatLabel(p.length, true)}): ${p.total} vídeo(s)${p.added ? `, ${p.added} entraram agora` : ""}${p.reserve.length ? `; ficaram de reserva (formato cheio): ${p.reserve.join("; ")}` : ""}.`,
+    ),
+    res.none ? `${res.none} ficaram sem formato.` : "",
+  ].filter(Boolean);
+  if (touched.length) {
+    try {
+      const n = await prisma.niche.findUniqueOrThrow({ where: { id: nicheId } });
+      await startJob(
+        { kind: "recipes-batch", targetId: `classify:${nicheId}`, label: `Receitas dos formatos: ${n.name}`, href: classifyHref(nicheId), expectedSec: 100 * touched.length },
+        async (report) => {
+          const r = await recipesAndGaps(touched, (done, total, step) => report((done / total) * 100, step));
+          return `${r.notes.join(" · ")}. Custo: ${money(r.costUsd)}.`;
+        },
+        ["classify"],
+      );
+      lines.push("Gerando as receitas em segundo plano; o aviso no canto mostra quando terminar.");
+    } catch (e) {
+      lines.push(`Não comecei as receitas: ${errMsg(e)}`);
+    }
+  }
+  refreshClassify(nicheId);
+  return { ok: lines.join("\n") };
+}
+
+/** Na tela do estudo: aceita a sugestão do Radar (cria o formato se ainda não existe). */
+export async function confirmSuggestionAction(videoId: string, nicheId: string): Promise<FormState> {
+  try {
+    const sug = await prisma.formatSuggestion.findUniqueOrThrow({ where: { videoId_nicheId: { videoId, nicheId } } });
+    const res = await applyChoices(nicheId, [{ videoId, label: sug.label }]);
+    refreshClassify(nicheId);
+    revalidatePath(`/video/${videoId}`);
+    const p = res.placed[0];
+    if (sug.label === NONE) return { ok: "Confirmado: fica sem formato." };
+    if (p?.reserve.length) return { ok: `Confirmado, mas ${p.name} já tem ${MAX_FORMAT_VIDEOS} vídeos: este ficou de reserva.` };
+    return { ok: `Confirmado: entrou em ${p?.name ?? sug.label}.${res.created.length ? " Formato criado." : ""}` };
+  } catch (e) {
+    return { error: errMsg(e) };
+  }
+}
+
+/** Refaz a lista do que falta num formato rascunho (tipo de vídeo e candidatos do radar). */
+export async function findGapsAction(formatId: string): Promise<FormState> {
+  try {
+    const f = await prisma.videoFormat.findUniqueOrThrow({ where: { id: formatId } });
+    await startJob({ kind: "gaps", targetId: formatId, label: `O que falta: ${f.name}`, href: `/formatos/${formatId}`, expectedSec: 25 }, async () => {
+      const g = await findGaps(formatId);
+      return `${g.candidatos.length} candidato(s) no radar. Custo: ${money(g.costUsd)}.`;
+    });
+    refresh(formatId);
+    revalidatePath(classifyHref(f.nicheId));
+    return { ok: BACKGROUND_OK };
+  } catch (e) {
+    return { error: errMsg(e) };
+  }
+}
+
+// ---------- Limpeza (cartilha antiga + ideias sem formato) ----------
+
+/** Faz a cópia de segurança e só depois apaga o que está marcado. */
+export async function cleanupAction(nicheId: string, _prev: FormState, fd: FormData): Promise<FormState> {
+  if (fd.get("confirm") !== "on") return { error: "Marque a caixa de confirmação antes de apagar." };
+  try {
+    const r = await runCleanup(nicheId, { playbooks: fd.get("playbooks") === "on", ideaIds: fd.getAll("idea").map(String) });
+    revalidatePath("/cartilha");
+    revalidatePath("/ideias");
+    revalidatePath("/gerador");
+    revalidatePath("/formatos/limpeza");
+    revalidatePath("/configuracoes");
+    return {
+      ok: [
+        `Cópia de segurança feita antes: ${r.backup.path}`,
+        `Apagado: ${r.playbooks} ${r.playbooks === 1 ? "versão da cartilha antiga" : "versões da cartilha antiga"} e ${r.ideas} ${r.ideas === 1 ? "ideia" : "ideias"} (com os roteiros).`,
+        r.kept.length ? `Ficou: ${r.kept.join("; ")}.` : "",
+        "Estudos e roteiros aprovados do perfil não foram tocados.",
+      ]
+        .filter(Boolean)
+        .join("\n"),
+    };
+  } catch (e) {
+    return { error: errMsg(e) };
   }
 }
