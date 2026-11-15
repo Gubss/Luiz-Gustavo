@@ -4,6 +4,7 @@
  */
 import { test, before } from "node:test";
 import assert from "node:assert/strict";
+import { withSse } from "./anthropic-sse";
 import { execSync } from "node:child_process";
 import { rmSync } from "node:fs";
 
@@ -72,7 +73,7 @@ const SCRIPT = {
 };
 
 before(() => {
-  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+  globalThis.fetch = withSse(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(input instanceof Request ? input.url : String(input));
     if (url.hostname === "api.anthropic.com") {
       const body = JSON.parse(String(init?.body));
@@ -249,6 +250,8 @@ test("gerador: formato obrigatório; receita + regra geral + perfil viram ideias
   assert.equal(bodies.length, 2);
   assert.match(bodies[1].system, /TAREFA: escrever o roteiro/);
   assert.match(bodies[1].system, /Nenhum texto em cima de rosto/);
+  assert.equal((bodies[1] as unknown as { max_tokens: number }).max_tokens, 32000, "roteiro tem limite de 32 mil tokens");
+  assert.equal((bodies[1] as unknown as { stream: boolean }).stream, true, "roteiro vem por streaming");
   const sUser = bodies[1].messages[0].content.map((c) => c.text ?? "").join("");
   assert.match(sUser, /Premissa: Theo jura/);
   assert.match(sUser, /duração alvo ≈ 35s/, "duração do perfil vence a da receita");

@@ -4,6 +4,7 @@
  */
 import { test, before } from "node:test";
 import assert from "node:assert/strict";
+import { withSse } from "./anthropic-sse";
 import { execSync } from "node:child_process";
 import { rmSync } from "node:fs";
 
@@ -32,7 +33,7 @@ const PLAYBOOK = {
 };
 
 before(() => {
-  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+  globalThis.fetch = withSse(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(input instanceof Request ? input.url : String(input));
     if (url.hostname === "api.anthropic.com") {
       anthropicBodies.push(JSON.parse(String(init?.body)));

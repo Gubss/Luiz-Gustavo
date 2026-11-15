@@ -186,7 +186,7 @@ export async function runProfileFromChannel(myChannelId: string, report?: (p: nu
   const { prompt, pick, captions } = await buildPrompt(myChannelId, { fetchCaptions: true });
   if (!pick.length) throw new Error("Não achei vídeos nesse canal. Confira o link do canal no perfil.");
   await report?.(35, "Claude escrevendo o perfil (3 de 3)");
-  const r = await callStructured({ kind: "profile-from-channel", model: s.modelDeep, effort: "medium", system: SYSTEM, user: prompt, schema: ProfileDraftSchema, maxTokens: 16000 });
+  const r = await callStructured({ kind: "profile-from-channel", model: s.modelDeep, effort: "medium", system: SYSTEM, user: prompt, schema: ProfileDraftSchema, maxTokens: 32000 });
   const md = draftToMd(c.name, c.url, r.data, pick);
   await prisma.setting.upsert({
     where: { key: DRAFT_KEY(myChannelId) },
