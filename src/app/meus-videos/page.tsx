@@ -1,3 +1,5 @@
+import { AnalyticsOverview } from "@/components/AnalyticsOverview";
+import { WorkSection } from "@/components/workflow";
 import Link from "next/link";
 import { Collapsible, Help, PageHeader } from "@/components/ui";
 import { ClampText } from "@/components/ui-client";
@@ -116,13 +118,13 @@ function VideosTable({ rows, all, now }: { rows: VideoRow[]; all: VideoRow[]; no
           <tr>
             <th className="font-normal" colSpan={2} />
             <th className="border-l border-line/60 pb-1 text-center font-normal text-zinc-400" colSpan={SHOWN_CHECKPOINTS.length}>
-              Views com…
+              Visualizações com…
             </th>
             <th className="font-normal" colSpan={2} />
           </tr>
           <tr>
             <th className="pb-2 text-left font-normal">Vídeo</th>
-            <th className="pb-2 pr-4 text-right font-normal">Views agora</th>
+            <th className="pb-2 pr-4 text-right font-normal">Visualizações</th>
             {SHOWN_CHECKPOINTS.map((h) => (
               <th key={h} className="border-l border-line/60 pb-2 text-center font-normal">
                 {h < 24 ? checkpointLabel(h) : h === 24 ? "1 dia" : h === 48 ? "2 dias" : `${Math.round(h / 24)} dias`}
@@ -194,7 +196,7 @@ export default async function MyVideosPage({ searchParams }: { searchParams: Pro
     <div className="mx-auto max-w-6xl space-y-6">
       <PageHeader
         title="Meus vídeos"
-        subtitle="Como cada vídeo seu está indo comparado com o normal do canal, e por quê."
+        subtitle="7 · Veja os resultados e escolha o que melhorar no próximo vídeo."
         help={
           <p>
             Acompanha cada vídeo do seu canal em 1h, 3h, 24h, 48h, 3 dias e 7 dias, compara com o normal do próprio canal na mesma idade e explica por
@@ -215,7 +217,8 @@ export default async function MyVideosPage({ searchParams }: { searchParams: Pro
         </div>
       )}
 
-      <section className="card grid gap-5 p-5 md:grid-cols-[1fr_1fr]">
+      <AnalyticsOverview channelId={c.id} />
+      <WorkSection id="detail-1" title="Conexão e atualização">
         <div className="space-y-3">
           <div className="flex items-center gap-3">
             {c.thumbnailUrl && (
@@ -240,7 +243,7 @@ export default async function MyVideosPage({ searchParams }: { searchParams: Pro
           ) : (
             <ActionButton
               action={refreshChannelAction.bind(null, c.id)}
-              label="↻ Atualizar agora"
+              label="Atualizar números"
               busy="Começando…"
               hint={`Vídeos novos + números de todos${google?.status === "ok" ? " + Analytics" : ""}. Grátis (≈ ${2 + Math.ceil(videos.length / 50)} unidades de cota).`}
               className="btn-secondary"
@@ -278,9 +281,9 @@ export default async function MyVideosPage({ searchParams }: { searchParams: Pro
             </div>
           )}
         </div>
-      </section>
+      </WorkSection>
 
-      <section className="card space-y-4 p-5" id="canal">
+      <WorkSection id="canal" title="Análise do canal">
         <header className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-lg font-semibold">Diagnóstico do canal</h2>
@@ -407,7 +410,7 @@ export default async function MyVideosPage({ searchParams }: { searchParams: Pro
             )}
           </div>
         )}
-      </section>
+      </WorkSection>
 
       <section className="card space-y-3 p-5">
         <h2 className="text-lg font-semibold">Últimos 30 dias ({recent.length})</h2>
@@ -420,7 +423,7 @@ export default async function MyVideosPage({ searchParams }: { searchParams: Pro
       </section>
 
       {older.length > 0 && (
-        <section className="card space-y-3 p-5">
+        <WorkSection id="detail-4" title="Vídeos mais antigos">
           <h2 className="text-lg font-semibold">Mais antigos ({older.length})</h2>
           <VideosTable rows={showAll ? older : older.slice(0, 20)} all={videos} now={now} />
           {!showAll && older.length > 20 && (
@@ -428,7 +431,7 @@ export default async function MyVideosPage({ searchParams }: { searchParams: Pro
               Mostrar todos
             </Link>
           )}
-        </section>
+        </WorkSection>
       )}
     </div>
   );
