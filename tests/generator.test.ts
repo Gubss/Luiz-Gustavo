@@ -25,6 +25,7 @@ const textOf = (b: Body) => b.messages[0].content.map((c) => c.text ?? "").join(
 
 /** Leitura de espectador simulada: 3 risadas com reação, nada a corrigir. */
 const CRITIC_OK = {
+  narrativa: [],
   risadas: [
     { cena: 1, esperado: "rugido de leão", aconteceu: "o pai diz que nem abria a boca", reacao: "Theo cai do sofá" },
     { cena: 3, esperado: "som assustador", aconteceu: "som de pombo", reacao: "Theo ri" },
@@ -49,6 +50,7 @@ const IDEAS = {
     {
       tema: "Mitos do T-Rex",
       premissa: "Theo jura que o T-Rex rugia igual leão. O pai mostra que ele provavelmente fazia um som grave de boca fechada.",
+      viabilidade: { situacao: "Theo imita o T-Rex", regra: "", motivacao: "Theo quer assustar o pai", conflito: "o pai sabe o som real", consequencias: ["o pai imita", "Theo ri"], virada: "o pombo da janela", sustenta: true, motivo: "cadeia inteira" },
       formatoDeHistoria: "Theo afirma algo errado e o pai corrige",
       gancho: "THEO: Pai, o T-Rex rugia igual leão, né?",
       ganchoPadrao: "Mito vs. verdade",
@@ -63,12 +65,25 @@ const IDEAS = {
     {
       tema: "Meteoro",
       premissa: "Theo acha que todos os dinossauros morreram no mesmo dia. A mãe conta das aves.",
+      viabilidade: { situacao: "Theo imita o T-Rex", regra: "", motivacao: "Theo quer assustar o pai", conflito: "o pai sabe o som real", consequencias: ["o pai imita", "Theo ri"], virada: "o pombo da janela", sustenta: true, motivo: "cadeia inteira" },
       formatoDeHistoria: "Pergunta no jantar",
       gancho: "THEO: Os dinossauros morreram tudo num dia só!",
       ganchoPadrao: "Afirmação errada",
       titulos: [{ titulo: "Os dinossauros ainda estão vivos?", formula: "pergunta" }],
       adaptacao: { daCartilha: "Pergunta no título", doCanal: "Jantar da família" },
       porQueVaiFuncionar: "Pergunta no título.",
+      risco: "",
+    },
+    {
+      tema: "Ovo de dinossauro",
+      premissa: "x",
+      viabilidade: { situacao: "x", regra: "", motivacao: "x", conflito: "x", consequencias: [], virada: "x", sustenta: false, motivo: "só funciona no título" },
+      formatoDeHistoria: "x",
+      gancho: "x",
+      ganchoPadrao: "x",
+      titulos: [{ titulo: "x", formula: "x" }],
+      adaptacao: { daCartilha: "x", doCanal: "x" },
+      porQueVaiFuncionar: "x",
       risco: "",
     },
   ],
@@ -81,12 +96,21 @@ const SCRIPT = {
   titulosAlternativos: ["O som real do T-Rex"],
   duracaoSeg: 30,
   resumo: "Theo imita o rugido, o pai corrige.",
+  espinha: ["Porque Theo jura que o T-Rex rugia → o pai corrige → então imita o som de pombo → Theo descobre que o T-Rex era um pombo"],
+  regrasPlantadas: [{ oQue: "o som grave de boca fechada", ondeAparece: "fala 2", comoPaga: "vira a piada do pombo na fala 4" }],
+  falado: [
+    { personagem: "Theo", fala: "Pai, o T-Rex rugia igual leão!" },
+    { personagem: "Pai", fala: "Na verdade, filho, ele provavelmente nem abria a boca." },
+    { personagem: "Pai", fala: "Ele fazia um som grave, tipo um pombo gigante: hummm." },
+    { personagem: "Theo", fala: "Então o T-Rex era um pombo?!" },
+    { personagem: "Pai", fala: "Quer saber qual dinossauro era mais rápido?" },
+  ],
   cenas: [
-    { inicio: 0, fim: 3, parte: "gancho", personagem: "Theo", fala: "Pai, o T-Rex rugia igual leão!", acao: "Theo pula do sofá com um dinossauro de brinquedo", textoNaTela: "MITO?", novidade: "afirmação errada" },
-    { inicio: 3, fim: 8, parte: "virada", personagem: "Pai", fala: "Na verdade, filho, ele provavelmente nem abria a boca.", acao: "Pai baixa o jornal", textoNaTela: "", novidade: "correção" },
-    { inicio: 8, fim: 22, parte: "desenvolvimento", personagem: "Pai", fala: "Ele fazia um som grave, tipo um pombo gigante: hummm.", acao: "Pai imita, Theo ri", textoNaTela: "hummm", novidade: "som de pombo" },
-    { inicio: 22, fim: 27, parte: "clímax", personagem: "Theo", fala: "Então o T-Rex era um pombo?!", acao: "Zoom no rosto do Theo", textoNaTela: "", novidade: "piada" },
-    { inicio: 27, fim: 30, parte: "fecho", personagem: "Pai", fala: "Quer saber qual dinossauro era mais rápido?", acao: "Pai sorri", textoNaTela: "parte 2?", novidade: "gancho de continuação" },
+    { inicio: 0, fim: 3, parte: "gancho", falas: [1], acao: "Theo pula do sofá com um dinossauro de brinquedo", expressoes: "Theo confiante", direcao: "", textoNaTela: "MITO?", novidade: "afirmação errada" },
+    { inicio: 3, fim: 8, parte: "virada", falas: [2], acao: "Pai baixa o jornal", expressoes: "", direcao: "", textoNaTela: "", novidade: "correção" },
+    { inicio: 8, fim: 22, parte: "desenvolvimento", falas: [3], acao: "Pai imita, Theo ri", expressoes: "", direcao: "", textoNaTela: "hummm", novidade: "som de pombo" },
+    { inicio: 22, fim: 27, parte: "clímax", falas: [4], acao: "Zoom no rosto do Theo", expressoes: "", direcao: "zoom", textoNaTela: "", novidade: "piada" },
+    { inicio: 27, fim: 30, parte: "fecho", falas: [5], acao: "Pai sorri", expressoes: "", direcao: "", textoNaTela: "parte 2?", novidade: "gancho de continuação" },
   ],
   capa: "Theo assustado com um T-Rex de boca fechada",
   descricao: "O T-Rex rugia mesmo?",
@@ -106,7 +130,7 @@ before(() => {
     if (url.hostname === "api.anthropic.com") {
       const body = JSON.parse(String(init?.body));
       bodies.push(body);
-      const reply = isCriticBody(body) ? criticReply : isScriptBody(body) ? SCRIPT : IDEAS;
+      const reply = isCriticBody(body) ? (Array.isArray(criticReply) ? criticReply.shift() : criticReply) : isScriptBody(body) ? SCRIPT : IDEAS;
       return new Response(
         JSON.stringify({
           id: "msg_test",
@@ -247,7 +271,8 @@ test("gerador: formato obrigatório; receita + regra geral + perfil viram ideias
     data: { myChannelId: ch.id, externalId: "old00000001", title: "O T-Rex rugia mesmo? Mitos do T-Rex (animação 2D)", publishedAt: new Date("2024-01-01") },
   });
   const r = await generateIdeas({ myChannelId: ch.id, formatId: fMito.id, referenceId: ref.id, count: 2, ponto: "mitos de dinossauro" });
-  assert.equal(r.ideas.length, 2);
+  assert.equal(r.ideas.length, 2, "a ideia que não sustenta a história fica de fora");
+  assert.deepEqual(r.discarded, [{ tema: "Ovo de dinossauro", motivo: "só funciona no título" }]);
   assert.equal(bodies.length, 1);
   const sys = bodies[0].system;
   assert.match(sys, /UM FORMATO SÓ/);
@@ -276,7 +301,7 @@ test("gerador: formato obrigatório; receita + regra geral + perfil viram ideias
   assert.ok(sEst.usd > 0);
   assert.equal(sEst.basedOn, 0, "sem roteiro real ainda: usa a saída típica");
   assert.equal(sEst.outputTokens, 26000, "raciocínio adaptativo conta como saída");
-  assert.ok(Math.abs(sEst.script.usdMax - (sEst.inputTokens * 4 + 32000 * 20) / 1e6) < 1e-9, "teto do roteiro = limite de 32 mil tokens");
+  assert.ok(Math.abs(sEst.script.usdMax - (sEst.inputTokens * 4 + 48000 * 20) / 1e6) < 1e-9, "teto do roteiro = limite de 48 mil tokens");
   assert.ok(sEst.critic.usd > 0 && sEst.critic.usd < sEst.script.usd / 5, "leitura de espectador é barata");
   assert.ok(Math.abs(sEst.usd - (sEst.script.usd + sEst.critic.usd)) < 1e-9, "estimativa mostrada inclui a leitura");
   assert.ok(Math.abs(sEst.usdMax - (sEst.script.usdMax + sEst.critic.usdMax + sEst.rewriteMaxUsd)) < 1e-9, "teto inclui uma reescrita");
@@ -294,9 +319,13 @@ test("gerador: formato obrigatório; receita + regra geral + perfil viram ideias
   assert.match(String(bodies[2].system), /historinha em 1 frase[\s\S]*conta, medida ou número exato[\s\S]*virada final foi plantada/);
   assert.ok(isCriticBody(bodies[2]));
   assert.equal(bodies[2].model, "claude-sonnet-5-5", "leitura de espectador no modelo barato");
-  assert.match(textOf(bodies[2]), /Cena 3 \(desenvolvimento, 8-22s\) \[Pai imita, Theo ri\] Pai: Ele fazia um som grave/);
+  assert.match(textOf(bodies[2]), /Fala 3 \(desenvolvimento\) — Pai: Ele fazia um som grave/);
+  assert.doesNotMatch(textOf(bodies[2]), /Pai imita, Theo ri/, "leitura de olhos fechados: sem a animação");
+  assert.match(String(bodies[2].system), /12\. /, "as 12 perguntas da revisão narrativa");
+  assert.match(bodies[1].system, /CAMADA NARRATIVA COMUM/);
+  assert.match(bodies[1].system, /desastre em cadeia/i);
   assert.match(bodies[1].system, /Nenhum texto em cima de rosto/);
-  assert.equal((bodies[1] as unknown as { max_tokens: number }).max_tokens, 32000, "roteiro tem limite de 32 mil tokens");
+  assert.equal((bodies[1] as unknown as { max_tokens: number }).max_tokens, 48000, "roteiro tem limite de 48 mil tokens");
   assert.equal((bodies[1] as unknown as { stream: boolean }).stream, true, "roteiro vem por streaming");
   const sUser = bodies[1].messages[0].content.map((c) => c.text ?? "").join("");
   assert.match(sUser, /Premissa: Theo jura/);
@@ -308,7 +337,11 @@ test("gerador: formato obrigatório; receita + regra geral + perfil viram ideias
   const md = s.idea.script!;
   assert.match(md.split("\n")[1], /^\*\*Formato:\*\* Mito vs\. verdade · receita v1 \(1 vídeo\) · rascunho · \*\*Nicho:\*\* 3D animado · Regra geral v1$/);
   assert.equal(md.split("\n")[2], "**Pendências:** 1 fato para conferir");
-  assert.match(md, /\*\*Theo:\*\* Pai, o T-Rex rugia igual leão!/);
+  assert.match(md, /## Roteiro falado[^\n]*\n+\*\*Theo:\*\* Pai, o T-Rex rugia igual leão!\n+\*\*Pai:\*\* Na verdade/);
+  const falado = md.split("## Animação e direção")[0];
+  assert.doesNotMatch(falado, /Pai baixa o jornal/, "o roteiro falado não tem direção de cena");
+  assert.match(md, /## Animação e direção[\s\S]*Pai baixa o jornal/, "o export leva a animação também");
+  assert.match(md, /## Espinha da história/);
   assert.match(md, /- \[x\] Gancho em até 3s/);
   const data = JSON.parse(s.idea.scriptData!);
   assert.equal(data.metrics.scenes, 5);
@@ -375,22 +408,25 @@ test("gerador: formato obrigatório; receita + regra geral + perfil viram ideias
   assert.doesNotMatch(textOf(lastScript()), /ROTEIRO ANTERIOR/);
 
   // Leitura de espectador reprova (1 risada, passo sem motivo): reescreve UMA vez só esses trechos, no modo corrigir.
-  criticReply = { ...CRITIC_OK, risadas: CRITIC_OK.risadas.slice(0, 1), passosSemMotivo: [{ cena: 3, problema: "o pai imita sem ninguém pedir" }] };
+  criticReply = [{ ...CRITIC_OK, risadas: CRITIC_OK.risadas.slice(0, 1), passosSemMotivo: [{ cena: 3, problema: "o pai imita sem ninguém pedir" }] }, CRITIC_OK];
   const n0 = bodies.length;
   const costBefore = (await prisma.idea.findUniqueOrThrow({ where: { id: saved[0].id } })).scriptCostUsd!;
   const redo = await generateScript(saved[0].id, { mode: "nova" });
   criticReply = CRITIC_OK;
-  assert.equal(bodies.length - n0, 3, "roteiro, leitura e uma reescrita (sem segunda leitura)");
-  const fix = bodies[bodies.length - 1];
+  assert.equal(bodies.length - n0, 4, "roteiro, leitura, uma revisão da história e a leitura final");
+  const fix = bodies[bodies.length - 2];
   assert.ok(isScriptBody(fix));
-  assert.match(fix.system, /MODO CORRIGIR/);
+  assert.match(fix.system, /MODO REVISAR A HISTÓRIA/);
   const fixUser = textOf(fix);
-  assert.match(fixUser, /# ROTEIRO ANTERIOR[\s\S]*Pai, o T-Rex rugia igual leão!/);
-  assert.match(fixUser, /Conferência de lógica e graça[\s\S]*Só 1 risada com reação da família[\s\S]*Cena 3: passo sem motivo/);
+  assert.match(fixUser, /# ROTEIRO QUE ACABOU DE SER ESCRITO[\s\S]*Pai, o T-Rex rugia igual leão!/);
+  assert.match(fixUser, /CONFERÊNCIA DE LÓGICA E GRAÇA[\s\S]*Só 1 risada com reação da família[\s\S]*Fala 3: passo sem motivo/);
+  assert.ok(isCriticBody(bodies[bodies.length - 1]), "lê de novo depois de revisar");
   assert.equal(redo.review.rewritten, true);
-  const redoGens = await prisma.generation.findMany({ orderBy: { createdAt: "desc" }, take: 3 });
-  assert.deepEqual(redoGens.map((g) => g.kind).reverse(), ["script", "script-critic", "script-fix"]);
-  assert.ok(Math.abs(redo.idea.scriptCostUsd! - costBefore - redoGens.reduce((a, g) => a + (g.costUsd ?? 0), 0)) < 1e-9, "as três chamadas entram no custo");
+  assert.ok(redo.review.recheck, "leitura final salva");
+  assert.deepEqual(redo.review.left, [], "a leitura final passou");
+  const redoGens = await prisma.generation.findMany({ orderBy: { createdAt: "desc" }, take: 4 });
+  assert.deepEqual(redoGens.map((g) => g.kind).reverse(), ["script", "script-critic", "script-fix", "script-recheck"]);
+  assert.ok(Math.abs(redo.idea.scriptCostUsd! - costBefore - redoGens.reduce((a, g) => a + (g.costUsd ?? 0), 0)) < 1e-9, "as quatro chamadas entram no custo");
 
   // A leitura falhou (resposta fora do formato): o roteiro é salvo assim mesmo, com o aviso.
   criticReply = { nada: true };
@@ -438,6 +474,7 @@ test("segunda passada confere o checklist do Gubs inteiro (historinha, conta em 
   const { checkScriptText } = await import("../src/lib/script-check");
   const code = checkScriptText([{ text: "O Thor sobe com o cacho." }]);
   const base = {
+    narrativa: [] as { item: number; ok: boolean; problema: string }[],
     risadas: [1, 2, 3].map((cena) => ({ cena, esperado: "a", aconteceu: "b", reacao: "a avó grita" })),
     passosSemMotivo: [],
     frasesAula: [],
@@ -454,4 +491,47 @@ test("segunda passada confere o checklist do Gubs inteiro (historinha, conta em 
   const bad = reviewPoints(code, { ...base, historinha: "", contas: [{ cena: 4, frase: "uns dez gramas" }], viradaPlantada: false, fechoCerto: false }).points;
   assert.equal(bad.length, 4);
   assert.match(bad.join("\n"), /historinha em 1 frase[\s\S]*Tema de desenho com conta[\s\S]*não foi plantada[\s\S]*duas opções/);
+});
+
+test("revisão narrativa: item reprovado vira ponto; virada não plantada não repete", async () => {
+  const { reviewPoints } = await import("../src/lib/generator");
+  const { checkScriptText } = await import("../src/lib/script-check");
+  const code = checkScriptText([{ text: "O Thor sobe com o cacho." }]);
+  const crit = {
+    narrativa: [
+      { item: 3, ok: false, problema: "Fala 4: a mãe ri do frango roubado" },
+      { item: 10, ok: false, problema: "o vizinho aparece só no fim" },
+    ],
+    risadas: [1, 2, 3].map((cena) => ({ cena, esperado: "a", aconteceu: "b", reacao: "a avó grita" })),
+    passosSemMotivo: [],
+    frasesAula: [],
+    bordoes: [],
+    fechoExplicaPiada: false,
+    historinha: "O Thor rouba o frango.",
+    temaDeDesenho: true,
+    contas: [],
+    viradaPlantada: false,
+    fechoCerto: true,
+    veredito: "ok",
+  };
+  const pts = reviewPoints(code, crit, "fala").points;
+  assert.equal(pts.filter((p) => /^Revisão narrativa/.test(p)).length, 2);
+  assert.match(pts.join("\n"), /Revisão narrativa 3[\s\S]*a mãe ri do frango roubado/);
+  assert.equal(pts.filter((p) => /não foi plantada/.test(p)).length, 0, "o item 10 já cobre a virada");
+});
+
+test("roteiro falado × animação: lê o novo e o antigo; fala solta entra numa cena", async () => {
+  const { spokenLines, sceneLines, attachLines } = await import("../src/lib/script-lines");
+  const antigo = { cenas: [{ inicio: 3, fim: 6, parte: "virada", personagem: "Pai", fala: "Não." }, { inicio: 0, fim: 3, parte: "gancho", personagem: "Theo", fala: "Rugia!" }] };
+  assert.deepEqual(spokenLines(antigo).map((l) => `${l.who}: ${l.text}`), ["Theo: Rugia!", "Pai: Não."]);
+  assert.deepEqual(sceneLines(antigo, antigo.cenas[0]), [{ n: null, who: "Pai", text: "Não." }]);
+  const novo = attachLines({
+    falado: [{ personagem: "A", fala: "um" }, { personagem: "B", fala: "dois" }, { personagem: "A", fala: "três" }],
+    cenas: [
+      { inicio: 0, fim: 3, parte: "gancho", falas: [1, 1, 9] },
+      { inicio: 3, fim: 6, parte: "fecho", falas: [3] },
+    ],
+  });
+  assert.deepEqual(novo.cenas.map((s) => s.falas), [[1, 2], [3]], "repetida e inexistente saem; a 2 vai para a cena da 1");
+  assert.deepEqual(spokenLines(novo).map((l) => l.parte), ["gancho", "gancho", "fecho"]);
 });

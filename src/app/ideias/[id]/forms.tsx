@@ -1,6 +1,32 @@
 "use client";
 
+import { useState, type ReactNode } from "react";
 import { IDEA_STATUS } from "@/lib/idea-status";
+
+/** Roteiro em duas abas: o falado (só o que se ouve) abre primeiro; a animação e direção fica na outra. */
+export function ScriptTabs({ spoken, animation }: { spoken: ReactNode; animation: ReactNode }) {
+  const [tab, setTab] = useState<"falado" | "animacao">("falado");
+  const btn = (k: typeof tab, label: string) => (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={tab === k}
+      onClick={() => setTab(k)}
+      className={`rounded-md px-3 py-1.5 text-sm ${tab === k ? "bg-zinc-800 text-zinc-100" : "text-zinc-400 hover:text-zinc-200"}`}
+    >
+      {label}
+    </button>
+  );
+  return (
+    <div>
+      <div role="tablist" className="mb-3 inline-flex gap-1 rounded-lg border border-line p-1">
+        {btn("falado", "Roteiro falado")}
+        {btn("animacao", "Animação e direção")}
+      </div>
+      <div role="tabpanel">{tab === "falado" ? spoken : animation}</div>
+    </div>
+  );
+}
 
 export function IdeaStatusSelect({ action, value }: { action: (fd: FormData) => Promise<void>; value: string }) {
   return (

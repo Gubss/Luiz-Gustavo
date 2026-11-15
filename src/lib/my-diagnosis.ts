@@ -19,7 +19,8 @@ import { readSegments, type Segment } from "./transcript";
 import { transcriptForPrompt } from "./study-metrics";
 import { ageHours, channelPeers, checkpointLabel, checkpointTolerance, CHECKPOINTS, fmtAge } from "./my-videos";
 import { TRAFFIC_LABEL, type DailyPoint, type RetentionPoint, type TrafficPoint, type VideoAnalytics } from "./google";
-import type { ScriptContent } from "./generator";
+import type { ScriptContent, StoredScript } from "./generator";
+import { sceneLines, sortedScenes } from "./script-lines";
 
 
 function parse<T>(json: string | null | undefined): T | null {
@@ -117,11 +118,12 @@ export function scriptTimeline(v: MyVideo, idea: { scriptData: string | null; sc
       prompt: transcriptForPrompt(segs, v.transcriptText ?? "", v.isShort),
     };
   }
-  const sd = parse<ScriptContent>(idea?.scriptData);
+  const sd = parse<StoredScript>(idea?.scriptData);
   if (sd?.cenas?.length) {
-    const lines: Line[] = [...sd.cenas]
-      .sort((a, b) => a.inicio - b.inicio)
-      .map((c) => ({ t: c.inicio, end: c.fim, text: `${c.fala ? `${c.personagem || "—"}: ${c.fala}` : ""}${c.acao ? ` [${c.acao}]` : ""}`.trim() }));
+    const lines: Line[] = sortedScenes(sd.cenas).map((c) => {
+      const said = sceneLines(sd, c).map((l) => `${l.who}: ${l.text}`).join(" ");
+      return { t: c.inicio, end: c.fim, text: `${said}${c.acao ? ` [${c.acao}]` : ""}`.trim() };
+    });
     return { source: "roteiro do gerador (tempos previstos)", lines, prompt: lines.map((l) => `[${Math.round(l.t)}–${Math.round(l.end ?? l.t)}] ${l.text}`).join("\n") };
   }
   const txt = v.scriptText?.trim() || v.transcriptText?.trim() || idea?.script?.trim();

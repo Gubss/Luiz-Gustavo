@@ -25,7 +25,6 @@ const NAV: { step: number; group: string; items: Item[] }[] = [
       { href: "/gerador", label: "Gerador", hint: "Ideias e roteiros no formato do seu canal", icon: "M8 2v3M8 11v3M2 8h3M11 8h3M4 4l2 2M10 10l2 2M12 4l-2 2M6 10l-2 2" },
       { href: "/ideias", label: "Ideias", hint: "Tudo que já foi gerado e em que etapa está", icon: "M5.5 13h5M6 11c0-1.5-2-2.5-2-5a4 4 0 118 0c0 2.5-2 3.5-2 5z" },
       { href: "/formatos", label: "Formatos", hint: "Receitas de vídeo do nicho", icon: "M3 3h4.5a1.5 1.5 0 011.5 1.5V13a1 1 0 00-1-1H3zM13 3H9.5" },
-      { href: "/cartilha", label: "Cartilha", hint: "Cartilhas antigas, só para consulta", icon: "M4 2.5h8v11H4zM6.5 5.5h3M6.5 8h3" },
     ],
   },
   {
