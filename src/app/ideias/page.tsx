@@ -12,17 +12,23 @@ export default async function IdeasPage({ searchParams }: PageProps<"/ideias">) 
   const canal = one(sp.canal);
   const status = one(sp.status);
   const formato = one(sp.formato);
+  const receita = one(sp.receita);
   const text = (one(sp.q) ?? "").trim();
-  const base = { ...(canal ? { myChannelId: canal } : {}), ...(formato ? { format: formato } : {}) };
-  const [channels, all, counts, formatCounts] = await Promise.all([
+  const base = {
+    ...(canal ? { myChannelId: canal } : {}),
+    ...(formato ? { format: formato } : {}),
+    ...(receita ? { formatId: receita === "nenhum" ? null : receita } : {}),
+  };
+  const [channels, all, counts, formatCounts, recipeFormats] = await Promise.all([
     prisma.myChannel.findMany({ orderBy: { createdAt: "asc" }, select: { id: true, name: true } }),
     prisma.idea.findMany({
       where: { ...base, ...(status ? { status } : { status: { not: "DISCARDED" } }) },
-      include: { publishedVideo: true },
+      include: { publishedVideo: true, videoFormat: { select: { id: true, name: true } } },
       orderBy: { updatedAt: "desc" },
     }),
     prisma.idea.groupBy({ by: ["status"], where: base, _count: true }),
     prisma.idea.groupBy({ by: ["format"], where: canal ? { myChannelId: canal, status: { not: "DISCARDED" } } : { status: { not: "DISCARDED" } }, _count: true }),
+    prisma.videoFormat.findMany({ where: { ideas: { some: canal ? { myChannelId: canal } : {} } }, select: { id: true, name: true }, orderBy: { createdAt: "asc" } }),
   ]);
   // Busca por texto em título, tema e premissa
   const norm = (x: string) => x.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
@@ -35,7 +41,7 @@ export default async function IdeasPage({ searchParams }: PageProps<"/ideias">) 
   const countOf = (s: string) => counts.find((c) => c.status === s)?._count ?? 0;
   const active = counts.filter((c) => c.status !== "DISCARDED").reduce((n, c) => n + c._count, 0);
   const fCount = (f: string) => formatCounts.find((c) => c.format === f)?._count ?? 0;
-  const href = makeHref("/ideias", { canal, status, formato, q: text || undefined });
+  const href = makeHref("/ideias", { canal, status, formato, receita, q: text || undefined });
 
   return (
     <div className="mx-auto max-w-6xl space-y-5">
@@ -70,7 +76,22 @@ export default async function IdeasPage({ searchParams }: PageProps<"/ideias">) 
               ))}
             </FilterRow>
           )}
-          <FilterRow label="Formato">
+          {recipeFormats.length > 0 && (
+            <FilterRow label="Formato">
+              <FilterChip href={href({ receita: undefined, page: undefined })} active={!receita}>
+                Todos
+              </FilterChip>
+              {recipeFormats.map((f) => (
+                <FilterChip key={f.id} href={href({ receita: f.id, page: undefined })} active={receita === f.id}>
+                  {f.name}
+                </FilterChip>
+              ))}
+              <FilterChip href={href({ receita: "nenhum", page: undefined })} active={receita === "nenhum"}>
+                sem formato
+              </FilterChip>
+            </FilterRow>
+          )}
+          <FilterRow label="Tipo">
             <FilterChip href={href({ formato: undefined, page: undefined })} active={!formato}>
               Todos
             </FilterChip>
@@ -82,7 +103,7 @@ export default async function IdeasPage({ searchParams }: PageProps<"/ideias">) 
             </FilterChip>
           </FilterRow>
         </div>
-        <SearchBox action="/ideias" q={text} keep={{ canal, status, formato }} placeholder="Buscar por título ou assunto" />
+        <SearchBox action="/ideias" q={text} keep={{ canal, status, formato, receita }} placeholder="Buscar por título ou assunto" />
       </div>
 
       {pg.total === 0 ? (

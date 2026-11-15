@@ -25,6 +25,8 @@ import { ActionButton, PasteTranscriptForm } from "./forms";
 import { runningJobsFor } from "@/lib/jobs";
 import { RunningNote } from "@/components/RunningNote";
 import { CompareWithPlaybook } from "@/components/CompareWithPlaybook";
+import { StateForm } from "@/components/StateForm";
+import { setVideoFormatAction } from "@/app/formatos/actions";
 import { latestPlaybook, type PlaybookStats } from "@/lib/playbook";
 
 const ts = (s: number) => {
@@ -382,13 +384,30 @@ export default async function VideoStudyPage({ params }: PageProps<"/video/[id]"
   // Vídeo de um canal meu? (para comparar com a cartilha e não misturar nas referências)
   const myChannel = await prisma.myChannel.findFirst({ where: { externalId: v.channel.externalId }, select: { id: true, name: true, nicheId: true } });
   const cmpNicheIds = [...new Set([...channelNiches.map((n) => n.id), v.studyNicheId, myChannel?.nicheId].filter((x): x is string => !!x))];
-  let cmp: { st: PlaybookStats; nicheName: string; href: string } | null = null;
-  for (const nid of cmpNicheIds) {
+  // Formatos do vídeo (um por nicho) e opções para escolher
+  const videoNicheIds = [...new Set([...channelNiches.map((n) => n.id), v.studyNicheId].filter((x): x is string => !!x))];
+  const [inFormats, formatOptions] = await Promise.all([
+    prisma.formatVideo.findMany({ where: { videoId: v.id }, include: { format: { include: { recipes: { orderBy: { createdAt: "desc" }, take: 1 } } } } }),
+    prisma.videoFormat.findMany({
+      where: { nicheId: { in: videoNicheIds }, length: v.isShort ? "short" : "long" },
+      orderBy: { createdAt: "asc" },
+      include: { niche: { select: { name: true } }, _count: { select: { videos: true } } },
+    }),
+  ]);
+  let cmp: { st: PlaybookStats; label: string; href: string } | null = null;
+  for (const fv of inFormats) {
+    const st = parse<PlaybookStats>(fv.format.recipes[0]?.stats);
+    if (st) {
+      cmp = { st, label: `receita do formato ${fv.format.name}`, href: `/formatos/${fv.format.id}` };
+      break;
+    }
+  }
+  for (const nid of cmp ? [] : cmpNicheIds) {
     const pb = await latestPlaybook(nid, v.isShort ? "short" : "long");
     const st = parse<PlaybookStats>(pb?.stats);
     if (pb && st) {
       const nn = await prisma.niche.findUnique({ where: { id: nid }, select: { name: true } });
-      cmp = { st, nicheName: nn?.name ?? "", href: `/cartilha?niche=${nid}&format=${v.isShort ? "short" : "long"}` };
+      cmp = { st, label: `cartilha antiga de ${nn?.name ?? ""}`, href: `/cartilha?niche=${nid}&format=${v.isShort ? "short" : "long"}` };
       break;
     }
   }
@@ -440,17 +459,17 @@ export default async function VideoStudyPage({ params }: PageProps<"/video/[id]"
           {myChannel && (
             <p className="rounded-lg border border-sky-800 bg-sky-950/40 p-2 text-sm text-sky-200">
               Este vídeo é do seu canal <Link href={`/meus-canais/${myChannel.id}`} className="underline">{myChannel.name}</Link>. Estude normalmente;
-              deixe &ldquo;Entra na cartilha&rdquo; em <b>nenhum nicho</b> para a cartilha continuar sendo só das referências.
+              deixe &ldquo;Conta no nicho&rdquo; em <b>nenhum nicho</b> e não ponha em formato: as receitas são feitas só das referências.
             </p>
           )}
           <div className="text-sm text-zinc-400">
             {channelNiches.length ? (
               <>
-                Entra na cartilha de:{" "}
+                Conta no nicho:{" "}
                 {channelNiches.map((n, i) => (
                   <span key={n.id}>
                     {i > 0 && ", "}
-                    <Link href={`/cartilha?niche=${n.id}&format=${v.isShort ? "short" : "long"}`} className="text-red-400 hover:underline">
+                    <Link href={`/formatos?niche=${n.id}&format=${v.isShort ? "short" : "long"}`} className="text-red-400 hover:underline">
                       {n.name}
                     </Link>
                   </span>
@@ -459,7 +478,7 @@ export default async function VideoStudyPage({ params }: PageProps<"/video/[id]"
               </>
             ) : allNiches.length ? (
               <form action={setStudyNicheAction.bind(null, v.id)} className="flex flex-wrap items-center gap-2">
-                <label htmlFor="studyNiche">Entra na cartilha de:</label>
+                <label htmlFor="studyNiche">Conta no nicho:</label>
                 <select id="studyNiche" name="nicheId" defaultValue={v.studyNicheId ?? ""} className="input w-auto py-1">
                   <option value="">nenhum nicho</option>
                   {allNiches.map((n) => (
@@ -469,10 +488,53 @@ export default async function VideoStudyPage({ params }: PageProps<"/video/[id]"
                   ))}
                 </select>
                 <button className="btn-ghost">Salvar</button>
-                <span className="text-xs text-zinc-500">O canal deste vídeo não está em nenhum nicho; escolha para o estudo contar na cartilha.</span>
+                <span className="text-xs text-zinc-500">O canal deste vídeo não está em nenhum nicho; escolha para o estudo poder entrar num formato.</span>
               </form>
             ) : null}
           </div>
+          {videoNicheIds.length > 0 && !myChannel && (
+            <div id="formato" className="text-sm text-zinc-400">
+              {diag?.content || diag?.markdown ? (
+                formatOptions.length ? (
+                  <StateForm action={setVideoFormatAction.bind(null, v.id, formatOptions[0].nicheId)} label="Salvar" className="btn-ghost" formClassName="flex flex-wrap items-center gap-2">
+                    <label htmlFor="videoFormat">Formato:</label>
+                    <select id="videoFormat" name="formatId" defaultValue={inFormats.find((x) => x.nicheId === formatOptions[0].nicheId)?.formatId ?? ""} className="input w-auto py-1">
+                      <option value="">nenhum</option>
+                      {formatOptions
+                        .filter((o) => o.nicheId === formatOptions[0].nicheId)
+                        .map((o) => (
+                          <option key={o.id} value={o.id}>
+                            {o.name} ({o._count.videos} {o._count.videos === 1 ? "vídeo" : "vídeos"})
+                          </option>
+                        ))}
+                    </select>
+                  </StateForm>
+                ) : (
+                  <span>
+                    Formato: nenhum criado em {channelNiches[0]?.name ?? "este nicho"}.{" "}
+                    <Link href={`/formatos?niche=${videoNicheIds[0]}&format=${v.isShort ? "short" : "long"}`} className="text-red-400 hover:underline">
+                      Criar formato
+                    </Link>
+                  </span>
+                )
+              ) : (
+                <span className="text-xs text-zinc-500">Depois do diagnóstico, dá para pôr este vídeo num formato do nicho.</span>
+              )}
+              {inFormats.length > 0 && (
+                <span className="mt-1 block text-xs text-zinc-500">
+                  Está em:{" "}
+                  {inFormats.map((x, i) => (
+                    <span key={x.formatId}>
+                      {i > 0 && ", "}
+                      <Link href={`/formatos/${x.formatId}`} className="text-violet-300 hover:underline">
+                        {x.format.name}
+                      </Link>
+                    </span>
+                  ))}
+                </span>
+              )}
+            </div>
+          )}
           <div className="rounded-lg border border-line bg-zinc-950/50 p-3">
             {studyJob ? (
               <RunningNote job={studyJob} what={`Estudo completo · ${studyJob.step ?? ""}`} />
@@ -500,8 +562,8 @@ export default async function VideoStudyPage({ params }: PageProps<"/video/[id]"
       {/* 1. Transcrição */}
       {cmp && metrics && (
         <section className="card space-y-3 p-5">
-          <h2 className="text-lg font-semibold">Comparado com a cartilha</h2>
-          <CompareWithPlaybook m={metrics} st={cmp.st} nicheName={cmp.nicheName} href={cmp.href} own={!!myChannel} />
+          <h2 className="text-lg font-semibold">Comparado com a {cmp.label.startsWith("receita") ? "receita do formato" : "cartilha antiga"}</h2>
+          <CompareWithPlaybook m={metrics} st={cmp.st} label={cmp.label} href={cmp.href} own={!!myChannel} />
         </section>
       )}
       <Section

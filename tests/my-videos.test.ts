@@ -272,7 +272,9 @@ test("meus vídeos: lê o canal, acompanha marcos, Analytics, diagnóstico e li�
   assert.equal(rep.report.videoCount, 3);
   assert.match(bodies.at(-1)!.system, /Encontre os padrões/);
   const { loadContext } = await import("../src/lib/generator");
-  const ctx = await loadContext({ myChannelId: ch.id });
+  const vfNiche = (await prisma.myChannel.findUniqueOrThrow({ where: { id: ch.id } })).nicheId ?? (await prisma.niche.create({ data: { name: "Nicho do teste" } })).id;
+  const vf = await prisma.videoFormat.create({ data: { nicheId: vfNiche, name: "Família constrói" } });
+  const ctx = await loadContext({ myChannelId: ch.id, formatId: vf.id });
   assert.match(ctx.block, /APRENDIZADOS DOS MEUS VÍDEOS/);
   assert.match(ctx.block, /Mostrar o resultado antes de explicar/);
   assert.match(ctx.block, /NÃO funcionaram no meu canal: Narração rápida/);

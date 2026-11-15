@@ -5,6 +5,7 @@
  * a síntese do que se repete: ganchos, fórmulas de título, estrutura, ritmo.
  */
 import { z } from "zod";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "./db";
 import { getSettings } from "./settings";
 import { callStructured, estimateCost, type CostEstimate } from "./claude";
@@ -44,38 +45,57 @@ async function notMine() {
   return { channel: { externalId: { notIn: mine.map((m) => m.externalId!) } } };
 }
 
+export const studyInclude = {
+  channel: { select: { title: true, subscriberCount: true } },
+  diagnosis: true,
+  transcript: { select: { id: true } },
+} as const;
+
+type StudyRow = Prisma.VideoGetPayload<{ include: typeof studyInclude }>;
+
+/** Linha do banco → estudo pronto para medir e mandar ao Claude. */
+export function toStudy(v: StudyRow) {
+  const d = v.diagnosis!;
+  const metrics = parse<StudyMetrics & { channel?: VideoMetrics | null }>(d.metrics);
+  return {
+    id: v.id,
+    externalId: v.externalId,
+    title: v.title,
+    thumbnailUrl: v.thumbnailUrl,
+    channelTitle: v.channel.title,
+    subscriberCount: v.channel.subscriberCount,
+    viewCount: v.viewCount,
+    durationSec: v.durationSec,
+    isShort: v.isShort,
+    publishedAt: v.publishedAt,
+    hasTranscript: !!v.transcript,
+    content: parse<DiagnosisContent>(d.content),
+    markdown: d.markdown,
+    metrics,
+    comments: parse<CommentsAnalysis>(d.commentsAnalysis),
+    source: d.source,
+    updatedAt: d.updatedAt,
+  };
+}
+
 export async function loadNicheStudies(nicheId: string, format: PlaybookFormat) {
   const rows = await prisma.video.findMany({
     where: { AND: [inNiche(nicheId), hasDiagnosis, { isShort: format === "short" }, await notMine()] },
-    include: {
-      channel: { select: { title: true, subscriberCount: true } },
-      diagnosis: true,
-      transcript: { select: { id: true } },
-    },
+    include: studyInclude,
     orderBy: { viewCount: "desc" },
   });
-  return rows.map((v) => {
-    const d = v.diagnosis!;
-    const metrics = parse<StudyMetrics & { channel?: VideoMetrics | null }>(d.metrics);
-    return {
-      id: v.id,
-      externalId: v.externalId,
-      title: v.title,
-      thumbnailUrl: v.thumbnailUrl,
-      channelTitle: v.channel.title,
-      subscriberCount: v.channel.subscriberCount,
-      viewCount: v.viewCount,
-      durationSec: v.durationSec,
-      publishedAt: v.publishedAt,
-      hasTranscript: !!v.transcript,
-      content: parse<DiagnosisContent>(d.content),
-      markdown: d.markdown,
-      metrics,
-      comments: parse<CommentsAnalysis>(d.commentsAnalysis),
-      source: d.source,
-      updatedAt: d.updatedAt,
-    };
+  return rows.map(toStudy);
+}
+
+/** Estudos escolhidos a dedo (ex.: os vídeos de um formato), na ordem de views. */
+export async function loadStudiesByIds(ids: string[]) {
+  if (!ids.length) return [];
+  const rows = await prisma.video.findMany({
+    where: { AND: [{ id: { in: ids } }, hasDiagnosis] },
+    include: studyInclude,
+    orderBy: { viewCount: "desc" },
   });
+  return rows.map(toStudy);
 }
 
 export type NicheStudy = Awaited<ReturnType<typeof loadNicheStudies>>[number];

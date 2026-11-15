@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db";
 import { usdToBrl } from "@/lib/claude";
 import { generateIdeas, generateScript, IDEA_STATUS, type IdeasRequest } from "@/lib/generator";
 import { startJob } from "@/lib/jobs";
+import { returnPoints } from "@/lib/speech";
 import type { FormState } from "@/app/video/actions";
 
 const BACKGROUND_OK = "Começou em segundo plano. Pode sair desta tela: o aviso no canto mostra quando terminar.";
@@ -106,4 +107,48 @@ export async function deleteIdea(ideaId: string) {
   await prisma.idea.delete({ where: { id: ideaId } });
   refresh();
   redirect("/ideias");
+}
+
+/** Escolhe o formato de uma ideia antiga (gerada antes dos formatos), para poder escrever o roteiro. */
+export async function setIdeaFormatAction(ideaId: string, _prev: FormState, fd: FormData): Promise<FormState> {
+  const formatId = String(fd.get("formatId") ?? "");
+  if (!formatId) return { error: "Escolha um formato." };
+  const f = await prisma.videoFormat.findUnique({ where: { id: formatId } });
+  if (!f) return { error: "Esse formato não existe mais." };
+  await prisma.idea.update({ where: { id: ideaId }, data: { formatId, nicheId: f.nicheId, format: f.length } });
+  refresh(ideaId);
+  return { ok: `Formato: ${f.name}.` };
+}
+
+/** Devolução do Estúdio: o roteiro foi reprovado no filtro de produção. Cada ponto vira aprendizado do canal e a ideia fica "devolvida". */
+export async function returnIdeaAction(ideaId: string, _prev: FormState, fd: FormData): Promise<FormState> {
+  const raw = String(fd.get("returnNotes") ?? "").trim();
+  const points = returnPoints(raw);
+  if (!points.length) return { error: "Cole os pontos em que o roteiro foi reprovado (um por linha)." };
+  const idea = await prisma.idea.findUniqueOrThrow({ where: { id: ideaId }, select: { myChannelId: true, formatId: true, returnNotes: true } });
+  if (!idea.myChannelId) return { error: "Essa ideia não está ligada a um canal seu." };
+  const now = new Date();
+  const stamp = now.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
+  await prisma.$transaction([
+    prisma.idea.update({
+      where: { id: ideaId },
+      data: {
+        status: "RETURNED",
+        returnedAt: now,
+        returnNotes: [idea.returnNotes, `Devolução de ${stamp}:\n${raw}`].filter(Boolean).join("\n\n"),
+      },
+    }),
+    ...points.map((text) =>
+      prisma.channelLesson.create({ data: { myChannelId: idea.myChannelId!, ideaId, formatId: idea.formatId, text: text.slice(0, 1000) } }),
+    ),
+  ]);
+  refresh(ideaId);
+  revalidatePath(`/meus-canais/${idea.myChannelId}`);
+  return { ok: `${points.length} ${points.length === 1 ? "ponto virou aprendizado" : "pontos viraram aprendizado"} do canal. A ideia ficou como devolvida.` };
+}
+
+export async function deleteLessonAction(lessonId: string) {
+  const l = await prisma.channelLesson.delete({ where: { id: lessonId } });
+  if (l.ideaId) refresh(l.ideaId);
+  revalidatePath(`/meus-canais/${l.myChannelId}`);
 }

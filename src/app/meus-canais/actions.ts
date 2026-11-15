@@ -76,7 +76,7 @@ export async function saveScript(myChannelId: string, scriptId: string | null, _
   const script = str(fd, "script");
   if (!title) return { error: "Dê um título (o título do vídeo publicado)." };
   if (script.length < 20) return { error: "Cole o roteiro inteiro (falas e, se quiser, as cenas)." };
-  const data = { title, script, url: optStr(fd, "url"), views: optInt(fd, "views"), notes: optStr(fd, "notes") };
+  const data = { title, script, url: optStr(fd, "url"), views: optInt(fd, "views"), notes: optStr(fd, "notes"), formatId: optStr(fd, "formatId") };
   if (scriptId) await prisma.myChannelScript.update({ where: { id: scriptId }, data });
   else await prisma.myChannelScript.create({ data: { ...data, myChannelId } });
   refresh(myChannelId);

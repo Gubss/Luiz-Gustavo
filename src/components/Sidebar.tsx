@@ -20,7 +20,7 @@ const NAV: { group: string; items: Item[] }[] = [
       { href: "/radar", label: "Radar de outliers", hint: "Vídeos que estouraram", icon: "M8 8m-5.5 0a5.5 5.5 0 1011 0 5.5 5.5 0 10-11 0M8 8l3-3" },
       { href: "/favoritos", label: "Favoritos", hint: "Vídeos que você guardou", icon: "M8 2.5l1.7 3.5 3.8.5-2.8 2.6.7 3.8L8 11.1 4.6 12.9l.7-3.8L2.5 6.5l3.8-.5z" },
       { href: "/estudos", label: "Estudos de vídeo", hint: "Por que cada vídeo funcionou", icon: "M3 3h7l3 3v7H3zM6 8h5M6 11h5" },
-      { href: "/cartilha", label: "Cartilha do nicho", hint: "O que se repete nos estudos", icon: "M3 3h4.5a1.5 1.5 0 011.5 1.5V13a1 1 0 00-1-1H3zM13 3H9.5" },
+      { href: "/formatos", label: "Formatos do nicho", hint: "Receitas de vídeo e a regra geral do nicho", icon: "M3 3h4.5a1.5 1.5 0 011.5 1.5V13a1 1 0 00-1-1H3zM13 3H9.5" },
     ],
   },
   {

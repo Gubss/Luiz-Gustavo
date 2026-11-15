@@ -63,8 +63,8 @@ const SCRIPT = {
   descricao: "O T-Rex rugia mesmo?",
   hashtags: ["dinossauros", "#shorts"],
   checklist: [
-    { item: "Gancho em até 3s", ok: true, comentario: "" },
-    { item: "Fecho com pergunta", ok: true, comentario: "" },
+    { item: "Gancho em até 3s", origem: "formato", ok: true, comentario: "" },
+    { item: "Fecho com pergunta", origem: "regra geral", ok: true, comentario: "" },
   ],
   adaptacao: "O mito vs. verdade virou a briga do Theo com o pai.",
   conferirFatos: ["Som de boca fechada é hipótese de pesquisa (2016)"],
@@ -109,9 +109,9 @@ test("medidas do roteiro em código", async () => {
   assert.ok(m.wordsPerSec! > 1 && m.wordsPerSec! < 2);
 });
 
-test("gerador: perfil + cartilha viram ideias e roteiro no formato do canal", async () => {
+test("gerador: formato obrigatório; receita + regra geral + perfil viram ideias e roteiro", async () => {
   const { prisma } = await import("../src/lib/db");
-  const { estimateIdeas, generateIdeas, estimateScript, generateScript, profileGaps, loadContext } = await G();
+  const { estimateIdeas, generateIdeas, estimateScript, generateScript, profileGaps, loadContext, GeneratorError } = await G();
 
   const niche = await prisma.niche.create({ data: { name: "3D animado" } });
   const ch = await prisma.myChannel.create({
@@ -123,27 +123,34 @@ test("gerador: perfil + cartilha viram ideias e roteiro no formato do canal", as
       concept: "Família 3D; o Theo (7) é curioso.",
       characters: "Theo (7 anos): tem certeza de tudo\nPai: calmo e engraçado",
       storyFormats: "Theo afirma algo errado e o pai corrige",
+      visualStyle: "3D estilo filme infantil. Efeitos: chinelo voando, rebobinar 1s.",
       tone: "leve",
       durationSec: 35,
     },
   });
   assert.deepEqual(profileGaps(ch, 0), ["pelo menos 1 roteiro que você já publicou"]);
+
+  // Dois formatos no nicho; o vídeo de referência fica no formato "Mito vs. verdade".
+  const fMito = await prisma.videoFormat.create({ data: { nicheId: niche.id, name: "Mito vs. verdade", description: "alguém afirma um mito e é desmentido" } });
+  const fObra = await prisma.videoFormat.create({ data: { nicheId: niche.id, name: "Construir resolvendo problemas" } });
   await prisma.myChannelScript.create({
-    data: { myChannelId: ch.id, title: "Theo e o arco-íris", script: "THEO: Pai, o arco-íris tem fim!\nPAI: Na verdade ele é um círculo.", views: 12000 },
+    data: { myChannelId: ch.id, formatId: fMito.id, title: "Theo e o arco-íris", script: "THEO: Pai, o arco-íris tem fim!\nPAI: Na verdade ele é um círculo.", views: 12000 },
+  });
+  await prisma.myChannelScript.create({
+    data: { myChannelId: ch.id, formatId: fObra.id, title: "O vulcão", script: "Você faz o óbvio.\nMas a espuma escorre pro tapete.\nChinelada.", views: 1000 },
   });
 
-  // Uma cartilha pronta (etapa 5) e um estudo de referência de OUTRO formato (narrador).
   const other = await prisma.channel.create({ data: { externalId: "UCnarr000000000000000001", title: "Canal Narrador" } });
   await prisma.nicheChannel.create({ data: { nicheId: niche.id, channelId: other.id } });
   const ref = await prisma.video.create({
     data: { externalId: "dino0000001", channelId: other.id, title: "Mentiras sobre dinossauros", publishedAt: new Date(), isShort: true, viewCount: 2_000_000, durationSec: 40 },
   });
-  await prisma.diagnosis.create({
-    data: {
-      videoId: ref.id,
-      markdown: "Narrador desmente 3 mitos de dinossauro. Gancho: 'Tudo o que te ensinaram está errado'.",
-    },
+  await prisma.diagnosis.create({ data: { videoId: ref.id, markdown: "Narrador desmente 3 mitos de dinossauro. Gancho: 'Tudo o que te ensinaram está errado'." } });
+  await prisma.transcript.create({
+    data: { videoId: ref.id, language: "pt", source: "manual", text: "Tudo o que te ensinaram sobre o T-Rex está errado. Ele não rugia. Ele fazia hummm." },
   });
+  await prisma.formatVideo.create({ data: { formatId: fMito.id, videoId: ref.id, nicheId: niche.id } });
+
   const { computePlaybookStats } = await import("../src/lib/playbook");
   const stats = {
     ...computePlaybookStats("short", []),
@@ -151,82 +158,120 @@ test("gerador: perfil + cartilha viram ideias e roteiro no formato do canal", as
     wordsPerSec: { value: 2.4, min: 2, max: 3, n: 2 },
     beatInterval: { value: 4, min: 3, max: 5, n: 2 },
     maxGap: { value: 9, min: 8, max: 10, n: 2 },
+    speech: { sentence: { sentences: 3, wordsPerSentence: 4, shortPct: 30, longPct: 0 }, perVideo: [], shared: [] },
   };
-  const pb = await prisma.nichePlaybook.create({
+  const recipe = await prisma.formatRecipe.create({
     data: {
-      nicheId: niche.id,
-      format: "short",
+      formatId: fMito.id,
+      version: 1,
       model: "claude-opus-5-5",
       stats: JSON.stringify(stats),
       content: "{}",
-      markdown: "# Cartilha — 3D animado (Shorts)\n## Ganchos\n- **Mito vs. verdade**",
-      diagnosisCount: 2,
+      markdown: "# Receita do formato — Mito vs. verdade\n## Como abre\nMito dito com certeza nos 3s",
+      voice: JSON.stringify([{ videoId: ref.id, title: "Mentiras sobre dinossauros", text: "Tudo o que te ensinaram sobre o T-Rex está errado." }]),
+      videoIds: JSON.stringify([ref.id]),
+    },
+  });
+  await prisma.formatRecipe.create({
+    data: { formatId: fObra.id, version: 1, model: "x", stats: "{}", content: "{}", markdown: "# Receita do formato — Construir\nCada solução cria o próximo problema" },
+  });
+  const rule = await prisma.nicheRule.create({
+    data: {
+      nicheId: niche.id,
+      version: 1,
+      model: "x",
+      recipeIds: "[]",
+      formatNames: "[]",
+      content: JSON.stringify({ resumo: "Comum aos dois.", comum: [{ tema: "fecho", regra: "Pergunta falada de duas opções", porque: "", emCadaFormato: [] }], especificos: [{ formato: "Construir", oQueEDele: ["narrador fala você"] }], conflitos: [], checklist: ["Fecho com pergunta de duas opções"] }),
     },
   });
 
-  // Contexto: entra perfil, roteiro publicado, cartilha e a referência.
-  const ctx = await loadContext({ myChannelId: ch.id, referenceId: ref.id });
-  assert.equal(ctx.playbook?.id, pb.id);
+  // Sem formato: erro claro.
+  await assert.rejects(() => loadContext({ myChannelId: ch.id, formatId: null }), GeneratorError);
+
+  // Contexto: perfil, roteiro aprovado DO FORMATO, receita só deste formato, regra geral (só o comum) e a referência do formato.
+  const ctx = await loadContext({ myChannelId: ch.id, formatId: fMito.id, referenceId: ref.id });
+  assert.equal(ctx.recipe?.id, recipe.id);
+  assert.equal(ctx.rule?.id, rule.id);
   assert.equal(ctx.reference?.id, ref.id);
   assert.match(ctx.block, /Theo \(7 anos\)/);
   assert.match(ctx.block, /Theo e o arco-íris/);
-  assert.match(ctx.block, /Mito vs\. verdade/);
+  assert.doesNotMatch(ctx.block, /O vulcão/, "roteiro de outro formato não entra");
+  assert.match(ctx.block, /Receita do formato — Mito vs\. verdade/);
+  assert.doesNotMatch(ctx.block, /Cada solução cria o próximo problema/, "nunca duas receitas juntas");
+  assert.match(ctx.block, /Pergunta falada de duas opções/);
+  assert.doesNotMatch(ctx.block, /narrador fala você/, "o que é específico de outro formato não vira regra");
+  assert.match(ctx.block, /AMOSTRAS DE VOZ/);
   assert.match(ctx.block, /Mentiras sobre dinossauros/);
+  assert.doesNotMatch(ctx.block, /CARTILHA/);
 
-  const est = await estimateIdeas({ myChannelId: ch.id, referenceId: ref.id, count: 2 });
+  // A referência de outro formato é ignorada.
+  const ctxObra = await loadContext({ myChannelId: ch.id, formatId: fObra.id, referenceId: ref.id });
+  assert.equal(ctxObra.reference, null);
+  assert.match(ctxObra.block, /O vulcão/);
+
+  const est = await estimateIdeas({ myChannelId: ch.id, formatId: fMito.id, referenceId: ref.id, count: 2 });
   assert.ok(est.usd > 0 && est.usdMax > est.usd, "estimativa antes de chamar");
   assert.equal(bodies.length, 0, "estimar não chama a API");
 
-  // Vídeo antigo do próprio canal (lido do YouTube) com o mesmo tema da ideia 1.
   await prisma.myChannelVideo.create({
     data: { myChannelId: ch.id, externalId: "old00000001", title: "O T-Rex rugia mesmo? Mitos do T-Rex (animação 2D)", publishedAt: new Date("2024-01-01") },
   });
-  const r = await generateIdeas({ myChannelId: ch.id, referenceId: ref.id, count: 2, ponto: "mitos de dinossauro" });
+  const r = await generateIdeas({ myChannelId: ch.id, formatId: fMito.id, referenceId: ref.id, count: 2, ponto: "mitos de dinossauro" });
   assert.equal(r.ideas.length, 2);
   assert.equal(bodies.length, 1);
   const sys = bodies[0].system;
-  assert.match(sys, /separar o COMO do O QUÊ/);
+  assert.match(sys, /UM FORMATO SÓ/);
+  assert.match(sys, /SOA FALADO, NÃO ESCRITO/);
   const user = bodies[0].messages[0].content.map((c) => c.text ?? "").join("");
   assert.match(user, /mitos de dinossauro/);
   assert.match(user, /Theo e o arco-íris \[roteiro cadastrado\]/, "temas já feitos entram para não repetir");
   assert.match(user, /Mitos do T-Rex \(animação 2D\) \[vídeo publicado\]/);
-  assert.match(sys, /mesmo que o vídeo antigo seja de outro estilo/);
 
   const saved = await prisma.idea.findMany({ where: { myChannelId: ch.id }, orderBy: { createdAt: "asc" } });
   assert.equal(saved.length, 2);
   assert.equal(saved[0].status, "IDEA");
-  assert.equal(saved[0].playbookId, pb.id);
+  assert.equal(saved[0].formatId, fMito.id);
+  assert.equal(saved[0].recipeId, recipe.id);
+  assert.equal(saved[0].ruleId, rule.id);
   assert.equal(saved[0].chosenTitle, "O T-Rex NÃO rugia?!");
   const d0 = JSON.parse(saved[0].ideaData!);
   assert.equal(d0.jaFeito[0]?.source, "vídeo publicado", "marca o tema já feito pelo canal");
-  assert.deepEqual(JSON.parse(saved[1].ideaData!).jaFeito, [], "tema novo não é marcado");
   assert.deepEqual(JSON.parse(saved[0].referenceIds!), [ref.id]);
   assert.ok(Math.abs(saved[0].ideaCostUsd! * 2 - r.costUsd) < 1e-9, "custo dividido entre as ideias");
+
+  // Devolução do Estúdio: vira aprendizado e entra no próximo pedido com peso maior.
+  await prisma.channelLesson.create({ data: { myChannelId: ch.id, ideaId: saved[1].id, formatId: fMito.id, text: "Texto na tela em cima do rosto do pai" } });
 
   const sEst = await estimateScript(saved[0].id);
   assert.ok(sEst.usd > 0);
   const s = await generateScript(saved[0].id, { extra: "mais curto" });
   assert.equal(bodies.length, 2);
   assert.match(bodies[1].system, /TAREFA: escrever o roteiro/);
+  assert.match(bodies[1].system, /Nenhum texto em cima de rosto/);
   const sUser = bodies[1].messages[0].content.map((c) => c.text ?? "").join("");
   assert.match(sUser, /Premissa: Theo jura/);
-  assert.match(sUser, /duração alvo ≈ 35s/, "duração do perfil vence a da cartilha");
+  assert.match(sUser, /duração alvo ≈ 35s/, "duração do perfil vence a da receita");
   assert.match(sUser, /Pedido extra: mais curto/);
+  assert.match(sUser, /DEVOLUÇÕES DO ESTÚDIO[\s\S]*Texto na tela em cima do rosto do pai/);
 
   assert.equal(s.idea.status, "SCRIPT");
-  assert.match(s.idea.script!, /\*\*Theo:\*\* Pai, o T-Rex rugia igual leão!/);
-  assert.match(s.idea.script!, /- \[x\] Gancho em até 3s/);
+  const md = s.idea.script!;
+  assert.match(md.split("\n")[1], /^\*\*Formato:\*\* Mito vs\. verdade · receita v1 \(1 vídeo\) · rascunho · \*\*Nicho:\*\* 3D animado · Regra geral v1$/);
+  assert.equal(md.split("\n")[2], "**Pendências:** 1 fato para conferir");
+  assert.match(md, /\*\*Theo:\*\* Pai, o T-Rex rugia igual leão!/);
+  assert.match(md, /- \[x\] Gancho em até 3s/);
   const data = JSON.parse(s.idea.scriptData!);
   assert.equal(data.metrics.scenes, 5);
-  assert.equal(data.playbookId, pb.id);
+  assert.equal(data.meta.formatName, "Mito vs. verdade");
+  assert.ok(data.voice, "conferência da voz salva");
 
   const gens = await prisma.generation.findMany({ orderBy: { createdAt: "asc" } });
   assert.deepEqual(gens.map((g) => g.kind), ["ideas", "script"]);
 
-  // Sem nicho nem cartilha: ainda funciona, só com o perfil.
-  const solo = await loadContext({ myChannelId: ch.id, nicheId: null });
-  assert.equal(solo.playbook, null);
-  assert.doesNotMatch(solo.block, /CARTILHA/);
+  // Ideia antiga sem formato: o roteiro pede o formato antes.
+  const old = await prisma.idea.create({ data: { myChannelId: ch.id, format: "short", theme: "antiga", titles: "[]" } });
+  await assert.rejects(() => generateScript(old.id), /ainda não tem formato/);
 });
 
 test("já fez esse tema? tampa de caneta × vídeo antigo; uma palavra em comum não basta", async () => {

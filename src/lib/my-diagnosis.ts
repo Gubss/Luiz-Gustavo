@@ -14,6 +14,7 @@ import { prisma } from "./db";
 import { getSettings } from "./settings";
 import { callStructured, estimateCost, type CostEstimate } from "./claude";
 import { latestPlaybook, statsBlock, formatLabel, type PlaybookFormat, type PlaybookStats } from "./playbook";
+import { latestRecipe, latestRule } from "./formats";
 import { readSegments, type Segment } from "./transcript";
 import { transcriptForPrompt } from "./study-metrics";
 import { ageHours, channelPeers, checkpointLabel, checkpointTolerance, CHECKPOINTS, fmtAge } from "./my-videos";
@@ -196,7 +197,11 @@ async function buildContext(v: Loaded) {
     line: script?.lines.length ? (lineAt(script.lines, d.fromSec)?.text ?? null) : null,
   }));
   const format: PlaybookFormat = v.isShort ? "short" : "long";
-  const playbook = v.myChannel.nicheId ? await latestPlaybook(v.myChannel.nicheId, format) : null;
+  // O vídeo veio de uma ideia com formato: compara com a receita desse formato. Senão, com a cartilha antiga (se houver).
+  const formatId = v.inspiredIdea?.formatId ?? null;
+  const recipe = formatId ? await latestRecipe(formatId) : null;
+  const recipeFormat = recipe ? await prisma.videoFormat.findUnique({ where: { id: recipe.formatId }, select: { name: true } }) : null;
+  const playbook = !recipe && v.myChannel.nicheId ? await latestPlaybook(v.myChannel.nicheId, format) : null;
 
   const cps: DiagnosisInputs["checkpoints"] = CHECKPOINTS.filter((h) => h <= age + checkpointTolerance(h)).map((h) => {
     const c = v.checkpoints.find((x: MyVideoCheckpoint) => x.ageHours === h);
@@ -317,7 +322,10 @@ async function buildContext(v: Loaded) {
       .join("\n") || "(perfil não preenchido)",
   );
 
-  if (playbook) {
+  if (recipe) {
+    const st = parse<PlaybookStats>(recipe.stats);
+    L.push(``, `# RECEITA DO FORMATO QUE ESTE VÍDEO SEGUIU: ${recipeFormat?.name ?? ""} (versão ${recipe.version})`, st ? statsBlock(st) : "", cut(recipe.markdown ?? recipe.content, 6000));
+  } else if (playbook) {
     const st = parse<PlaybookStats>(playbook.stats);
     L.push(``, `# CARTILHA DO NICHO (${playbook.diagnosisCount} estudos de outros canais)`, st ? statsBlock(st) : "", cut(playbook.markdown ?? playbook.content, 6000));
   } else {
@@ -519,8 +527,11 @@ async function reportPrompt(myChannelId: string) {
       cut(c.analytics.trim(), 8000),
     );
   if (c.nicheId) {
-    const pb = await latestPlaybook(c.nicheId, format);
-    if (pb) L.push(``, `# CARTILHA DO NICHO (${pb.diagnosisCount} estudos)`, cut(pb.markdown ?? pb.content, 5000));
+    // Regra geral do nicho (o que é comum a todos os formatos); sem ela, a cartilha antiga.
+    const rule = await latestRule(c.nicheId, format);
+    const pb = rule ? null : await latestPlaybook(c.nicheId, format);
+    if (rule) L.push(``, `# REGRA GERAL DO NICHO (versão ${rule.version})`, cut(rule.markdown ?? rule.content, 5000));
+    else if (pb) L.push(``, `# CARTILHA DO NICHO (${pb.diagnosisCount} estudos)`, cut(pb.markdown ?? pb.content, 5000));
   }
   return { prompt: L.join("\n"), videoCount: pick.length };
 }

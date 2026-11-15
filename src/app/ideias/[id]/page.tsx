@@ -6,13 +6,24 @@ import { prisma } from "@/lib/db";
 import { fmtDateTime } from "@/lib/format";
 import { modelLabel, usdToBrl, type CostEstimate } from "@/lib/claude";
 import { findSimilarTitles } from "@/lib/catalog";
-import { estimateScript, type IdeaData, type ScriptContent, type ScriptMetrics } from "@/lib/generator";
+import { estimateScript, scriptPending, type FormatMeta, type IdeaData, type ScriptContent, type ScriptMetrics, type VoiceCheck } from "@/lib/generator";
 import type { PlaybookStats } from "@/lib/playbook";
+import { formatsOfNiche } from "@/lib/formats";
 import { StateForm } from "@/components/StateForm";
-import { PublishedNote, RepeatWarning, StatusBadge } from "@/components/IdeaCard";
+import { FormatTag, PublishedNote, RepeatWarning, StatusBadge } from "@/components/IdeaCard";
 import { repeatsForIdeas } from "@/lib/my-catalog";
 import { ConfirmDelete } from "@/app/nichos/[id]/forms";
-import { deleteIdea, generateScriptAction, linkPublishedAction, saveIdeaNotes, setIdeaStatus, unlinkPublishedAction } from "@/app/gerador/actions";
+import {
+  deleteIdea,
+  deleteLessonAction,
+  generateScriptAction,
+  linkPublishedAction,
+  returnIdeaAction,
+  saveIdeaNotes,
+  setIdeaFormatAction,
+  setIdeaStatus,
+  unlinkPublishedAction,
+} from "@/app/gerador/actions";
 import { publishedCandidates } from "@/lib/my-catalog";
 import { IdeaStatusSelect } from "./forms";
 import { runningJobsFor } from "@/lib/jobs";
@@ -45,8 +56,8 @@ const PART_STYLE: Record<string, string> = {
   fecho: "text-emerald-300",
 };
 
-/** Roteiro × medidas da cartilha (tudo calculado em código). */
-function MetricsVsPlaybook({ m, st }: { m: ScriptMetrics; st: PlaybookStats | null }) {
+/** Roteiro × medidas da receita do formato (tudo calculado em código). */
+function MetricsVsPlaybook({ m, st, label }: { m: ScriptMetrics; st: PlaybookStats | null; label: string }) {
   const rows: { label: string; mine: string; target: string; warn?: boolean }[] = [];
   const near = (a: number | null, b: number | null, tol: number) => a == null || b == null || Math.abs(a - b) <= b * tol;
   rows.push({
@@ -81,7 +92,7 @@ function MetricsVsPlaybook({ m, st }: { m: ScriptMetrics; st: PlaybookStats | nu
           <tr className="text-left text-xs text-zinc-500">
             <th className="py-1 font-normal">Medida</th>
             <th className="py-1 font-normal">Este roteiro</th>
-            <th className="py-1 font-normal">Cartilha (mediana)</th>
+            <th className="py-1 font-normal">{label} (mediana)</th>
           </tr>
         </thead>
         <tbody>
@@ -98,14 +109,78 @@ function MetricsVsPlaybook({ m, st }: { m: ScriptMetrics; st: PlaybookStats | nu
       </table>
       <p className="text-xs text-zinc-500">
         {m.words} palavras em {m.scenes} cenas. Falas: {m.speakers.map((s) => `${s.name} ${s.lines} (${s.words} palavras)`).join(" · ") || "—"}. ⚠ = longe da
-        cartilha; vale conferir (os tempos são uma previsão do roteiro, não da animação final).
+        referência; vale conferir (os tempos são uma previsão do roteiro, não da animação final).
       </p>
     </div>
   );
 }
 
-function ScriptView({ c }: { c: ScriptContent }) {
+/** Conferência da voz feita em código depois de gerar: frases longas, frases/bordões repetidos e falas copiadas. */
+function VoicePanel({ v }: { v: VoiceCheck }) {
+  const issues = v.long.length + v.repeats.length + v.copied.length;
+  return (
+    <div className={`rounded-lg border p-3 text-sm ${issues ? "border-amber-700 bg-amber-950/30" : "border-line"}`}>
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <span className={issues ? "font-medium text-amber-200" : "text-emerald-300"}>
+          {issues ? `⚠ Voz: ${issues} ${issues === 1 ? "ponto para olhar" : "pontos para olhar"}` : "✓ Voz: frases curtas e nada repetido"}
+        </span>
+        <span className="text-xs text-zinc-500">
+          {num(v.sentence.wordsPerSentence)} palavras por frase
+          {v.target != null && ` · alvo ${num(v.target)} (${v.targetFrom})`}
+        </span>
+      </div>
+      {v.repeats.length > 0 && (
+        <div className="mt-2">
+          <div className="text-xs text-amber-200">Frase ou bordão que já saiu em roteiro publicado:</div>
+          <ul className="mt-0.5 space-y-0.5 text-xs text-zinc-300">
+            {v.repeats.map((o, i) => (
+              <li key={i}>
+                “{o.sentence}” <span className="text-zinc-500">· {o.kind} em {o.source}: “{o.match}”</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {v.copied.length > 0 && (
+        <div className="mt-2">
+          <div className="text-xs text-amber-200">Fala copiada de um vídeo estudado (as amostras servem só para o ritmo):</div>
+          <ul className="mt-0.5 space-y-0.5 text-xs text-zinc-300">
+            {v.copied.map((o, i) => (
+              <li key={i}>
+                “{o.sentence}” <span className="text-zinc-500">· {o.source}: “{o.match}”</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {v.long.length > 0 && (
+        <div className="mt-2">
+          <div className="text-xs text-amber-200">Frase longa demais para falar num fôlego:</div>
+          <ul className="mt-0.5 space-y-0.5 text-xs text-zinc-300">
+            {v.long.map((l, i) => (
+              <li key={i}>
+                {l.who ? <span className="text-zinc-500">{l.who}: </span> : null}“{l.sentence}” <span className="text-zinc-500">· {l.words} palavras</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+type CheckItem = ScriptContent["checklist"][number] & { origem?: string };
+
+function ScriptView({ c, formatName }: { c: ScriptContent; formatName?: string | null }) {
   const scenes = [...c.cenas].sort((a, b) => a.inicio - b.inicio);
+  const items = c.checklist as CheckItem[];
+  const hasOrigin = items.some((x) => x.origem);
+  const groups = hasOrigin
+    ? [
+        { title: `Checklist do formato${formatName ? ` (${formatName})` : ""}`, items: items.filter((x) => x.origem !== "regra geral") },
+        { title: "Checklist da regra geral do nicho", items: items.filter((x) => x.origem === "regra geral") },
+      ].filter((g) => g.items.length)
+    : [{ title: "Checklist da cartilha", items }];
   return (
     <div className="space-y-4 text-sm">
       <ClampText lines={3} className="text-[15px] leading-relaxed text-zinc-200">
@@ -148,25 +223,30 @@ function ScriptView({ c }: { c: ScriptContent }) {
       </div>
 
       <Collapsible
-        title="Checklist, fatos para conferir e como a cartilha virou cena"
+        title={hasOrigin ? "Checklist do formato e da regra geral, fatos para conferir" : "Checklist, fatos para conferir e como a cartilha virou cena"}
         meta={`${c.checklist.filter((x) => x.ok).length} de ${c.checklist.length} itens ok${c.conferirFatos.length ? ` · ${c.conferirFatos.length} fatos para conferir` : ""}`}
         className="rounded-lg border border-line p-4"
+        open={c.checklist.some((x) => !x.ok) || c.conferirFatos.length > 0}
       >
       <div className="grid gap-4 md:grid-cols-2">
-        <div>
-          <H3>Checklist da cartilha</H3>
-          <ul className="space-y-1">
-            {c.checklist.map((x, i) => (
-              <li key={i} className={x.ok ? "text-zinc-200" : "text-amber-300"}>
-                {x.ok ? "✓" : "✗"} {x.item}
-                {x.comentario && <span className="text-xs text-zinc-500"> — {x.comentario}</span>}
-              </li>
-            ))}
-          </ul>
+        <div className="space-y-4">
+          {groups.map((g) => (
+            <div key={g.title}>
+              <H3>{g.title}</H3>
+              <ul className="space-y-1">
+                {g.items.map((x, i) => (
+                  <li key={i} className={x.ok ? "text-zinc-200" : "text-amber-300"}>
+                    {x.ok ? "✓" : "✗"} {x.item}
+                    {x.comentario && <span className="text-xs text-zinc-500"> — {x.comentario}</span>}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
         </div>
         <div className="space-y-4">
           <div>
-            <H3>Como a cartilha virou cena</H3>
+            <H3>{hasOrigin ? "Como a receita virou cena" : "Como a cartilha virou cena"}</H3>
             <p className="text-zinc-300">{c.adaptacao}</p>
           </div>
           {c.conferirFatos.length > 0 && (
@@ -212,25 +292,34 @@ function ScriptView({ c }: { c: ScriptContent }) {
 
 export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
   const { id } = await params;
-  const idea = await prisma.idea.findUnique({ where: { id }, include: { myChannel: true, niche: true, publishedVideo: true } });
+  const idea = await prisma.idea.findUnique({
+    where: { id },
+    include: { myChannel: true, niche: true, publishedVideo: true, videoFormat: true, lessons: { orderBy: { createdAt: "asc" } } },
+  });
   if (!idea) notFound();
   const d = parse<IdeaData>(idea.ideaData);
   const titles = parse<string[]>(idea.titles) ?? [];
-  const sd = parse<ScriptContent & { metrics?: ScriptMetrics; playbookId?: string | null }>(idea.scriptData);
+  const sd = parse<ScriptContent & { metrics?: ScriptMetrics; playbookId?: string | null; voice?: VoiceCheck; meta?: FormatMeta }>(idea.scriptData);
   const refIds = parse<string[]>(idea.referenceIds) ?? [];
   const pbId = sd?.playbookId ?? idea.playbookId;
+  const recipeId = sd?.meta?.recipeId ?? idea.recipeId;
+  const nicheForFormats = idea.nicheId ?? idea.myChannel?.nicheId ?? null;
 
-  const [refs, playbook, similar, est, jobs] = await Promise.all([
+  const [refs, playbook, recipe, similar, est, jobs, formatChoices] = await Promise.all([
     refIds.length ? prisma.video.findMany({ where: { id: { in: refIds } }, select: { id: true, title: true, channel: { select: { title: true } } } }) : [],
-    pbId ? prisma.nichePlaybook.findUnique({ where: { id: pbId }, select: { stats: true, diagnosisCount: true, createdAt: true } }) : null,
+    !recipeId && pbId ? prisma.nichePlaybook.findUnique({ where: { id: pbId }, select: { stats: true, diagnosisCount: true, createdAt: true } }) : null,
+    recipeId ? prisma.formatRecipe.findUnique({ where: { id: recipeId }, select: { stats: true, version: true } }) : null,
     findSimilarTitles(`${idea.theme} ${idea.chosenTitle ?? ""}`, { nicheId: idea.nicheId ?? undefined, limit: 5 }),
-    idea.myChannelId ? estimateScript(idea.id) : null,
+    idea.myChannelId && idea.formatId ? estimateScript(idea.id) : null,
     runningJobsFor([idea.id]),
+    !idea.formatId && nicheForFormats ? formatsOfNiche(nicheForFormats, idea.format === "long" ? "long" : "short") : Promise.resolve([]),
   ]);
   const scriptJob = jobs.find((j) => j.kind === "script");
   const repeats = (await repeatsForIdeas([idea])).get(idea.id) ?? [];
   const cands = idea.publishedVideo ? null : await publishedCandidates(idea);
-  const pbStats = parse<PlaybookStats>(playbook?.stats);
+  const pbStats = parse<PlaybookStats>(recipe?.stats ?? playbook?.stats);
+  const pbLabel = recipe ? `Receita v${recipe.version}` : "Cartilha";
+  const pending = sd ? scriptPending(sd) : null;
   const allTitles = [...new Set([...(idea.chosenTitle ? [idea.chosenTitle] : []), ...titles])];
   const scriptForm = est ? (
             <StateForm
@@ -270,8 +359,24 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
           <p className="text-sm text-zinc-400">
             {idea.theme} · {idea.myChannel ? <Link href={`/meus-canais/${idea.myChannel.id}`} className="hover:underline">{idea.myChannel.name}</Link> : "sem canal"} ·{" "}
             {idea.format === "long" ? "vídeo longo" : "Short"} · criada {fmtDateTime(idea.createdAt)}
-            {idea.niche && ` · cartilha de ${idea.niche.name}`}
+            {idea.niche && ` · nicho ${idea.niche.name}`}
           </p>
+          <div className="mt-1.5 flex flex-wrap items-center gap-2">
+            {idea.videoFormat ? (
+              <Link href={`/formatos/${idea.videoFormat.id}`}>
+                <FormatTag name={idea.videoFormat.name} />
+              </Link>
+            ) : (
+              <FormatTag name={null} />
+            )}
+            {pending && (pending.unchecked > 0 || pending.facts > 0) && (
+              <span className="badge bg-amber-600/20 text-amber-200">
+                Pendências: {pending.unchecked > 0 && `${pending.unchecked} ${pending.unchecked === 1 ? "caixa desmarcada" : "caixas desmarcadas"}`}
+                {pending.unchecked > 0 && pending.facts > 0 && " · "}
+                {pending.facts > 0 && `${pending.facts} ${pending.facts === 1 ? "fato para conferir" : "fatos para conferir"}`}
+              </span>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <StatusBadge status={idea.status} />
@@ -292,10 +397,10 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
               {d.gancho} <span className="block text-xs text-zinc-500 not-italic">Gancho: {d.ganchoPadrao}</span>
             </blockquote>
             <Collapsible title="De onde veio, por que pode funcionar e riscos" className="rounded-lg border border-line p-4" bodyClassName="mt-3 space-y-3">
-            <div className="text-xs text-zinc-500">Formato de história: {d.formatoDeHistoria}</div>
+            <div className="text-xs text-zinc-500">{idea.formatId ? "Como segue o motor do formato" : "Formato de história"}: {d.formatoDeHistoria}</div>
             <div className="grid gap-3 md:grid-cols-2">
               <div className="rounded bg-ink/60 p-3">
-                <div className="text-xs text-zinc-500">Vem da cartilha / referência</div>
+                <div className="text-xs text-zinc-500">{idea.formatId ? "Vem da receita do formato" : "Vem da cartilha / referência"}</div>
                 <div className="text-zinc-200">{d.adaptacao.daCartilha}</div>
               </div>
               <div className="rounded bg-ink/60 p-3">
@@ -364,12 +469,15 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
               <a href={`/api/ideias/${idea.id}/roteiro`} download className="btn-secondary">
                 Baixar roteiro (.md) para o Maestri
               </a>
-              <span className="text-xs text-zinc-500">Vai o roteiro cena a cena + personagens, estilo visual e tom do canal.</span>
+              <span className="text-xs text-zinc-500">
+                No topo vão o formato usado e as pendências; depois o roteiro cena a cena + personagens, estilo visual e tom do canal.
+              </span>
             </div>
-            <ScriptView c={sd} />
+            {sd.voice && <VoicePanel v={sd.voice} />}
+            <ScriptView c={sd} formatName={sd.meta?.formatName ?? idea.videoFormat?.name} />
             {sd.metrics && (
-              <Collapsible title="Medidas do roteiro × cartilha" className="rounded-lg border border-line p-4">
-                <MetricsVsPlaybook m={sd.metrics} st={pbStats} />
+              <Collapsible title={`Medidas do roteiro × ${recipe ? "receita do formato" : "cartilha"}`} className="rounded-lg border border-line p-4">
+                <MetricsVsPlaybook m={sd.metrics} st={pbStats} label={pbLabel} />
               </Collapsible>
             )}
             {idea.script && (
@@ -395,10 +503,76 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
               scriptForm
             )}
           </div>
-        ) : (
+        ) : !idea.myChannelId ? (
           <p className="text-sm text-amber-300">Essa ideia não está ligada a um canal seu, então não dá para escrever o roteiro.</p>
-        )}
+        ) : !idea.formatId ? (
+          <div className="space-y-2 border-t border-line pt-4">
+            <p className="text-sm text-amber-300">Esta ideia é de antes dos formatos. Escolha o formato para escrever o roteiro (ele segue a receita de um formato só).</p>
+            {formatChoices.length ? (
+              <StateForm action={setIdeaFormatAction.bind(null, idea.id)} label="Usar este formato" className="btn-secondary">
+                <select name="formatId" className="input w-auto" defaultValue="">
+                  <option value="">— escolha —</option>
+                  {formatChoices.map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.name}
+                      {f._count.videos < 3 ? " (rascunho)" : ""}
+                    </option>
+                  ))}
+                </select>
+              </StateForm>
+            ) : (
+              <p className="text-sm text-zinc-400">
+                Nenhum formato criado neste nicho ainda.{" "}
+                <Link href={nicheForFormats ? `/formatos?niche=${nicheForFormats}` : "/formatos"} className="text-red-400 hover:underline">
+                  Criar em Formatos do nicho
+                </Link>
+              </p>
+            )}
+          </div>
+        ) : null}
       </section>
+
+      {/* Devolução do Estúdio */}
+      {idea.myChannelId && (idea.script || idea.lessons.length > 0) && (
+        <section className={`card space-y-3 p-5 ${idea.status === "RETURNED" ? "border-red-800" : ""}`}>
+          <header className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-base font-semibold">Devolução do Estúdio</h2>
+            {idea.returnedAt && <span className="text-xs text-zinc-500">devolvida em {fmtDateTime(idea.returnedAt)}</span>}
+          </header>
+          {idea.lessons.length > 0 && (
+            <div>
+              <p className="mb-1 text-xs text-zinc-500">
+                Estes pontos viraram aprendizado do canal: entram em toda geração de ideia e roteiro, com peso maior que a receita do formato.
+              </p>
+              <ul className="space-y-1 text-sm">
+                {idea.lessons.map((l) => (
+                  <li key={l.id} className="flex items-start justify-between gap-3 rounded border border-line px-3 py-1.5">
+                    <span className="text-zinc-200">{l.text}</span>
+                    <form action={deleteLessonAction.bind(null, l.id)}>
+                      <button className="btn-ghost px-2 py-0.5 text-xs text-zinc-500 hover:text-red-400" title="Tirar este ponto dos aprendizados">
+                        tirar
+                      </button>
+                    </form>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <Collapsible
+            title={<span className="text-sm">{idea.lessons.length ? "Colar outra devolução" : "O Estúdio reprovou este roteiro? Cole os pontos aqui"}</span>}
+          >
+            <StateForm action={returnIdeaAction.bind(null, idea.id)} label="Registrar devolução" className="btn-secondary">
+              <textarea
+                name="returnNotes"
+                rows={5}
+                className="input"
+                placeholder={"Um ponto por linha. Ex.:\n- O fim usa o carro do pai, que não apareceu antes\n- Texto na tela em cima do rosto da avó\n- Frase longa demais no gancho"}
+              />
+              <p className="text-xs text-zinc-500">Cada linha vira um aprendizado do canal e a ideia fica marcada como devolvida.</p>
+            </StateForm>
+          </Collapsible>
+        </section>
+      )}
 
       {/* Virou vídeo? */}
       <section className="card space-y-3 p-5">

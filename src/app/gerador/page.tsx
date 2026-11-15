@@ -4,7 +4,8 @@ import { prisma } from "@/lib/db";
 import { fmtCompact, fmtDateTime } from "@/lib/format";
 import { modelLabel, usdToBrl, type CostEstimate } from "@/lib/claude";
 import { getSettings } from "@/lib/settings";
-import { dataLevel, formatLabel, loadNicheStudies, type PlaybookFormat } from "@/lib/playbook";
+import { formatLabel, type PlaybookFormat } from "@/lib/playbook";
+import { formatStudies, formatsOfNiche, isDraft } from "@/lib/formats";
 import { estimateIdeas, loadContext, profileGaps } from "@/lib/generator";
 import { StateForm } from "@/components/StateForm";
 import { IdeaCard } from "@/components/IdeaCard";
@@ -45,24 +46,27 @@ export default async function GeneratorPage({ searchParams }: PageProps<"/gerado
 
   const channel = channels.find((c) => c.id === one(sp.canal)) ?? channels[0];
   const nicheParam = one(sp.niche);
-  const nicheId = nicheParam === "none" ? null : (niches.find((n) => n.id === nicheParam)?.id ?? channel.nicheId);
+  const nicheId = niches.find((n) => n.id === nicheParam)?.id ?? channel.nicheId ?? niches[0]?.id ?? null;
   const fmtParam = one(sp.format);
   const format: PlaybookFormat = fmtParam === "short" || fmtParam === "long" ? fmtParam : channel.format === "long" ? "long" : "short";
   const count = [3, 5, 8].includes(Number(one(sp.n))) ? Number(one(sp.n)) : 5;
   const refId = one(sp.ref) || null;
 
+  const formats = nicheId ? await formatsOfNiche(nicheId, format) : [];
+  const formatId = formats.find((f) => f.id === one(sp.formato))?.id ?? null;
+
   const [ctx, studies, recent] = await Promise.all([
-    loadContext({ myChannelId: channel.id, nicheId, format, referenceId: refId }),
-    nicheId ? loadNicheStudies(nicheId, format) : Promise.resolve([]),
+    formatId ? loadContext({ myChannelId: channel.id, formatId, referenceId: refId }) : Promise.resolve(null),
+    formatId ? formatStudies(formatId) : Promise.resolve([]),
     prisma.idea.findMany({
-      where: { myChannelId: channel.id, status: { in: ["IDEA", "SCRIPT"] } },
-      include: { publishedVideo: true },
+      where: { myChannelId: channel.id, status: { in: ["IDEA", "SCRIPT", "RETURNED"] } },
+      include: { publishedVideo: true, videoFormat: { select: { id: true, name: true } } },
       orderBy: { createdAt: "desc" },
       take: 12,
     }),
   ]);
-  const req = { myChannelId: channel.id, nicheId, format, referenceId: ctx.reference?.id ?? null, count };
-  const est = await estimateIdeas(req);
+  const req = formatId ? { myChannelId: channel.id, formatId, referenceId: ctx?.reference?.id ?? null, count } : null;
+  const est = req ? await estimateIdeas(req) : null;
   const [repeats, ownCount] = await Promise.all([repeatsForIdeas(recent), prisma.myChannelVideo.count({ where: { myChannelId: channel.id } })]);
   const ideasJob = (await runningJobsFor([channel.id])).find((j) => j.kind === "ideas");
   const gaps = profileGaps(channel, channel._count.scripts);
@@ -71,10 +75,11 @@ export default async function GeneratorPage({ searchParams }: PageProps<"/gerado
     const p = new URLSearchParams();
     const cur: Record<string, string | undefined> = {
       canal: channel.id,
-      niche: nicheParam,
+      niche: nicheId ?? undefined,
       format,
+      formato: formatId ?? undefined,
       n: String(count),
-      ref: ctx.reference?.id,
+      ref: ctx?.reference?.id,
       ...patch,
     };
     for (const [k, v] of Object.entries(cur)) if (v) p.set(k, v);
@@ -85,11 +90,12 @@ export default async function GeneratorPage({ searchParams }: PageProps<"/gerado
     <div className="mx-auto max-w-6xl space-y-6">
       <PageHeader
         title="Gerador de ideias"
-        subtitle="Ideias e roteiros no formato do seu canal, usando o que funciona na cartilha."
+        subtitle="Ideias e roteiros num formato do nicho, contados com os personagens do seu canal."
         help={
           <p>
-            Pega o <b>como</b> da cartilha (gancho, fórmula de título, ritmo, virada, fecho) e conta a história no <b>formato do seu canal</b>, com os
-            seus personagens. Os vídeos estudados podem ser de outro estilo: o gerador usa a mecânica, não o formato.
+            Escolha um <b>formato</b> (uma receita tirada de 3 a 5 vídeos parecidos). O roteiro segue só essa receita, aplica a <b>regra geral do
+            nicho</b> (o que é comum a todos os formatos) e conta a história com os <b>seus personagens</b>, no tom dos seus roteiros aprovados.
+            Nunca mistura dois formatos.
           </p>
         }
       />
@@ -103,26 +109,44 @@ export default async function GeneratorPage({ searchParams }: PageProps<"/gerado
             </Chip>
           ))}
         </div>
+        {niches.length > 1 && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="w-24 text-sm text-zinc-500">Nicho:</span>
+            {niches.map((n) => (
+              <Chip key={n.id} href={href({ niche: n.id, formato: undefined, ref: undefined })} active={n.id === nicheId}>
+                {n.name}
+                {n.id === channel.nicheId && <span className="text-xs text-zinc-500"> (do canal)</span>}
+              </Chip>
+            ))}
+          </div>
+        )}
         <div className="flex flex-wrap items-center gap-2">
-          <span className="w-24 text-sm text-zinc-500">Cartilha de:</span>
-          {niches.map((n) => (
-            <Chip key={n.id} href={href({ niche: n.id, ref: undefined })} active={n.id === nicheId}>
-              {n.name}
-              {n.id === channel.nicheId && <span className="text-xs text-zinc-500"> (do canal)</span>}
-            </Chip>
-          ))}
-          <Chip href={href({ niche: "none", ref: undefined })} active={nicheId === null}>
-            nenhuma
+          <span className="w-24 text-sm text-zinc-500">Tipo:</span>
+          <Chip href={href({ format: "short", formato: undefined, ref: undefined })} active={format === "short"}>
+            Shorts
+          </Chip>
+          <Chip href={href({ format: "long", formato: undefined, ref: undefined })} active={format === "long"}>
+            Vídeos longos
           </Chip>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <span className="w-24 text-sm text-zinc-500">Formato:</span>
-          <Chip href={href({ format: "short", ref: undefined })} active={format === "short"}>
-            Shorts
-          </Chip>
-          <Chip href={href({ format: "long", ref: undefined })} active={format === "long"}>
-            Vídeos longos
-          </Chip>
+          <span className="w-24 text-sm font-medium text-zinc-300">Formato:</span>
+          {formats.map((f) => (
+            <Chip key={f.id} href={href({ formato: f.id, ref: undefined })} active={f.id === formatId}>
+              {f.name}
+              {isDraft(f._count.videos) && <span className="text-xs text-amber-300"> rascunho</span>}
+            </Chip>
+          ))}
+          {formats.length === 0 && (
+            <span className="text-sm text-amber-300">
+              Nenhum formato de {formatLabel(format, true)} neste nicho.{" "}
+              <Link href={nicheId ? `/formatos?niche=${nicheId}&format=${format}` : "/formatos"} className="underline">
+                Crie em Formatos do nicho
+              </Link>
+              .
+            </span>
+          )}
+          {formats.length > 0 && !formatId && <span className="text-sm text-amber-300">← escolha um (obrigatório)</span>}
         </div>
       </div>
 
@@ -132,7 +156,8 @@ export default async function GeneratorPage({ searchParams }: PageProps<"/gerado
           <div className="text-xs text-zinc-500">Perfil do canal</div>
           <div className="font-medium">{channel.name}</div>
           <div className="text-zinc-400">
-            {channel._count.scripts} {channel._count.scripts === 1 ? "roteiro publicado" : "roteiros publicados"} cadastrados
+            {channel._count.scripts} {channel._count.scripts === 1 ? "roteiro aprovado" : "roteiros aprovados"} cadastrados
+            {ctx && ` · ${ctx.voiceScripts.count} ${ctx.voiceScripts.sameFormat ? "deste formato" : "sem formato marcado"} entram como amostra de voz`}
           </div>
           {gaps.length ? <div className="text-amber-300">Falta: {gaps.join(", ")}.</div> : <div className="text-emerald-300">Perfil completo.</div>}
           {ownCount ? (
@@ -140,11 +165,18 @@ export default async function GeneratorPage({ searchParams }: PageProps<"/gerado
           ) : (
             <div className="text-amber-300">Leia os vídeos do seu canal no perfil para o gerador não repetir temas que você já fez.</div>
           )}
-          <div className={ctx.learnings ? "text-emerald-300" : "text-zinc-500"}>
-            {ctx.learnings
-              ? `${ctx.learnings} ${ctx.learnings === 1 ? "lição" : "lições"} dos seus vídeos publicados entram no pedido.`
-              : "Ainda sem lições dos seus vídeos (faça um diagnóstico em Meus vídeos)."}
-          </div>
+          {ctx && (
+            <div className={ctx.lessons ? "text-emerald-300" : "text-zinc-500"}>
+              {ctx.lessons ? `${ctx.lessons} ${ctx.lessons === 1 ? "ponto de devolução" : "pontos de devolução"} do Estúdio entram (valem mais que a receita).` : "Nenhuma devolução do Estúdio ainda."}
+            </div>
+          )}
+          {ctx && (
+            <div className={ctx.learnings ? "text-emerald-300" : "text-zinc-500"}>
+              {ctx.learnings
+                ? `${ctx.learnings} ${ctx.learnings === 1 ? "lição" : "lições"} dos seus vídeos publicados entram no pedido.`
+                : "Ainda sem lições dos seus vídeos (faça um diagnóstico em Meus vídeos)."}
+            </div>
+          )}
           <Link href={`/meus-canais/${channel.id}`} className="text-xs text-red-400 hover:underline">
             Editar perfil
           </Link>
@@ -153,58 +185,59 @@ export default async function GeneratorPage({ searchParams }: PageProps<"/gerado
           </Link>
         </div>
         <div className="card space-y-1 p-4 text-sm">
-          <div className="text-xs text-zinc-500">Cartilha ({formatLabel(format, true)})</div>
-          {ctx.playbook ? (
+          <div className="text-xs text-zinc-500">Formato ({formatLabel(format, true)})</div>
+          {ctx ? (
             <>
-              <div className="font-medium">{ctx.nicheName}</div>
+              <div className="font-medium">{ctx.videoFormat.name}</div>
               <div className="text-zinc-400">
-                {ctx.playbook.diagnosisCount} {ctx.playbook.diagnosisCount === 1 ? "estudo" : "estudos"} · confiança{" "}
-                {dataLevel(ctx.playbook.diagnosisCount).label} · {fmtDateTime(ctx.playbook.createdAt)}
+                {ctx.videoFormat.videos} {ctx.videoFormat.videos === 1 ? "vídeo" : "vídeos"}
+                {ctx.recipe ? ` · receita v${ctx.recipe.version} de ${fmtDateTime(ctx.recipe.createdAt)}` : " · sem receita ainda"}
               </div>
-              {ctx.playbook.diagnosisCount <= 2 && <div className="text-amber-300">Base pequena: o gerador segue mais o seu perfil.</div>}
+              {ctx.meta.draft && <div className="text-amber-300">Rascunho (menos de 3 vídeos): o gerador segue mais os seus roteiros aprovados.</div>}
+              {!ctx.recipe && ctx.fallbackStudies > 0 && (
+                <div className="text-amber-300">Sem receita: vou usar {ctx.fallbackStudies} {ctx.fallbackStudies === 1 ? "estudo" : "estudos"} do formato direto.</div>
+              )}
+              <div className={ctx.rule ? "text-zinc-400" : "text-zinc-500"}>
+                {ctx.rule ? `Regra geral do nicho v${ctx.rule.version} entra junto.` : "Sem regra geral do nicho ainda (precisa de 2 formatos prontos)."}
+              </div>
+              <div className={ctx.channelHow ? "text-emerald-300" : "text-amber-300"}>
+                {ctx.channelHow ? "Como o seu canal faz este formato: preenchido." : "Falta escrever como o seu canal faz este formato."}
+              </div>
+              <Link href={`/formatos/${ctx.videoFormat.id}`} className="text-xs text-red-400 hover:underline">
+                Abrir formato
+              </Link>
             </>
-          ) : ctx.fallbackStudies ? (
-            <div className="text-amber-300">
-              Ainda sem cartilha nesse formato. Vou usar {ctx.fallbackStudies} {ctx.fallbackStudies === 1 ? "estudo" : "estudos"} direto.
-            </div>
-          ) : nicheId ? (
-            <div className="text-amber-300">Sem cartilha nem estudos nesse formato. O gerador usa só o perfil do canal.</div>
           ) : (
-            <div className="text-zinc-400">Nenhuma cartilha escolhida: usa só o perfil do canal.</div>
-          )}
-          {nicheId && (
-            <Link href={`/cartilha?niche=${nicheId}&format=${format}`} className="text-xs text-red-400 hover:underline">
-              Abrir cartilha
-            </Link>
+            <div className="text-zinc-400">Escolha um formato acima. O roteiro segue a receita de um formato só.</div>
           )}
         </div>
         <div className="card space-y-1 p-4 text-sm">
-          <div className="text-xs text-zinc-500">Vídeo de referência (opcional)</div>
-          {ctx.reference ? (
+          <div className="text-xs text-zinc-500">Vídeo do formato para adaptar (opcional)</div>
+          {ctx?.reference ? (
             <>
               <div className="font-medium">{ctx.reference.title}</div>
               <div className="text-zinc-400">{ctx.reference.channelTitle}</div>
               <Link href={href({ ref: undefined })} className="text-xs text-red-400 hover:underline">
-                Tirar referência
+                Tirar
               </Link>
             </>
           ) : (
-            <div className="text-zinc-400">Nenhum. Escolha abaixo para adaptar um vídeo específico ao seu canal.</div>
+            <div className="text-zinc-400">Nenhum. Serve para pegar o tema ou a história de um vídeo do formato; a estrutura continua a da receita.</div>
           )}
         </div>
       </section>
 
       {studies.length > 0 && (
-        <details className="card" open={!ctx.reference && studies.length <= 6}>
+        <details className="card" open={!ctx?.reference && studies.length <= 6}>
           <summary className="cursor-pointer px-4 py-3 text-sm text-zinc-300">
-            Adaptar um vídeo estudado ({studies.length} {formatLabel(format, studies.length !== 1)} no nicho)
+            Adaptar um vídeo do formato ({studies.length} {studies.length === 1 ? "vídeo" : "vídeos"} em {ctx?.videoFormat.name})
           </summary>
           <ul className="divide-y divide-line border-t border-line">
             {studies.map((st) => (
               <li key={st.id}>
                 <Link
-                  href={href({ ref: st.id === ctx.reference?.id ? undefined : st.id })}
-                  className={`flex items-center gap-3 px-4 py-2 hover:bg-raised ${st.id === ctx.reference?.id ? "bg-red-950/30" : ""}`}
+                  href={href({ ref: st.id === ctx?.reference?.id ? undefined : st.id })}
+                  className={`flex items-center gap-3 px-4 py-2 hover:bg-raised ${st.id === ctx?.reference?.id ? "bg-red-950/30" : ""}`}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={st.thumbnailUrl ?? `https://i.ytimg.com/vi/${st.externalId}/mqdefault.jpg`} alt="" className="h-9 w-16 shrink-0 rounded object-cover" />
@@ -214,7 +247,7 @@ export default async function GeneratorPage({ searchParams }: PageProps<"/gerado
                       {st.channelTitle} · {fmtCompact(st.viewCount)} views
                     </div>
                   </div>
-                  <span className="text-xs text-zinc-400">{st.id === ctx.reference?.id ? "✓ referência" : "usar como referência"}</span>
+                  <span className="text-xs text-zinc-400">{st.id === ctx?.reference?.id ? "✓ escolhido" : "adaptar este"}</span>
                 </Link>
               </li>
             ))}
@@ -239,7 +272,8 @@ export default async function GeneratorPage({ searchParams }: PageProps<"/gerado
           </p>
         )}
         {ideasJob && <RunningNote job={ideasJob} what="Geração de ideias" />}
-        {!ideasJob && (
+        {!ideasJob && (!req || !est) && <p className="text-sm text-amber-300">Escolha um formato acima para sugerir ideias.</p>}
+        {!ideasJob && req && est && (
         <StateForm
           action={generateIdeasAction.bind(null, req)}
           label={`Sugerir ${count} ideias`}
@@ -252,14 +286,14 @@ export default async function GeneratorPage({ searchParams }: PageProps<"/gerado
               name="ponto"
               rows={2}
               className="input"
-              placeholder="Ex.: mitos sobre dinossauros · algo sobre o espaço · uma ideia de cena · deixe vazio para o gerador escolher pela cartilha"
+              placeholder="Ex.: o pote de sorvete da avó · um trabalho da escola · uma ideia de cena · deixe vazio para o gerador escolher dentro do formato"
             />
           </div>
         </StateForm>
         )}
         <p className="text-xs text-zinc-500">
-          Cada ideia vem com a cena no formato do canal, o gancho falado pelo personagem, 3 a 5 títulos com a fórmula usada e o que veio da
-          cartilha × o que é do seu canal. Depois, abra a ideia para escrever o roteiro completo (outro custo, mostrado no botão).
+          Cada ideia vem no formato escolhido, com o gancho falado, 3 a 5 títulos e o que veio da receita × o que é do seu canal. Depois,
+          abra a ideia para escrever o roteiro completo (outro custo, mostrado no botão).
         </p>
       </section>
 
