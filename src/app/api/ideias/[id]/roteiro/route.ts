@@ -6,9 +6,14 @@ import { prisma } from "@/lib/db";
  */
 export async function GET(_req: Request, ctx: RouteContext<"/api/ideias/[id]/roteiro">) {
   const { id } = await ctx.params;
-  const idea = await prisma.idea.findUnique({ where: { id }, include: { myChannel: true } });
+  const idea = await prisma.idea.findUnique({ where: { id }, include: { myChannel: true, videoFormat: true } });
   if (!idea?.script) return new Response("Essa ideia ainda não tem roteiro.", { status: 404 });
   const c = idea.myChannel;
+  // Como o canal faz o formato usado (para o Estúdio conferir o roteiro contra o formato certo).
+  const how =
+    c && idea.formatId
+      ? (await prisma.channelFormat.findUnique({ where: { myChannelId_formatId: { myChannelId: c.id, formatId: idea.formatId } } }))?.howText
+      : null;
   const block = (t: string, v: string | null | undefined) => (v?.trim() ? [`## ${t}`, v.trim(), ""] : []);
   const md = [
     idea.script,
@@ -21,6 +26,7 @@ export async function GET(_req: Request, ctx: RouteContext<"/api/ideias/[id]/rot
     ...block("Estilo visual", c?.visualStyle),
     ...block("Tom e linguagem", c?.tone),
     ...block("Sempre / nunca", c?.rules),
+    ...(idea.videoFormat ? block(`Formato usado: ${idea.videoFormat.name}`, how ?? idea.videoFormat.description) : []),
     `_Gerado pelo YouTube Radar · ideia ${idea.id}_`,
     "",
   ].join("\n");

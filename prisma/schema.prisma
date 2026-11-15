@@ -61,6 +61,8 @@ model Niche {
   discovered DiscoveredChannel[]
   searches   DiscoverySearch[]
   studied    Video[]             @relation("StudyNiche")
+  formats    VideoFormat[]
+  rules      NicheRule[]
 }
 
 /// Canal de terceiros monitorado. Pode estar em vários nichos.
@@ -178,6 +180,8 @@ model MyChannel {
   scripts MyChannelScript[]
   reports MyChannelReport[]
   catalog MyChannelVideo[]
+  formatNotes ChannelFormat[]
+  lessons     ChannelLesson[]
 }
 
 /// Todos os vídeos que o meu canal já publicou (lidos do YouTube): o gerador não repete esses temas,
@@ -210,10 +214,13 @@ model MyChannelScript {
   script      String
   views       Int?
   notes       String? // o que funcionou / o que não funcionou
+  /// Formato (receita) que este roteiro segue: as amostras de voz do gerador saem primeiro dos roteiros do mesmo formato.
+  formatId    String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  myChannel MyChannel @relation(fields: [myChannelId], references: [id], onDelete: Cascade)
+  myChannel MyChannel    @relation(fields: [myChannelId], references: [id], onDelete: Cascade)
+  format    VideoFormat? @relation(fields: [formatId], references: [id], onDelete: SetNull)
 
   @@index([myChannelId])
 }
@@ -311,6 +318,7 @@ model Video {
   diagnosis  Diagnosis?
   structure  ScriptStructure?
   inspired   MyVideo[]
+  formats    FormatVideo[]
 
   @@unique([platform, externalId])
   @@index([channelId, publishedAt])
@@ -438,9 +446,122 @@ model NichePlaybook {
   @@index([nicheId, format, createdAt])
 }
 
+// ---------- Formatos (camada 1) e regra geral do nicho (camada 2) ----------
+
+/// Formato = uma receita de vídeo dentro de um nicho, tirada de 3 a 5 vídeos estudados que seguem a mesma estrutura
+/// (ex.: "desastre em cadeia", "construir resolvendo problemas"). Com menos de 3 vídeos fica como rascunho.
+/// `length` é Short ou vídeo longo (o antigo "formato" das cartilhas).
+model VideoFormat {
+  id          String   @id @default(cuid())
+  nicheId     String
+  name        String
+  description String?
+  length      String   @default("short") // "short" | "long"
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  niche    Niche             @relation(fields: [nicheId], references: [id], onDelete: Cascade)
+  videos   FormatVideo[]
+  recipes  FormatRecipe[]
+  ideas    Idea[]
+  scripts  MyChannelScript[]
+  channels ChannelFormat[]
+  lessons  ChannelLesson[]
+
+  @@index([nicheId])
+}
+
+/// Vídeo estudado escolhido para um formato. Um vídeo entra em no máximo um formato por nicho (para não misturar receitas).
+model FormatVideo {
+  formatId String
+  videoId  String
+  nicheId  String
+  addedAt  DateTime @default(now())
+
+  format VideoFormat @relation(fields: [formatId], references: [id], onDelete: Cascade)
+  video  Video       @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  @@id([formatId, videoId])
+  @@unique([nicheId, videoId])
+}
+
+/// Receita do formato: uma versão por geração. `stats` é medido em código; `content` é a receita escrita pelo Claude.
+/// `voice` guarda trechos reais das transcrições (amostra de ritmo de fala para o gerador).
+model FormatRecipe {
+  id           String   @id @default(cuid())
+  formatId     String
+  version      Int
+  model        String
+  stats        String // JSON PlaybookStats + medidas de fala
+  content      String // JSON RecipeContent
+  markdown     String?
+  voice        String   @default("[]") // JSON [{videoId, title, text}]
+  videoIds     String   @default("[]") // JSON: Video.id usados
+  inputTokens  Int?
+  outputTokens Int?
+  costUsd      Float?
+  createdAt    DateTime @default(now())
+
+  format VideoFormat @relation(fields: [formatId], references: [id], onDelete: Cascade)
+
+  @@index([formatId, createdAt])
+}
+
+/// Regra geral do nicho: só o que é comum a 2+ formatos prontos (gancho, cadência de novidade, fecho, duração).
+model NicheRule {
+  id           String   @id @default(cuid())
+  nicheId      String
+  length       String   @default("short") // "short" | "long"
+  version      Int
+  model        String
+  recipeIds    String // JSON: FormatRecipe.id comparadas
+  formatNames  String // JSON: nomes dos formatos (para mostrar mesmo se o formato mudar)
+  content      String // JSON RuleContent
+  markdown     String?
+  inputTokens  Int?
+  outputTokens Int?
+  costUsd      Float?
+  createdAt    DateTime @default(now())
+
+  niche Niche @relation(fields: [nicheId], references: [id], onDelete: Cascade)
+
+  @@index([nicheId, length, createdAt])
+}
+
+/// Como o MEU canal faz um formato (personagens que entram, motor, bordões, fecho, o que nunca pode).
+model ChannelFormat {
+  myChannelId String
+  formatId    String
+  howText     String
+  updatedAt   DateTime @updatedAt
+
+  myChannel MyChannel   @relation(fields: [myChannelId], references: [id], onDelete: Cascade)
+  format    VideoFormat @relation(fields: [formatId], references: [id], onDelete: Cascade)
+
+  @@id([myChannelId, formatId])
+}
+
+/// Aprendizado do canal vindo da devolução do Estúdio (roteiro reprovado no filtro de produção).
+/// Vale mais que a receita do formato quando os dois conflitam.
+model ChannelLesson {
+  id          String   @id @default(cuid())
+  myChannelId String
+  ideaId      String?
+  formatId    String?
+  text        String
+  source      String   @default("devolucao")
+  createdAt   DateTime @default(now())
+
+  myChannel MyChannel    @relation(fields: [myChannelId], references: [id], onDelete: Cascade)
+  idea      Idea?        @relation(fields: [ideaId], references: [id], onDelete: SetNull)
+  format    VideoFormat? @relation(fields: [formatId], references: [id], onDelete: SetNull)
+
+  @@index([myChannelId, createdAt])
+}
+
 // ---------- Gerador e banco de ideias ----------
 
-/// Status: IDEA | SCRIPT | PRODUCED | PUBLISHED. Format: SHORT | LONG
+/// Status: IDEA | SCRIPT | RETURNED | PRODUCED | PUBLISHED | DISCARDED. Format: short | long (tamanho, não a receita)
 model Idea {
   id               String   @id @default(cuid())
   nicheId          String?
@@ -464,6 +585,13 @@ model Idea {
   scriptCostUsd    Float?
   // Vídeo do meu canal em que a ideia virou (publicada)
   publishedVideoId String?
+  // Formatos: a receita (camada 1) e a regra geral do nicho (camada 2) usadas
+  formatId         String?
+  recipeId         String?
+  ruleId           String?
+  // Devolução do Estúdio (roteiro reprovado no filtro de produção)
+  returnNotes      String?
+  returnedAt       DateTime?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
@@ -471,6 +599,8 @@ model Idea {
   myChannel      MyChannel?      @relation(fields: [myChannelId], references: [id], onDelete: SetNull)
   myVideos       MyVideo[]
   publishedVideo MyChannelVideo? @relation(fields: [publishedVideoId], references: [id], onDelete: SetNull)
+  videoFormat    VideoFormat?    @relation(fields: [formatId], references: [id], onDelete: SetNull)
+  lessons        ChannelLesson[]
 }
 
 /// Registro bruto de cada chamada ao Claude (auditoria, reaproveitamento e controle de gasto).

@@ -24,19 +24,20 @@ const majority = (yes: boolean | null | undefined, s: Share): Row["flag"] => {
 const yn = (b: boolean | null | undefined) => (b == null ? "—" : b ? "sim" : "não");
 
 /**
- * Este vídeo × a cartilha (medidas calculadas em código, sem custo).
+ * Este vídeo × a receita do formato (ou a cartilha antiga), com medidas calculadas em código, sem custo.
  * Serve para os seus próprios vídeos: ver em que o vídeo seguiu ou fugiu do padrão das referências.
  */
 export function CompareWithPlaybook({
   m,
   st,
-  nicheName,
+  label,
   href,
   own,
 }: {
   m: StudyMetrics;
   st: PlaybookStats;
-  nicheName: string;
+  /** Ex.: "receita do formato Desastre em cadeia" ou "cartilha de Animação 3D". */
+  label: string;
   href: string;
   own: boolean;
 }) {
@@ -76,7 +77,7 @@ export function CompareWithPlaybook({
       <p className="text-sm text-zinc-400">
         {own ? "Seu vídeo" : "Este vídeo"} comparado com a{" "}
         <Link href={href} className="text-red-400 hover:underline">
-          cartilha de {nicheName}
+          {label}
         </Link>{" "}
         ({st.studies} estudos). Grátis, calculado direto das medidas. {own && "Cruze com as views: o que fugiu do padrão e mesmo assim foi bem pode ser um diferencial seu."}
       </p>
@@ -85,7 +86,7 @@ export function CompareWithPlaybook({
           <tr className="text-left text-xs text-zinc-500">
             <th className="py-1 font-normal">Medida</th>
             <th className="py-1 font-normal">{own ? "Seu vídeo" : "Este vídeo"}</th>
-            <th className="py-1 font-normal">Cartilha (mediana e faixa)</th>
+            <th className="py-1 font-normal">Referência (mediana e faixa)</th>
           </tr>
         </thead>
         <tbody>
@@ -101,7 +102,7 @@ export function CompareWithPlaybook({
         </tbody>
       </table>
       <p className="text-xs text-zinc-500">
-        ✓ dentro da faixa dos estudos · ⚠ fora · sem marca quando a cartilha tem menos de 2 estudos com o dado.
+        ✓ dentro da faixa dos estudos · ⚠ fora · sem marca quando a referência tem menos de 2 estudos com o dado.
       </p>
       </Collapsible>
     </div>

@@ -17,8 +17,17 @@ import { RunningNote } from "@/components/RunningNote";
 import { runningJobsFor } from "@/lib/jobs";
 import { estimateCatalogUnits } from "@/lib/my-catalog";
 import { fmtCompact, fmtDate } from "@/lib/format";
+import { deleteLessonAction } from "@/app/gerador/actions";
 
-function ScriptFields({ s }: { s?: { title: string; url: string | null; views: number | null; script: string; notes: string | null } }) {
+type FormatOption = { id: string; name: string; length: string; niche: { name: string } };
+
+function ScriptFields({
+  s,
+  formats,
+}: {
+  s?: { title: string; url: string | null; views: number | null; script: string; notes: string | null; formatId: string | null };
+  formats: FormatOption[];
+}) {
   return (
     <div className="grid gap-3 md:grid-cols-[2fr_2fr_1fr]">
       <div>
@@ -44,6 +53,20 @@ function ScriptFields({ s }: { s?: { title: string; url: string | null; views: n
         />
       </div>
       <div className="md:col-span-3">
+        <label className="label">Formato que este roteiro segue</label>
+        <select name="formatId" className="input w-auto" defaultValue={s?.formatId ?? ""}>
+          <option value="">— nenhum marcado —</option>
+          {formats.map((f) => (
+            <option key={f.id} value={f.id}>
+              {f.name} ({f.niche.name}, {f.length === "long" ? "longo" : "Short"})
+            </option>
+          ))}
+        </select>
+        <p className="mt-1 text-xs text-zinc-500">
+          No gerador, só os roteiros do formato escolhido entram como amostra de voz (os de outro formato ficam de fora para não misturar).
+        </p>
+      </div>
+      <div className="md:col-span-3">
         <label className="label">O que funcionou / o que não funcionou (opcional)</label>
         <input name="notes" className="input" defaultValue={s?.notes ?? ""} placeholder="Ex.: retenção caiu quando a explicação do pai ficou longa" />
       </div>
@@ -56,11 +79,19 @@ export default async function MyChannelProfilePage({ params }: PageProps<"/meus-
   const [c, niches] = await Promise.all([
     prisma.myChannel.findUnique({
       where: { id },
-      include: { scripts: { orderBy: { createdAt: "asc" } }, _count: { select: { ideas: true } } },
+      include: {
+        scripts: { orderBy: { createdAt: "asc" }, include: { format: { select: { name: true } } } },
+        lessons: { orderBy: { createdAt: "desc" }, include: { idea: { select: { id: true, chosenTitle: true, theme: true } }, format: { select: { name: true } } } },
+        _count: { select: { ideas: true } },
+      },
     }),
     prisma.niche.findMany({ orderBy: { createdAt: "asc" }, select: { id: true, name: true } }),
   ]);
   if (!c) notFound();
+  // Formatos para marcar nos roteiros: os do nicho do canal primeiro.
+  const formatOptions = (
+    await prisma.videoFormat.findMany({ orderBy: { createdAt: "asc" }, select: { id: true, name: true, length: true, nicheId: true, niche: { select: { name: true } } } })
+  ).sort((a, b) => Number(b.nicheId === c.nicheId) - Number(a.nicheId === c.nicheId));
   const [videos, videoCount, job] = await Promise.all([
     prisma.myChannelVideo.findMany({ where: { myChannelId: c.id }, orderBy: { publishedAt: "desc" }, take: 300 }),
     prisma.myChannelVideo.count({ where: { myChannelId: c.id } }),
@@ -251,12 +282,47 @@ export default async function MyChannelProfilePage({ params }: PageProps<"/meus-
         </StateForm>
       </section>
 
+      {c.lessons.length > 0 && (
+        <section className="card space-y-3 p-5">
+          <div>
+            <h2 className="text-lg font-semibold">Devoluções do Estúdio ({c.lessons.length})</h2>
+            <p className="text-sm text-zinc-400">
+              Pontos em que roteiros foram reprovados antes de produzir. Entram em toda ideia e roteiro, com peso maior que a receita do formato.
+            </p>
+          </div>
+          <ul className="space-y-1 text-sm">
+            {c.lessons.map((l) => (
+              <li key={l.id} className="flex items-start justify-between gap-3 rounded border border-line px-3 py-1.5">
+                <span>
+                  <span className="text-zinc-200">{l.text}</span>
+                  <span className="block text-xs text-zinc-500">
+                    {fmtDate(l.createdAt)}
+                    {l.format && ` · formato ${l.format.name}`}
+                    {l.idea && (
+                      <>
+                        {" · "}
+                        <Link href={`/ideias/${l.idea.id}`} className="hover:underline">
+                          {l.idea.chosenTitle || l.idea.theme}
+                        </Link>
+                      </>
+                    )}
+                  </span>
+                </span>
+                <form action={deleteLessonAction.bind(null, l.id)}>
+                  <button className="btn-ghost px-2 py-0.5 text-xs text-zinc-500 hover:text-red-400">tirar</button>
+                </form>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       <section className="card space-y-4 p-5">
         <div>
-          <h2 className="text-lg font-semibold">Roteiros que já publiquei ({c.scripts.length})</h2>
+          <h2 className="text-lg font-semibold">Roteiros aprovados ({c.scripts.length})</h2>
           <p className="text-sm text-zinc-400">
-            O gerador lê até 5 deles (os com mais views primeiro) para copiar a voz do canal: tamanho das falas, jeito dos personagens, como
-            começa e termina.
+            Amostra de voz do canal: tamanho das frases, ritmo, jeito dos personagens. O gerador lê até 5 do formato escolhido (os com mais views
+            primeiro) para o ritmo, e avisa quando um roteiro novo repete uma frase ou bordão destes.
           </p>
         </div>
         {c.scripts.map((s) => (
@@ -265,10 +331,11 @@ export default async function MyChannelProfilePage({ params }: PageProps<"/meus-
               <span className="font-medium">{s.title}</span>
               {s.views != null && <span className="text-xs text-zinc-500">{fmtInt(s.views)} views</span>}
               <span className="text-xs text-zinc-500">· {s.script.split(/\s+/).length} palavras</span>
+              {s.format ? <span className="badge bg-violet-700/30 text-violet-200">Formato: {s.format.name}</span> : <span className="text-xs text-amber-300/80">sem formato marcado</span>}
             </summary>
             <div className="space-y-3 border-t border-line p-3">
               <StateForm action={saveScript.bind(null, c.id, s.id)} label="Salvar" className="btn-secondary">
-                <ScriptFields s={s} />
+                <ScriptFields s={s} formats={formatOptions} />
               </StateForm>
               <form action={deleteScript.bind(null, c.id, s.id)}>
                 <button className="btn-ghost px-2 py-1 text-xs">Excluir este roteiro</button>
@@ -279,7 +346,7 @@ export default async function MyChannelProfilePage({ params }: PageProps<"/meus-
         <div className="rounded-lg border border-dashed border-zinc-700 p-4">
           <h3 className="mb-3 text-sm font-semibold">Adicionar roteiro</h3>
           <StateForm action={saveScript.bind(null, c.id, null)} label="Adicionar roteiro" className="btn-secondary">
-            <ScriptFields />
+            <ScriptFields formats={formatOptions} />
           </StateForm>
         </div>
       </section>

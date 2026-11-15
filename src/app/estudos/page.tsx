@@ -4,6 +4,7 @@ import { fmtCompact, fmtDateTime } from "@/lib/format";
 import { claudeSpendThisMonth, usdToBrl } from "@/lib/claude";
 import { studyByLinkAction } from "@/app/video/actions";
 import { StudyLinkForm } from "@/app/video/[id]/forms";
+import { formatsByVideo } from "@/lib/formats";
 import { Badge, Collapsible, EmptyState, FilterChip, FilterRow, PageHeader, Pagination, SearchBox, makeHref, one, paginate, type SP } from "@/components/ui";
 
 const PER_PAGE = 20;
@@ -22,6 +23,7 @@ export default async function StudiesPage({ searchParams }: PageProps<"/estudos"
   const formato = one(sp.formato);
   const canal = one(sp.canal);
   const etapa = one(sp.etapa);
+  const semFormato = one(sp.receita) === "sem";
   const text = (one(sp.q) ?? "").trim();
   const [videos, spend] = await Promise.all([
     prisma.video.findMany({
@@ -35,6 +37,7 @@ export default async function StudiesPage({ searchParams }: PageProps<"/estudos"
     }),
     claudeSpendThisMonth(),
   ]);
+  const inFormat = new Set((await prisma.formatVideo.findMany({ select: { videoId: true } })).map((x) => x.videoId));
   const last = (v: (typeof videos)[number]) => Math.max(v.transcript?.updatedAt.getTime() ?? 0, v.diagnosis?.updatedAt.getTime() ?? 0);
   videos.sort((a, b) => last(b) - last(a));
 
@@ -47,10 +50,12 @@ export default async function StudiesPage({ searchParams }: PageProps<"/estudos"
       (!formato || (formato === "short" ? v.isShort : !v.isShort)) &&
       (!canal || v.channel.id === canal) &&
       (!etapa || (etapa === "completo" ? hasDiag(v) && hasComments(v) : etapa === "sem-diagnostico" ? !hasDiag(v) : !hasComments(v))) &&
-      (!text || norm(`${v.title} ${v.channel.title}`).includes(norm(text))),
+      (!text || norm(`${v.title} ${v.channel.title}`).includes(norm(text))) &&
+      (!semFormato || (hasDiag(v) && !inFormat.has(v.id))),
   );
   const pg = paginate(filtered, one(sp.page), PER_PAGE);
-  const href = makeHref("/estudos", { formato, canal, etapa, q: text || undefined });
+  const href = makeHref("/estudos", { formato, canal, etapa, receita: semFormato ? "sem" : undefined, q: text || undefined });
+  const tags = await formatsByVideo(pg.slice.map((v) => v.id));
   const count = (f: (v: (typeof videos)[number]) => boolean) => videos.filter(f).length;
 
   return (
@@ -87,7 +92,7 @@ export default async function StudiesPage({ searchParams }: PageProps<"/estudos"
         <>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="space-y-2">
-              <FilterRow label="Formato">
+              <FilterRow label="Tipo">
                 <FilterChip href={href({ formato: undefined, page: undefined })} active={!formato}>
                   Todos <span className="text-zinc-500">{videos.length}</span>
                 </FilterChip>
@@ -96,6 +101,14 @@ export default async function StudiesPage({ searchParams }: PageProps<"/estudos"
                 </FilterChip>
                 <FilterChip href={href({ formato: "long", page: undefined })} active={formato === "long"}>
                   Longos <span className="text-zinc-500">{count((v) => !v.isShort)}</span>
+                </FilterChip>
+              </FilterRow>
+              <FilterRow label="Formato">
+                <FilterChip href={href({ receita: undefined, page: undefined })} active={!semFormato}>
+                  Todos
+                </FilterChip>
+                <FilterChip href={href({ receita: "sem", page: undefined })} active={semFormato}>
+                  Estudados sem formato <span className="text-zinc-500">{count((v) => hasDiag(v) && !inFormat.has(v.id))}</span>
                 </FilterChip>
               </FilterRow>
               <FilterRow label="Etapa">
@@ -117,6 +130,7 @@ export default async function StudiesPage({ searchParams }: PageProps<"/estudos"
               <form action="/estudos" className="flex items-center gap-2">
                 {formato && <input type="hidden" name="formato" value={formato} />}
                 {etapa && <input type="hidden" name="etapa" value={etapa} />}
+                {semFormato && <input type="hidden" name="receita" value="sem" />}
                 {text && <input type="hidden" name="q" value={text} />}
                 <select name="canal" defaultValue={canal ?? ""} className="input w-48 py-1.5" aria-label="Canal">
                   <option value="">Todos os canais</option>
@@ -128,7 +142,7 @@ export default async function StudiesPage({ searchParams }: PageProps<"/estudos"
                 </select>
                 <button className="btn-secondary btn-sm">Filtrar</button>
               </form>
-              <SearchBox action="/estudos" q={text} keep={{ formato, canal, etapa }} placeholder="Buscar título ou canal" />
+              <SearchBox action="/estudos" q={text} keep={{ formato, canal, etapa, receita: semFormato ? "sem" : undefined }} placeholder="Buscar título ou canal" />
             </div>
           </div>
 
@@ -158,6 +172,16 @@ export default async function StudiesPage({ searchParams }: PageProps<"/estudos"
                         {v.channel.title} · {fmtCompact(v.viewCount)} views · {v.isShort ? "Short" : "longo"} · estudado em {fmtDateTime(new Date(last(v)))}
                       </div>
                       {resumo && <div className="mt-0.5 line-clamp-1 text-xs text-zinc-400">{resumo}</div>}
+                      {diag && (
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {(tags.get(v.id) ?? []).map((t) => (
+                            <span key={t.id} className="badge bg-violet-700/30 text-violet-200" title={`Nicho ${t.niche}`}>
+                              Formato: {t.name}
+                            </span>
+                          ))}
+                          {!tags.get(v.id) && <span className="text-[11px] text-zinc-500">sem formato · escolha na página do estudo</span>}
+                        </div>
+                      )}
                     </div>
                     <div className="shrink-0">
                       {diag && com ? (

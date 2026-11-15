@@ -22,6 +22,7 @@ function parse<T>(json: string | null | undefined): T | null {
 const STATUS_STYLE: Record<string, string> = {
   IDEA: "bg-zinc-800 text-zinc-300",
   SCRIPT: "bg-sky-700/30 text-sky-200",
+  RETURNED: "bg-red-700/30 text-red-200",
   PRODUCED: "bg-amber-600/30 text-amber-200",
   PUBLISHED: "bg-emerald-600/30 text-emerald-200",
   DISCARDED: "bg-zinc-900 text-zinc-500 line-through",
@@ -29,6 +30,19 @@ const STATUS_STYLE: Record<string, string> = {
 
 export function StatusBadge({ status }: { status: string }) {
   return <span className={`badge shrink-0 ${STATUS_STYLE[status] ?? STATUS_STYLE.IDEA}`}>{IDEA_STATUS[status] ?? status}</span>;
+}
+
+/** Etiqueta com o formato (receita) que a ideia/roteiro segue. */
+export function FormatTag({ name }: { name: string | null }) {
+  return name ? (
+    <span className="badge bg-violet-700/30 text-violet-200" title="Formato (receita) que este roteiro segue">
+      Formato: {name}
+    </span>
+  ) : (
+    <span className="badge bg-zinc-900 text-zinc-500" title="Gerada antes dos formatos">
+      sem formato
+    </span>
+  );
 }
 
 /** "Virou o vídeo X" (ideia ligada a um vídeo publicado do canal). */
@@ -79,7 +93,7 @@ export function IdeaCard({
   channelName,
   repeats = [],
 }: {
-  idea: Idea & { publishedVideo?: MyChannelVideo | null };
+  idea: Idea & { publishedVideo?: MyChannelVideo | null; videoFormat?: { id: string; name: string } | null };
   channelName?: string | null;
   repeats?: OwnMatch[];
 }) {
@@ -97,6 +111,9 @@ export function IdeaCard({
           <div className="mt-0.5 text-xs text-zinc-500">
             {idea.format === "long" ? "Vídeo longo" : "Short"}
             {channelName ? ` · ${channelName}` : ""} · {fmtDateTime(idea.createdAt)}
+          </div>
+          <div className="mt-1">
+            <FormatTag name={idea.videoFormat?.name ?? null} />
           </div>
         </div>
         <StatusBadge status={idea.status} />
@@ -127,7 +144,7 @@ export function IdeaCard({
           </blockquote>
           <div className="grid gap-2 text-xs md:grid-cols-2">
             <div className="rounded-lg bg-ink/70 p-2">
-              <div className="mb-0.5 text-zinc-500">Da cartilha</div>
+              <div className="mb-0.5 text-zinc-500">{idea.formatId ? "Da receita do formato" : "Da cartilha"}</div>
               <div className="text-zinc-300">{d.adaptacao.daCartilha}</div>
             </div>
             <div className="rounded-lg bg-ink/70 p-2">

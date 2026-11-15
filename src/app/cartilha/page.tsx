@@ -1,13 +1,11 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { fmtCompact, fmtDateTime, fmtMult } from "@/lib/format";
-import { modelLabel, usdToBrl, type CostEstimate } from "@/lib/claude";
-import { getSettings } from "@/lib/settings";
+import { modelLabel } from "@/lib/claude";
 import {
   changedSince,
   computePlaybookStats,
   dataLevel,
-  estimatePlaybook,
   formatLabel,
   loadNicheStudies,
   studyCounts,
@@ -17,10 +15,6 @@ import {
   type PlaybookStats,
   type Share,
 } from "@/lib/playbook";
-import { ActionButton } from "@/app/video/[id]/forms";
-import { generatePlaybookAction } from "./actions";
-import { runningJobsFor } from "@/lib/jobs";
-import { RunningNote } from "@/components/RunningNote";
 import { Chevron, Collapsible, EmptyState, FilterChip, PageHeader } from "@/components/ui";
 import { ClampText } from "@/components/ui-client";
 
@@ -28,9 +22,6 @@ type SP = Record<string, string | string[] | undefined>;
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
 const num = (n: number | null) => (n == null ? "—" : String(n).replace(".", ","));
 const usd = (n: number | null | undefined) => (n == null ? "—" : `US$ ${n.toFixed(n < 0.1 ? 3 : 2).replace(".", ",")}`);
-const brl = (n: number) => `R$ ${(n * usdToBrl()).toFixed(2).replace(".", ",")}`;
-const estimateHint = (e: CostEstimate) =>
-  `${modelLabel(e.model)} · custo estimado ${usd(e.usd)} a ${usd(e.usdMax)} (≈ ${brl(e.usd)} a ${brl(e.usdMax)})`;
 const mmss = (s: number | null) => (s == null ? "—" : s < 90 ? `${Math.round(s)}s` : `${Math.floor(s / 60)}min${String(Math.round(s % 60)).padStart(2, "0")}`);
 
 function parse<T>(json: string | null | undefined): T | null {
@@ -417,14 +408,13 @@ export default async function PlaybookPage({ searchParams }: PageProps<"/cartilh
   const format: PlaybookFormat =
     fmtParam === "short" || fmtParam === "long" ? fmtParam : counts.long.ready > counts.short.ready ? "long" : "short";
 
-  const [studies, versions, s] = await Promise.all([
+  const [studies, versions] = await Promise.all([
     loadNicheStudies(niche.id, format),
     prisma.nichePlaybook.findMany({
       where: { nicheId: niche.id, format },
       orderBy: { createdAt: "desc" },
       select: { id: true, createdAt: true, diagnosisCount: true, costUsd: true, model: true },
     }),
-    getSettings(),
   ]);
   const stats = computePlaybookStats(format, studies);
   const level = dataLevel(studies.length);
@@ -441,8 +431,6 @@ export default async function PlaybookPage({ searchParams }: PageProps<"/cartilh
     ? await prisma.video.findMany({ where: { id: { in: pbStudyIds } }, select: { id: true, title: true, channel: { select: { title: true } } } })
     : [];
   const titles = new Map(titleRows.map((r) => [r.id, { title: r.title, channel: r.channel.title }]));
-  const est = studies.length ? await estimatePlaybook(niche.id, format) : null;
-  const pbJob = (await runningJobsFor([`${niche.id}:${format}`]))[0];
   const pending = counts[format].pending;
 
   const href = (patch: Record<string, string | undefined>) => {
@@ -455,8 +443,8 @@ export default async function PlaybookPage({ searchParams }: PageProps<"/cartilh
   return (
     <div className="mx-auto max-w-6xl space-y-5">
       <PageHeader
-        title="Cartilha do nicho"
-        subtitle="O que se repete nos vídeos que você estudou: ganchos, títulos, estrutura e ritmo."
+        title="Cartilha do nicho (histórico)"
+        subtitle="A cartilha antiga juntava todos os estudos numa coisa só. Fica guardada só para consulta: o gerador agora usa os formatos."
         help={
           <p>
             Junta os estudos do nicho (Estudos de vídeo) e o Claude resume o padrão. Shorts e vídeos longos têm cartilhas separadas. As medidas
@@ -465,6 +453,13 @@ export default async function PlaybookPage({ searchParams }: PageProps<"/cartilh
           </p>
         }
       />
+
+      <p className="rounded-lg border border-violet-800 bg-violet-950/30 p-3 text-sm text-violet-200">
+        Agora cada formato tem a sua receita e o nicho tem uma regra geral (só o que é comum a todos os formatos).{" "}
+        <Link href={`/formatos?niche=${niche.id}&format=${format}`} className="underline">
+          Abrir Formatos do nicho
+        </Link>
+      </p>
 
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
         {niches.length > 1 && (
@@ -510,10 +505,10 @@ export default async function PlaybookPage({ searchParams }: PageProps<"/cartilh
         )}
         {hasChanges && changes && (
           <p className="rounded-lg border border-amber-700 bg-amber-950/40 p-3 text-sm text-amber-200">
-            Mudou desde esta cartilha:
+            Mudou desde esta cartilha (que não é mais gerada):
             {changes.added > 0 && ` ${changes.added} ${changes.added === 1 ? "estudo novo" : "estudos novos"}`}
             {changes.updated > 0 && `${changes.added ? "," : ""} ${changes.updated} ${changes.updated === 1 ? "refeito" : "refeitos"}`}
-            {changes.removed > 0 && `${changes.added + changes.updated ? "," : ""} ${changes.removed} fora da base`}. Gere de novo para incluir.
+            {changes.removed > 0 && `${changes.added + changes.updated ? "," : ""} ${changes.removed} fora da base`}. Os vídeos novos entram nos formatos.
           </p>
         )}
 
@@ -529,35 +524,8 @@ export default async function PlaybookPage({ searchParams }: PageProps<"/cartilh
           </>
         ) : (
           <p className="text-sm text-zinc-400">
-            {studies.length ? "Nenhuma cartilha gerada ainda para esse formato." : "Sem estudos, ainda não dá para gerar a cartilha."}
+            Nenhuma cartilha antiga para esse tipo de vídeo.
           </p>
-        )}
-
-        {est && (
-          <div className={content ? "border-t border-line pt-4" : ""}>
-            {!s.anthropicApiKey && (
-              <p className="mb-3 text-sm text-amber-300">
-                Falta a chave da Anthropic: cole a chave em <Link href="/configuracoes#chaves" className="underline">Configurações</Link> (não precisa reiniciar).
-              </p>
-            )}
-            {studies.length <= 2 && (
-              <p className="mb-3 text-sm text-amber-300">
-                Com {studies.length} {studies.length === 1 ? "estudo" : "estudos"} a cartilha sai como rascunho (o Claude é avisado para não
-                generalizar). Dá para gerar agora e de novo depois de estudar mais vídeos.
-              </p>
-            )}
-            {pbJob ? (
-              <RunningNote job={pbJob} what="Cartilha" />
-            ) : (
-              <ActionButton
-                action={generatePlaybookAction.bind(null, niche.id, format)}
-                label={content ? (hasChanges ? "Gerar de novo com os estudos novos" : "Gerar de novo") : "Gerar cartilha"}
-                busy="Começando…"
-                hint={`${estimateHint(est)} · roda em segundo plano (até 2 min)`}
-                className={content && !hasChanges ? "btn-secondary" : "btn-primary"}
-              />
-            )}
-          </div>
         )}
 
         {versions.length > 1 && (

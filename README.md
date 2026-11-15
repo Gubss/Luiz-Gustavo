@@ -12,6 +12,7 @@ outliers, estuda título/thumbnail/roteiro com o Claude e gera temas e roteiros.
 - [x] **Etapa 5** — cartilha do nicho (por formato: Shorts e longos separados)
 - [x] **Etapa 6** — perfil do meu canal, gerador de temas, títulos e roteiros adaptados ao formato do canal; banco de ideias
 - [x] **Etapa 7** — meus vídeos: acompanhamento em 1h/3h/24h/48h/3d/7d, YouTube Analytics (login do Google, só leitura), diagnóstico de cada vídeo e do canal, lições indo para o gerador
+- [x] **Formatos dentro do nicho** — receita por formato (camada 1), regra geral do nicho (camada 2), formato obrigatório no gerador, voz falada, devolução do Estúdio
 - [x] **Etapa 8** — configurações e controle de cota: chaves pela tela (com teste), cota do YouTube por origem e por dia, gastos com o Claude com limite mensal, regras do radar, o que roda sozinho e cópia de segurança do banco
 
 ## Como rodar no Windows
@@ -114,7 +115,45 @@ o canal apareceu × bônus para canal com menos de 1 ano. As abas Shorts/Longos 
 raio-x, a proporção real de Shorts do canal. Tudo fica salvo (`DiscoveredChannel`, `DiscoverySearch`): reabrir a tela
 não gasta cota.
 
-## Cartilha do nicho (etapa 5)
+## Formatos do nicho (substitui a cartilha no gerador)
+
+Menu **Formatos do nicho**. A cartilha antiga juntava todos os estudos numa coisa só e o roteiro saía misturando jeitos de
+contar. Agora são duas camadas:
+
+1. **Formato** — uma receita de vídeo dentro do nicho, tirada de 3 a 5 vídeos estudados que seguem a mesma estrutura
+   (ex.: "desastre em cadeia", "construir resolvendo problemas"). Você cria o formato, escolhe os vídeos (na tela do formato
+   ou em *Formato* na página do estudo) e gera a **receita**: como abre, quem narra e em que pessoa, o motor na ordem, o que se
+   repete e a cada quantos segundos, como a tensão cresce, como fecha e por que viralizou. Com menos de 3 vídeos fica como
+   **rascunho**. Um vídeo fica em um formato só por nicho. Medido em código, sem custo: palavras por frase, frases curtas,
+   começos de frase e expressões que se repetem ("Mas…", "Então você…", "minha casa") com os segundos e o intervalo.
+   Em cada formato há o campo **Como o meu canal faz este formato** (o seu texto do formato: elenco, motor, fecho, o que nunca pode).
+2. **Regra geral do nicho** — com 2 ou mais formatos prontos (3+ vídeos e receita), o Radar compara as receitas e separa
+   o que é comum (gancho, cadência de novidade, fecho, duração) do que é de cada formato. Só o comum vai para o gerador.
+
+**Gerador:** escolher o formato é obrigatório. O pedido leva só a receita desse formato, a regra geral (parte comum), o perfil,
+como o canal faz o formato, os roteiros aprovados **desse** formato (marque o formato de cada roteiro no perfil) e trechos das
+transcrições como amostra de ritmo. Nunca vão duas receitas juntas. O roteiro deve soar falado: frases curtas, nenhum termo
+técnico sem comparação, só efeitos do estilo visual do perfil, nada fixo na tela o vídeo inteiro e nenhum texto em cima de rosto.
+
+**Depois de gerar (em código):** frases longas demais para falar, frases ou bordões repetidos de roteiros publicados do canal e
+falas copiadas das transcrições aparecem num aviso na tela da ideia. O checklist sai em duas partes (formato e regra geral).
+
+**O .md para o Maestri** começa com o formato usado e as pendências:
+
+```
+**Formato:** Desastre em cadeia · receita v2 (4 vídeos) · **Nicho:** Animação 3D · Regra geral v1
+**Pendências:** 1 caixa do checklist desmarcada · 2 fatos para conferir
+```
+
+e o bloco "Referência do canal" ganha "Formato usado" com o texto de como o canal faz esse formato.
+
+**Devolução do Estúdio:** na tela da ideia, cole os pontos em que o roteiro foi reprovado no filtro de produção (um por linha).
+A ideia fica **Devolvida** e cada ponto vira aprendizado do canal, que entra em toda ideia e roteiro com peso maior que a receita
+(lista também no perfil do canal, com *tirar*).
+
+## Cartilha do nicho (etapa 5, agora só histórico)
+
+A tela continua para consulta das cartilhas já geradas, mas não gera mais e o gerador não usa.
 
 Menu **Cartilha do nicho** (ou o botão na página do nicho). Escolha o nicho e o formato: **Shorts** e **vídeos longos**
 têm cartilhas separadas.
