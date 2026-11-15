@@ -103,6 +103,11 @@ export default async function StudiesPage({ searchParams }: PageProps<"/estudos"
                   Longos <span className="text-zinc-500">{count((v) => !v.isShort)}</span>
                 </FilterChip>
               </FilterRow>
+              <Collapsible
+                title={<span className="text-xs text-zinc-400">Mais filtros</span>}
+                open={semFormato || !!etapa || !!canal}
+                bodyClassName="mt-2 space-y-2"
+              >
               <FilterRow label="Formato">
                 <FilterChip href={href({ receita: undefined, page: undefined })} active={!semFormato}>
                   Todos
@@ -125,8 +130,6 @@ export default async function StudiesPage({ searchParams }: PageProps<"/estudos"
                   Falta comentários <span className="text-zinc-500">{count((v) => !hasComments(v))}</span>
                 </FilterChip>
               </FilterRow>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
               <form action="/estudos" className="flex items-center gap-2">
                 {formato && <input type="hidden" name="formato" value={formato} />}
                 {etapa && <input type="hidden" name="etapa" value={etapa} />}
@@ -142,6 +145,9 @@ export default async function StudiesPage({ searchParams }: PageProps<"/estudos"
                 </select>
                 <button className="btn-secondary btn-sm">Filtrar</button>
               </form>
+              </Collapsible>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
               <SearchBox action="/estudos" q={text} keep={{ formato, canal, etapa, receita: semFormato ? "sem" : undefined }} placeholder="Buscar título ou canal" />
             </div>
           </div>
