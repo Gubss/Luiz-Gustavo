@@ -93,7 +93,7 @@ export default async function GeneratorPage({ searchParams }: PageProps<"/gerado
         subtitle="3 · Escolha o canal e o formato para gerar ideias."
         help={
           <p>
-            Escolha um <b>formato</b> (uma receita tirada de 3 a 5 vídeos parecidos). O roteiro segue só essa receita, aplica a <b>regra geral do
+            Escolha um <b>formato</b> (uma receita tirada de 3 a 8 vídeos parecidos). O roteiro segue só essa receita, aplica a <b>regra geral do
             nicho</b> (o que é comum a todos os formatos) e conta a história com os <b>seus personagens</b>, no tom dos seus roteiros aprovados.
             Nunca mistura dois formatos.
           </p>

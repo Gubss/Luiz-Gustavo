@@ -153,7 +153,7 @@ export default async function FormatsPage({ searchParams }: PageProps<"/formatos
     <div className="mx-auto max-w-6xl space-y-5">
       <PageHeader
         title="Formatos do nicho"
-        subtitle="Cada formato é uma receita de vídeo tirada de 3 a 5 vídeos que seguem a mesma estrutura."
+        subtitle="Cada formato é uma receita de vídeo tirada de 3 a 8 vídeos que seguem a mesma estrutura."
         help={
           <p>
             <b>Camada 1, formatos:</b> você escolhe quais vídeos estudados entram em cada formato e o Radar escreve a receita (como abre, quem narra,
@@ -210,7 +210,7 @@ export default async function FormatsPage({ searchParams }: PageProps<"/formatos
         <>
           {formats.length === 0 ? (
             <EmptyState title={`Nenhum formato de ${formatLabel(length, true)} em ${niche.name}`}>
-              Crie o primeiro abaixo, dê um nome (ex.: “desastre em cadeia”) e escolha de 3 a 5 vídeos estudados que seguem a mesma estrutura.
+              Crie o primeiro abaixo, dê um nome (ex.: “desastre em cadeia”) e escolha de 3 a 8 vídeos estudados que seguem a mesma estrutura.
             </EmptyState>
           ) : (
             <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">

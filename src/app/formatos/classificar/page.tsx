@@ -160,7 +160,7 @@ export default async function ClassifyPage({ searchParams }: PageProps<"/formato
           <p className="text-sm text-zinc-400">Nenhum estudo com diagnóstico neste nicho ainda.</p>
         ) : (
           <StateForm action={applyChoicesAction.bind(null, niche.id)} label="Gravar e gerar as receitas" busy="Gravando…" formClassName="space-y-3"
-            hint={`Cria os formatos que faltam, põe cada vídeo no escolhido (até ${MAX_FORMAT_VIDEOS} por formato) e gera as receitas (Opus, cerca de US$ 0,30 por formato).`}>
+            hint={`Cria os formatos que faltam, põe cada vídeo no escolhido (até ${MAX_FORMAT_VIDEOS} por formato) e gera as receitas (Opus; custo varia com a quantidade e o tamanho dos estudos).`}>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="text-left text-xs text-zinc-500">

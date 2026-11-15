@@ -1,7 +1,7 @@
 /**
  * Formatos dentro do nicho.
  *
- * Camada 1 — FORMATO: uma receita de vídeo tirada de 3 a 5 vídeos estudados que seguem a mesma estrutura
+ * Camada 1 — FORMATO: uma receita de vídeo tirada de 3 a 8 vídeos estudados que seguem a mesma estrutura
  * (ex.: "desastre em cadeia", "construir resolvendo problemas"). Você escolhe os vídeos; o Radar mede em código
  * o que dá para medir (ritmo, o que se repete e a cada quantos segundos, tamanho das frases) e o Claude escreve a receita:
  * como abre, quem narra e em que pessoa, o que se repete, como a tensão cresce, como fecha e por que viralizou.
@@ -37,7 +37,7 @@ function parse<T>(json: string | null | undefined): T | null {
 }
 
 export const MIN_FORMAT_VIDEOS = 3;
-export const MAX_FORMAT_VIDEOS = 5;
+export const MAX_FORMAT_VIDEOS = 8;
 export const isDraft = (videos: number) => videos < MIN_FORMAT_VIDEOS;
 
 export class FormatError extends Error {}
@@ -71,14 +71,19 @@ export async function formatStudies(formatId: string) {
  * se já estava em outro formato do mesmo nicho, sai de lá.
  */
 export async function setVideoFormat(videoId: string, nicheId: string, formatId: string | null) {
-  await prisma.formatVideo.deleteMany({ where: { nicheId, videoId } });
-  if (!formatId) return;
-  const f = await prisma.videoFormat.findUniqueOrThrow({ where: { id: formatId } });
-  if (f.nicheId !== nicheId) throw new FormatError("Esse formato é de outro nicho.");
-  const v = await prisma.video.findUniqueOrThrow({ where: { id: videoId }, select: { isShort: true } });
-  if (v.isShort !== (f.length === "short"))
-    throw new FormatError(`Esse formato é de ${formatLabel(f.length as PlaybookFormat, true)} e o vídeo é ${v.isShort ? "um Short" : "um vídeo longo"}.`);
-  await prisma.formatVideo.create({ data: { formatId, videoId, nicheId } });
+  return prisma.$transaction(async tx => {
+    if (formatId) {
+      const f = await tx.videoFormat.findUniqueOrThrow({ where: { id: formatId } });
+      if (f.nicheId !== nicheId) throw new FormatError("Esse formato é de outro nicho.");
+      const v = await tx.video.findUniqueOrThrow({ where: { id: videoId }, select: { isShort: true } });
+      if (v.isShort !== (f.length === "short"))
+        throw new FormatError("Esse formato é de " + formatLabel(f.length as PlaybookFormat, true) + " e o vídeo é " + (v.isShort ? "um Short" : "um vídeo longo") + ".");
+      const count = await tx.formatVideo.count({ where: { formatId, videoId: { not: videoId } } });
+      if (count >= MAX_FORMAT_VIDEOS) throw new FormatError("Esse formato já tem " + MAX_FORMAT_VIDEOS + " vídeos. Tire um antes de pôr outro.");
+    }
+    await tx.formatVideo.deleteMany({ where: { nicheId, videoId } });
+    if (formatId) await tx.formatVideo.create({ data: { formatId, videoId, nicheId } });
+  });
 }
 
 /** Formatos de cada vídeo (para mostrar a etiqueta na lista de estudos). */
@@ -216,7 +221,7 @@ export const RecipeSchema = z.object({
 export type RecipeContent = z.infer<typeof RecipeSchema>;
 
 const RECIPE_SYSTEM = `Você é analista de canais "dark" do YouTube e TikTok (sem rosto: animação, narração, histórias).
-Recebe de 1 a 5 vídeos que seguem a MESMA estrutura (um formato) dentro de um nicho, e escreve a RECEITA desse formato:
+Recebe de 1 a ${MAX_FORMAT_VIDEOS} vídeos que seguem a MESMA estrutura (um formato) dentro de um nicho, e escreve a RECEITA desse formato:
 como abre, quem narra e em que pessoa, a sequência de passos (o motor), o que se repete e a cada quantos segundos, como a tensão cresce,
 como fecha e por que esses vídeos viralizaram. Um roteirista vai seguir essa receita para escrever um vídeo novo no mesmo formato.
 
@@ -243,18 +248,18 @@ async function prepareRecipe(formatId: string) {
   const stats: RecipeStats = { ...computePlaybookStats(length, studies), speech: computeSpeech(studies, transcripts) };
   const byId = new Map(transcripts.map((t) => [t.videoId, t.text]));
   const prompt = [
-    `# Nicho: ${format.niche.name}${format.niche.description ? ` — ${format.niche.description}` : ""}`,
-    `# Formato: ${format.name} (${formatLabel(length, true)})${format.description ? `\nComo eu descrevo este formato: ${format.description}` : ""}`,
+    cut(`# Nicho: ${format.niche.name}${format.niche.description ? ` — ${format.niche.description}` : ""}`, 1000),
+    cut(`# Formato: ${format.name} (${formatLabel(length, true)})${format.description ? `\nComo eu descrevo este formato: ${format.description}` : ""}`, 1000),
     `Vídeos no formato: ${studies.length}${isDraft(studies.length) ? " (rascunho)" : ""}`,
     "",
-    statsBlock(stats),
+    cut(statsBlock(stats), 8000),
     "",
-    speechBlock(stats.speech),
+    cut(speechBlock(stats.speech), 8000),
     "",
     "# Vídeos do formato",
     ...studies.map((s, i) => {
       const t = byId.get(s.id);
-      return `${studyBlock(s, i).replace(/^## Estudo #/, "## Vídeo #")}\n${t ? `Transcrição:\n${cut(t, 3000)}` : "(sem transcrição)"}\n`;
+      return `${cut(studyBlock(s, i).replace(/^## Estudo #/, "## Vídeo #"), 4000)}\n${t ? `Transcrição:\n${cut(t, 3000)}` : "(sem transcrição)"}\n`;
     }),
   ].join("\n");
   const voice = studies
@@ -275,7 +280,7 @@ export async function estimateRecipe(formatId: string): Promise<CostEstimate & {
 export async function generateRecipe(formatId: string) {
   const s = await getSettings();
   const { format, studies, stats, prompt, voice } = await prepareRecipe(formatId);
-  if (!studies.length) throw new FormatError(`O formato "${format.name}" ainda não tem vídeos estudados. Escolha pelo menos 1 (o ideal é de 3 a 5).`);
+  if (!studies.length) throw new FormatError(`O formato "${format.name}" ainda não tem vídeos estudados. Escolha pelo menos 1 (o ideal é de 3 a 8).`);
   const r = await callStructured({
     kind: "recipe",
     model: s.modelDeep,

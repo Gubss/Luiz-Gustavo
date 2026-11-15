@@ -16,7 +16,7 @@ const STEPS: { n: number; title: string; text: string; href: string; cta: string
 ];
 
 const WORDS: { term: string; text: string }[] = [
-  { term: "Formato", text: "Um jeito de contar que se repete no nicho (ex.: desastre em cadeia). É tirado de 3 a 5 vídeos estudados parecidos." },
+  { term: "Formato", text: "Um jeito de contar que se repete no nicho (ex.: desastre em cadeia). É tirado de 3 a 8 vídeos estudados parecidos." },
   { term: "Receita", text: "O passo a passo de um formato: como abre, quem narra, a ordem, como fecha. O roteiro segue a receita do formato escolhido. Formato sem receita ainda: a tela avisa e pede confirmação antes de escrever." },
   { term: "Regra geral do nicho", text: "O que todos os formatos prontos têm em comum (gancho, ritmo, duração). Vai junto com a receita." },
   { term: "Perfil do canal", text: "Quem são os personagens, o tom, o estilo visual, o que sempre e o que nunca. O que acontece na história vem daqui; da referência só vem o jeito de contar." },
