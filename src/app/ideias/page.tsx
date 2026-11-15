@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db";
 import { IDEA_STATUS } from "@/lib/idea-status";
 import { IdeaCard } from "@/components/IdeaCard";
 import { repeatsForIdeas } from "@/lib/my-catalog";
-import { EmptyState, FilterChip, FilterRow, PageHeader, Pagination, SearchBox, Tabs, makeHref, one, paginate, type SP } from "@/components/ui";
+import { Collapsible, EmptyState, FilterChip, FilterRow, PageHeader, Pagination, SearchBox, Tabs, makeHref, one, paginate, type SP } from "@/components/ui";
 
 const PER_PAGE = 12;
 
@@ -47,10 +47,10 @@ export default async function IdeasPage({ searchParams }: PageProps<"/ideias">) 
     <div className="mx-auto max-w-6xl space-y-5">
       <PageHeader
         title="Banco de ideias"
-        subtitle="Tudo que o gerador criou. Mude o status conforme for produzindo."
+        subtitle="3–5 · Abra uma ideia para escrever ou revisar o roteiro."
         actions={
           <Link href={canal ? `/gerador?canal=${canal}` : "/gerador"} className="btn-primary">
-            Gerar mais ideias
+            Gerar ideias
           </Link>
         }
       />
@@ -62,6 +62,7 @@ export default async function IdeasPage({ searchParams }: PageProps<"/ideias">) 
         ]}
       />
 
+      <Collapsible title="Filtrar ideias" open={Boolean(canal || formato || receita || text)} className="card p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-4">
           {channels.length > 1 && (
@@ -105,6 +106,8 @@ export default async function IdeasPage({ searchParams }: PageProps<"/ideias">) 
         </div>
         <SearchBox action="/ideias" q={text} keep={{ canal, status, formato, receita }} placeholder="Buscar por título ou assunto" />
       </div>
+
+      </Collapsible>
 
       {pg.total === 0 ? (
         <EmptyState
