@@ -375,3 +375,28 @@ test("segunda passada confere o checklist do Gubs inteiro (historinha, conta em 
   assert.equal(bad.length, 4);
   assert.match(bad.join("\n"), /historinha em 1 frase[\s\S]*Tema de desenho com conta[\s\S]*não foi plantada[\s\S]*duas opções/);
 });
+
+test("sem ChannelFormat: limite de voz e narrador do perfil chegam ao prompt e à exportação",async()=>{
+ const {prisma}=await import("../src/lib/db");
+ const {loadContext,generateScript}=await G();
+ const {ideaExport}=await import("../src/lib/script-export");
+ const niche=await prisma.niche.create({data:{name:"Regressão voz do kit"}});
+ const characters='Quem narra: depende do formato, e é um só por roteiro. No formato de desastre, o menino narra em primeira pessoa. No formato de construir, um narrador fala "você" e o menino não fala. Narrador e menino usam a mesma voz, então os dois nunca falam no mesmo roteiro. Mãe, avó e professora têm voz própria.';
+ const channel=await prisma.myChannel.create({data:{name:"Por Que É Assim?",nicheId:niche.id,format:"short",characters,tone:"Nas histórias, narra em primeira pessoa. Leve e engraçado."}});
+ for(const [name,expected,excluded] of [["Desastre em cadeia","o menino narra em primeira pessoa","No formato de construir"],["Construir resolvendo problemas",'um narrador fala "você" e o menino não fala',"No formato de desastre"],["Historinha com regra absurda","Nas histórias, narra em primeira pessoa","No formato de construir"]]){
+  const format=await prisma.videoFormat.create({data:{nicheId:niche.id,name}});
+  assert.equal(await prisma.channelFormat.count({where:{myChannelId:channel.id,formatId:format.id}}),0);
+  const ctx=await loadContext({myChannelId:channel.id,formatId:format.id});
+  assert.equal(ctx.channelHow,false);
+  assert.ok(ctx.block.includes(expected));assert.ok(!ctx.block.includes(excluded));
+  assert.match(ctx.block,/Narrador e menino usam a mesma voz, então os dois nunca falam no mesmo roteiro/);
+  const idea=await prisma.idea.create({data:{myChannelId:channel.id,nicheId:niche.id,formatId:format.id,format:"short",theme:"Teste de narração",titles:"[]"}});
+  await generateScript(idea.id,{noRecipeOk:true});
+  assert.ok(textOf(lastScript()).includes(expected));
+  const exported=(await ideaExport(idea.id))!;assert.ok(exported.includes(expected));assert.ok(!exported.includes(excluded));
+  assert.match(exported,/Narrador e menino usam a mesma voz/);
+  const legacy=await prisma.idea.create({data:{myChannelId:channel.id,nicheId:niche.id,formatId:format.id,format:"short",theme:"Legado",titles:"[]",script:"legado",scriptData:JSON.stringify(SCRIPT)}});
+  const legacyExport=(await ideaExport(legacy.id))!;assert.ok(legacyExport.includes(expected));assert.ok(!legacyExport.includes(excluded));
+  assert.match(legacyExport,/Narrador e menino usam a mesma voz/);
+ }
+});

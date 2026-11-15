@@ -17,7 +17,14 @@ export function recipeEvidence(content:string,videoIds:string) {
  "Desconhecido: frames não foram vistos nesta etapa; não inferir retenção/CTR externos. Duração, voz e CTA da referência não são regras do canal."].join("\n");
 }
 
-/** Narrative choices belong in ChannelFormat, not the shared identity paragraph. */
-export function channelIdentity(text:string|null|undefined){
- return (text??"").replace(/,? com fato verificado:?/gi, "").split(/\r?\n|(?<=[.!?])\s+/).filter(s=>!/(?:quem narra|no formato|nas histórias|narra.*primeira pessoa|narrador e menino|você.*tempo todo|palavras por segundo|em todo vídeo|espectador sai|pergunta do fim)/i.test(s)).join("\n");
+/** Keep kit limits and the selected format's narration, even without ChannelFormat. */
+export function channelIdentity(text:string|null|undefined,formatName?:string){
+ const selected=(formatName??"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
+ return (text??"").replace(/,? com fato verificado:?/gi, "").split(/\r?\n|(?<=[.!?])\s+/).filter(s=>{
+  if(/narrador e menino.*mesma voz/i.test(s))return true;
+  const named=s.match(/no formato (?:de )?([^,]+),/i);
+  if(named){const name=named[1].normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().trim();return !!selected&&selected.includes(name);}
+  if(/nas histórias/i.test(s))return /histor/.test(selected);
+  return !/(?:no formato|narra.*primeira pessoa|você.*tempo todo|palavras por segundo|em todo vídeo|espectador sai|pergunta do fim)/i.test(s);
+ }).join("\n");
 }

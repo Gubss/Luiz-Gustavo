@@ -112,19 +112,19 @@ export function voiceScripts(scripts: MyChannelScript[], formatId: string | null
   return { scripts: same, sameFormat: true };
 }
 
-export function profileBlock(c: ChannelWithScripts, format: PlaybookFormat, opts: { formatId?: string | null; hasChannelHow?: boolean } = {}) {
+export function profileBlock(c: ChannelWithScripts, format: PlaybookFormat, opts: { formatId?: string | null; formatName?: string; hasChannelHow?: boolean } = {}) {
   const line = (label: string, v: string | null | undefined) => (v?.trim() ? `${label}: ${v.trim()}` : null);
   const out = [
     `# PERFIL DO MEU CANAL: ${c.name}`,
     line("Formato principal", formatLabel((c.format as PlaybookFormat) ?? "short", true)),
     line("Plataformas", c.platforms),
     c.durationSec ? `Duração alvo: ${c.durationSec}s` : null,
-    line("Identidade do canal", channelIdentity(c.concept)),
-    line("Personagens", channelIdentity(c.characters)),
+    line("Identidade do canal", channelIdentity(c.concept, opts.formatName)),
+    line("Personagens", channelIdentity(c.characters, opts.formatName)),
     // Com "como o meu canal faz este formato" preenchido, o resumo de formatos do perfil fica de fora (ele junta todos os formatos).
     null,
     line("Estilo visual (efeitos e regras de tela permitidos)", c.visualStyle),
-    line("Tom e linguagem", channelIdentity(c.tone)),
+    line("Tom e linguagem", channelIdentity(c.tone, opts.formatName)),
     line("Público", c.audience),
     line("Sempre / nunca", scopedRules(c.rules)),
     null,
@@ -132,25 +132,21 @@ export function profileBlock(c: ChannelWithScripts, format: PlaybookFormat, opts
   ].filter(Boolean) as string[];
   if (format !== c.format) out.push(`(Este pedido é para ${formatLabel(format, true)}, não o formato principal do canal.)`);
 
-  const v = voiceScripts(c.scripts, opts.formatId ?? null);
-  const scripts = v.scripts.slice(0, 5);
-  if (scripts.length) {
-    out.push(
-      "",
-      `## Roteiros aprovados do canal ${v.sameFormat ? "NESTE formato" : "(sem formato marcado)"} (${scripts.length}) — amostra de VOZ: tamanho das frases, ritmo, jeito dos personagens falarem.`,
-      "Use para o ritmo e o jeito de falar. NUNCA reaproveite falas, piadas ou bordões destes roteiros.",
-    );
-    scripts.forEach((s, i) => {
-      out.push(
-        `### Roteiro ${i + 1}: ${s.title}${s.views != null ? ` · ${s.views.toLocaleString("pt-BR")} views` : ""}`,
-        s.notes?.trim() ? `Notas do dono do canal: ${s.notes.trim()}` : "",
-        s.script.trim(),
-      );
-    });
-  } else {
-    out.push("", "(O canal ainda não tem roteiros aprovados neste formato. Siga o perfil e a receita.)");
+  // Keep voice samples whole; never truncate one to fit the profile budget.
+  let block=cut(out.join("\n"),12000);
+  const samples=voiceScripts(c.scripts,opts.formatId??null).scripts.slice(0,5);
+  const heading="\n\n## Roteiros aprovados NESTE formato — amostras completas de VOZ. Use para ritmo e jeito de falar; NUNCA reaproveite falas, piadas ou bordões.\n";
+  const included:string[]=[];
+  let size=block.length+heading.length+150;
+  for(const [i,s] of samples.entries()){
+   const sample=["### Roteiro "+(i+1)+": "+cut(s.title,200),s.notes?.trim()?"Notas do dono do canal: "+cut(s.notes.trim(),1000):"",s.script.trim()].filter(Boolean).join("\n");
+   if(size+sample.length+1>20000)continue;
+   included.push(sample);size+=sample.length+1;
   }
-  return out.filter((x) => x !== "").join("\n");
+  if(included.length)block+=heading+included.join("\n");
+  if(samples.length>included.length)block+="\n(Amostras de voz omitidas por tamanho; nenhuma foi cortada.)";
+  if(!samples.length)block+="\n(O canal ainda não tem roteiros aprovados neste formato. Siga o perfil e a receita.)";
+  return block;
 }
 
 /** Pontos das devoluções do Estúdio (roteiros reprovados no filtro de produção). */
@@ -238,7 +234,7 @@ export async function loadContext(opts: { myChannelId: string; formatId: string 
   const draft = isDraft(vf._count.videos);
   const studies = await formatStudies(vf.id);
 
-  const parts: string[] = [profileBlock(channel, format, { formatId: vf.id, hasChannelHow: !!how })];
+  const parts: string[] = [profileBlock(channel, format, { formatId: vf.id, formatName: vf.name, hasChannelHow: !!how })];
   if (lessons.block) parts.push("", lessons.block);
   // Etapa 7: o que os números dos MEUS vídeos mostraram.
   if (learned.block) parts.push("", scopedRules(learned.block));
@@ -897,7 +893,7 @@ function storedSpoken(d:z.infer<typeof SpokenSchema>):ScriptContent {
 }
 async function referenceFor(ctx:GeneratorContext) {
  const how=await prisma.channelFormat.findUnique({where:{myChannelId_formatId:{myChannelId:ctx.channel.id,formatId:ctx.videoFormat.id}}});
- return {name:ctx.channel.name,characters:channelIdentity(ctx.channel.characters),visualStyle:ctx.channel.visualStyle,tone:channelIdentity(ctx.channel.tone),rules:scopedRules(ctx.channel.rules),formatName:ctx.videoFormat.name,how:how?.howText??""};
+ return {name:ctx.channel.name,characters:channelIdentity(ctx.channel.characters,ctx.videoFormat.name),visualStyle:ctx.channel.visualStyle,tone:channelIdentity(ctx.channel.tone,ctx.videoFormat.name),rules:scopedRules(ctx.channel.rules),formatName:ctx.videoFormat.name,how:how?.howText??""};
 }
 export async function generateScript(ideaId:string,opts:{title?:string;extra?:string;mode?:ScriptMode;noRecipeOk?:boolean}={}) {
  if(opts.mode==="corrigir") throw new GeneratorError("Selecione a fala e use Corrigir trecho; o restante fica preservado.");

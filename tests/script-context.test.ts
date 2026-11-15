@@ -1,6 +1,6 @@
 import {test} from "node:test";import assert from "node:assert/strict";
 import {channelIdentity,completeSample,recipeEvidence,scopedRules} from "../src/lib/script-context";
-import {voiceScripts} from "../src/lib/generator";
+import {profileBlock,voiceScripts} from "../src/lib/generator";
 import {narrationWarnings} from "../src/lib/script-check";
 import type {MyChannelScript} from "@prisma/client";
 test("context excludes unknown, wrong-format and cut voice; preserves complete samples",()=>{
@@ -17,4 +17,15 @@ test("context excludes unknown, wrong-format and cut voice; preserves complete s
  assert.doesNotMatch(scopedRules("Bordão a cada 20–30 s.\nBordão no máximo 2 vezes."),/Bordão/);
  assert.match(recipeEvidence('{"motor":[{"passo":"causa e consequência"}]}','["video"]'),/1 exemplo, não é regra/);
  assert.equal(narrationWarnings([{personagem:"Narrador",fala:"Eu caí. O menino sentou."}]).length,1);
+});
+
+test("perfil tem teto de tamanho e omite amostras inteiras em vez de cortá-las",()=>{
+ const sample={formatId:"family",integrity:"complete",title:"Grande",script:"AMOSTRA_GRANDE "+"texto ".repeat(5000)+"Fim."} as MyChannelScript;
+ const channel={name:"Teste",format:"short",concept:"identidade ".repeat(5000),scripts:[sample,{...sample,title:"Curta",script:"Uma amostra curta, completa e preservada!"}]} as Parameters<typeof profileBlock>[0];
+ const block=profileBlock(channel,"short",{formatId:"family",formatName:"Historinha"});
+ assert.ok(block.length<=20000);
+ assert.match(block,/cortado/);
+ assert.doesNotMatch(block,/AMOSTRA_GRANDE/);
+ assert.match(block,/Uma amostra curta, completa e preservada!/);
+ assert.match(block,/Amostras de voz omitidas/);
 });

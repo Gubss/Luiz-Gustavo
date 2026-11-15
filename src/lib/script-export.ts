@@ -1,5 +1,5 @@
 import { prisma } from "./db";
-import { scopedRules } from "./script-context";
+import { channelIdentity, scopedRules } from "./script-context";
 import { spokenLines } from "./script-lines";
 import type { ScriptContent, FormatMeta } from "./generator";
 export type ChannelReference = { name:string; characters:string|null; visualStyle:string|null; tone:string|null; rules:string|null; formatName:string; how:string };
@@ -15,7 +15,7 @@ export async function ideaExport(ideaId:string) {
  if(idea.currentVersionId){const v=await prisma.scriptVersion.findFirst({where:{id:idea.currentVersionId,ideaId}});if(!v)throw new Error("Versão inválida");return v.markdown+await critiqueExport(v.id);}
  const channel=idea.myChannel;
  const how=channel&&idea.formatId?await prisma.channelFormat.findUnique({where:{myChannelId_formatId:{myChannelId:channel.id,formatId:idea.formatId}}}):null;
- const ref={name:channel?.name??"Canal pendente",characters:channel?.characters??null,visualStyle:channel?.visualStyle??null,tone:channel?.tone??null,rules:scopedRules(channel?.rules),formatName:idea.videoFormat?.name??"Formato pendente",how:how?.howText??""};
+ const ref={name:channel?.name??"Canal pendente",characters:channelIdentity(channel?.characters,idea.videoFormat?.name),visualStyle:channel?.visualStyle??null,tone:channelIdentity(channel?.tone,idea.videoFormat?.name),rules:scopedRules(channel?.rules),formatName:idea.videoFormat?.name??"Formato pendente",how:how?.howText??""};
  if(idea.scriptData){const d=JSON.parse(idea.scriptData) as ScriptContent;return exportScript(d,ref,idea.projectCode??idea.id,0);}
  return idea.script+"\n\n## Pendências\nRoteiro legado sem estrutura de falas; revisão humana pendente.\n\n# Referência do canal: "+ref.name+"\n"+[ref.characters,ref.visualStyle,ref.tone,ref.rules,ref.how].filter(Boolean).join("\n");
 }
