@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Chevron, Collapsible } from "@/components/ui";
+import { WorkSection } from "@/components/workflow";
 import { ClampText } from "@/components/ui-client";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
@@ -49,18 +50,13 @@ function parse<T>(json: string | null | undefined): T | null {
   }
 }
 
-function Section({ n, title, right, children }: { n: number; title: string; right?: React.ReactNode; children: React.ReactNode }) {
+/** Etapa do estudo: bloco que abre e fecha e lembra o estado no navegador. */
+function Section({ n, id, title, right, open, children }: { n: number; id: string; title: string; right?: React.ReactNode; open?: boolean; children: React.ReactNode }) {
   return (
-    <section className="card space-y-4 p-5">
-      <header className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-lg font-semibold">
-          <span className="mr-2 text-zinc-500">{n}.</span>
-          {title}
-        </h2>
-        {right}
-      </header>
+    <WorkSection id={id} title={`${n} · ${title}`} open={open}>
+      {right && <div className="-mt-2">{right}</div>}
       {children}
-    </section>
+    </WorkSection>
   );
 }
 
@@ -84,19 +80,19 @@ function MetricsPanel({ m, isShort, channel }: { m: StudyMetrics; isShort: boole
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
         <Tile label="Duração" value={m.durationSec != null ? ts(m.durationSec) : "—"} />
         <Tile label="Palavras" value={fmtInt(m.wordCount)} />
-        <Tile label="Palavras/s" value={m.wordsPerSec != null ? String(m.wordsPerSec).replace(".", ",") : "—"} hint={m.wordsPerMin ? `${m.wordsPerMin} por minuto` : undefined} />
+        <Tile label="Palavras/s" value={m.wordsPerSec != null ? String(m.wordsPerSec).replace(".", ",") : "—"} hint="Velocidade da fala. Perto de 3 é rápido, bom para Short." />
         <Tile
           label="Ritmo"
           value={m.paceThirds ? m.paceThirds.map((x) => x.toFixed(1).replace(".", ",")).join(" · ") : "—"}
-          hint="palavras/s no começo · meio · fim"
+          hint="Velocidade no começo · meio · fim"
         />
         {m.beats ? (
           <>
-            <Tile label="Algo novo a cada" value={m.beats.avgInterval != null ? `${String(m.beats.avgInterval).replace(".", ",")}s` : "—"} hint={`${m.beats.count} momentos novos`} />
+            <Tile label="Algo novo a cada" value={m.beats.avgInterval != null ? `${String(m.beats.avgInterval).replace(".", ",")}s` : "—"} hint={`De quanto em quanto tempo acontece algo novo (${m.beats.count} momentos). Menor prende mais.`} />
             <Tile
               label="Maior buraco"
               value={m.beats.maxGap != null ? `${String(m.beats.maxGap).replace(".", ",")}s` : "—"}
-              hint={m.beats.maxGapAt != null ? `sem novidade a partir de ${ts(m.beats.maxGapAt)}` : undefined}
+              hint={m.beats.maxGapAt != null ? `Trecho mais longo sem novidade, a partir de ${ts(m.beats.maxGapAt)}. É onde o público pode sair.` : undefined}
             />
           </>
         ) : (
@@ -105,10 +101,10 @@ function MetricsPanel({ m, isShort, channel }: { m: StudyMetrics; isShort: boole
       </div>
       {channel && (
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <Tile label="x média do canal" value={fmtMult(channel.multAvg)} hint={`base: ${fmtCompact(channel.baseMedian)} views (${channel.baseCount} ${isShort ? "Shorts" : "longos"})`} />
-          <Tile label="x inscritos" value={fmtMult(channel.multSubs)} />
-          <Tile label="Views/dia" value={fmtCompact(channel.viewsPerDay)} />
-          <Tile label="x velocidade" value={fmtMult(channel.velocityRatio)} hint="sobre a velocidade normal do canal" />
+          <Tile label="x média do canal" value={fmtMult(channel.multAvg)} hint={`Quantas vezes mais views que o normal do canal (${fmtCompact(channel.baseMedian)} em ${channel.baseCount} ${isShort ? "Shorts" : "longos"}). Acima de 3x é um estouro.`} />
+          <Tile label="x inscritos" value={fmtMult(channel.multSubs)} hint="Views ÷ inscritos. Acima de 1x: passou de quem já segue." />
+          <Tile label="Views/dia" value={fmtCompact(channel.viewsPerDay)} hint="Média por dia desde que saiu." />
+          <Tile label="x velocidade" value={fmtMult(channel.velocityRatio)} hint="Rapidez comparada ao normal do canal." />
         </div>
       )}
       <Collapsible title={<span className="text-sm">Abertura, fecho e título medidos</span>} bodyClassName="mt-3 space-y-3">
@@ -155,10 +151,6 @@ function DiagnosisView({ d, duration }: { d: DiagnosisContent; duration: number 
   const box = "rounded-lg border border-line p-4";
   return (
     <div className="space-y-4 text-sm">
-      <ClampText lines={4} className="text-[15px] leading-relaxed text-zinc-200">
-        {d.resumo}
-      </ClampText>
-
       <div>
         <H3>Por que funcionou</H3>
         <ul className="space-y-1.5">
@@ -178,17 +170,6 @@ function DiagnosisView({ d, duration }: { d: DiagnosisContent; duration: number 
           ))}
         </ul>
       </div>
-
-      {d.comoReplicar.length > 0 && (
-        <div className="rounded-lg bg-emerald-500/5 p-4 ring-1 ring-emerald-500/20">
-          <H3>Como replicar</H3>
-          <ul className="list-disc space-y-1 pl-5 text-zinc-200">
-            {d.comoReplicar.map((x, i) => (
-              <li key={i}>{x}</li>
-            ))}
-          </ul>
-        </div>
-      )}
 
       <Collapsible title="Título, thumbnail e gancho" className={box}>
         <div className="grid gap-4 md:grid-cols-3">
@@ -445,24 +426,33 @@ export default async function VideoStudyPage({ params }: PageProps<"/video/[id]"
             )}
             {v.channel.title} · {v.channel.subscriberCount != null ? `${fmtCompact(v.channel.subscriberCount)} inscritos` : "inscritos ocultos"}
           </a>
-          <div className="flex flex-wrap gap-x-5 gap-y-1 text-sm text-zinc-300">
-            <span>{fmtInt(v.viewCount)} views</span>
-            <span>{fmtInt(v.likeCount)} likes</span>
-            <span>{fmtInt(v.commentCount)} comentários</span>
-            <span>{v.isShort ? "Short" : "Vídeo longo"}{v.durationSec != null ? ` · ${ts(v.durationSec)}` : ""}</span>
-            <span>publicado {fmtDate(v.publishedAt)}</span>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <Tile label="Views" value={fmtCompact(v.viewCount)} />
+            {savedMetrics?.channel ? (
+              <Tile label="x o normal do canal" value={fmtMult(savedMetrics.channel.multAvg)} />
+            ) : (
+              <Tile label="Likes" value={fmtCompact(v.likeCount)} />
+            )}
+            <Tile label={v.isShort ? "Short" : "Vídeo longo"} value={v.durationSec != null ? ts(v.durationSec) : "—"} />
+            <Tile label="Publicado" value={fmtDate(v.publishedAt)} />
           </div>
-          <div className="flex flex-wrap gap-2 pt-1">
-            <a href={url} target="_blank" rel="noreferrer" className="btn-secondary">
-              Abrir no YouTube ↗
+          <p className="text-xs text-zinc-500">
+            {fmtInt(v.likeCount)} likes · {fmtInt(v.commentCount)} comentários ·{" "}
+            <a href={url} target="_blank" rel="noreferrer" className="underline hover:text-white">
+              abrir no YouTube ↗
             </a>
-          </div>
+          </p>
           {myChannel && (
             <p className="rounded-lg border border-sky-800 bg-sky-950/40 p-2 text-sm text-sky-200">
-              Este vídeo é do seu canal <Link href={`/meus-canais/${myChannel.id}`} className="underline">{myChannel.name}</Link>. Estude normalmente;
-              deixe &ldquo;Conta no nicho&rdquo; em <b>nenhum nicho</b> e não ponha em formato: as receitas são feitas só das referências.
+              Este vídeo é do seu canal <Link href={`/meus-canais/${myChannel.id}`} className="underline">{myChannel.name}</Link>. Não ponha em formato nem em nicho: as receitas são só das referências.
             </p>
           )}
+          <Collapsible
+            title={<span className="text-sm">Nicho e formato</span>}
+            meta={inFormats.length ? inFormats.map((x) => x.format.name).join(", ") : suggestions.some((sg) => sg.status === "pending") ? "sugestão para conferir" : "sem formato"}
+            open={suggestions.some((sg) => sg.status === "pending") || (!inFormats.length && !myChannel)}
+            bodyClassName="mt-3 space-y-3"
+          >
           <div className="text-sm text-zinc-400">
             {channelNiches.length ? (
               <>
@@ -554,21 +544,22 @@ export default async function VideoStudyPage({ params }: PageProps<"/video/[id]"
               )}
             </div>
           )}
+          </Collapsible>
           <div className="rounded-lg border border-line bg-zinc-950/50 p-3">
             {studyJob ? (
               <RunningNote job={studyJob} what={`Estudo completo · ${studyJob.step ?? ""}`} />
             ) : diagJob || comJob ? (
-              <p className="text-xs text-zinc-500">Tem uma etapa rodando abaixo; o “Estudar tudo” libera quando ela terminar.</p>
+              <p className="text-xs text-zinc-500">Tem uma etapa rodando abaixo; o “Estudar este vídeo” libera quando ela terminar.</p>
             ) : (
               <ActionButton
                 action={studyAllAction.bind(null, v.id)}
-                label={allDone ? "Estudar tudo de novo" : "Estudar tudo (transcrição → diagnóstico → comentários)"}
+                label={allDone ? "Estudar tudo de novo" : "Estudar este vídeo"}
                 busy="Começando…"
-                hint={`Um clique só, em segundo plano. ${modelLabel(diagEst.model)} + ${modelLabel(comEst.model)}: custo estimado ${usd(diagEst.usd + comEst.usd)} a ${usd(diagEst.usdMax + comEst.usdMax)}${rawComments.length ? "" : " · comentários usam 2 unidades de cota"}`}
+                hint={`Legenda, diagnóstico e comentários num clique. Custo estimado ${usd(diagEst.usd + comEst.usd)} a ${usd(diagEst.usdMax + comEst.usdMax)}${rawComments.length ? "" : " e 2 de cota"}.`}
                 className={allDone ? "btn-secondary" : "btn-primary"}
               />
             )}
-            <p className="mt-1 text-xs text-zinc-500">Ou faça uma etapa de cada vez nos botões abaixo.</p>
+            <p className="mt-1 text-xs text-zinc-500">Ou uma etapa de cada vez, nos blocos abaixo.</p>
           </div>
           {noKey && (
             <p className="rounded-lg border border-amber-700 bg-amber-950/40 p-3 text-sm text-amber-200">
@@ -577,6 +568,25 @@ export default async function VideoStudyPage({ params }: PageProps<"/video/[id]"
           )}
         </div>
       </header>
+
+      {content && (
+        <section className="card space-y-3 p-5">
+          <h2 className="text-base font-semibold">O que isso quer dizer pra você</h2>
+          <ClampText lines={3} className="text-[15px] leading-relaxed text-zinc-200">
+            {content.resumo}
+          </ClampText>
+          {content.comoReplicar.length > 0 && (
+            <div className="rounded-lg bg-emerald-500/5 p-4 ring-1 ring-emerald-500/20">
+              <h3 className="mb-2 text-sm font-semibold text-zinc-300">O que fazer agora (como repetir no seu canal)</h3>
+              <ul className="list-disc space-y-1 pl-5 text-sm text-zinc-200">
+                {content.comoReplicar.map((x, i) => (
+                  <li key={i}>{x}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </section>
+      )}
 
       {/* 1. Transcrição */}
       {cmp && metrics && (
@@ -587,7 +597,9 @@ export default async function VideoStudyPage({ params }: PageProps<"/video/[id]"
       )}
       <Section
         n={1}
+        id="transcricao"
         title="Transcrição"
+        open={!v.transcript}
         right={
           v.transcript && (
             <span className="text-xs text-zinc-500">
@@ -653,7 +665,9 @@ export default async function VideoStudyPage({ params }: PageProps<"/video/[id]"
       {/* 2. Diagnóstico */}
       <Section
         n={2}
-        title="Diagnóstico"
+        id="diagnostico"
+        title="Por que funcionou"
+        open={!!v.transcript && !!diag?.content}
         right={
           diag?.diagnosedAt && (
             <span className="text-xs text-zinc-500">
@@ -665,7 +679,7 @@ export default async function VideoStudyPage({ params }: PageProps<"/video/[id]"
       >
         {metrics && (
           <div>
-            <H3>Medidas (calculadas, não são opinião do Claude)</H3>
+            <H3>Números medidos (contados no texto, não é opinião da IA)</H3>
             <MetricsPanel m={metrics} isShort={v.isShort} channel={savedMetrics?.channel} />
           </div>
         )}
@@ -708,7 +722,8 @@ export default async function VideoStudyPage({ params }: PageProps<"/video/[id]"
       {/* 3. Comentários */}
       <Section
         n={3}
-        title="Comentários"
+        id="comentarios"
+        title="O que o público disse"
         right={
           diag?.commentsAnalyzedAt && (
             <span className="text-xs text-zinc-500">

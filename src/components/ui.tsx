@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { RememberDetails } from "./workflow";
 
 /**
  * Peças visuais compartilhadas (renderizadas no servidor).
@@ -67,14 +68,14 @@ export function Collapsible({
   bodyClassName?: string;
 }) {
   return (
-    <details className={`group ${className}`} open={open}>
+    <RememberDetails className={`group ${className}`} open={open}>
       <summary className="flex items-center gap-2 select-none">
         <Chevron />
         <span className="font-medium text-zinc-200 group-hover:text-white">{title}</span>
         {meta && <span className="ml-auto text-xs text-zinc-500">{meta}</span>}
       </summary>
       <div className={bodyClassName}>{children}</div>
-    </details>
+    </RememberDetails>
   );
 }
 

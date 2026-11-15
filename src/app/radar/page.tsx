@@ -6,7 +6,7 @@ import { RadarCard } from "@/components/RadarCard";
 import { CollectButton } from "@/components/CollectControls";
 import { fmtCompact, fmtDateTime, fmtMult } from "@/lib/format";
 import { getSettings } from "@/lib/settings";
-import { EmptyState, FilterChip as Chip, PageHeader, Pagination, Tabs, paginate } from "@/components/ui";
+import { Collapsible, EmptyState, FilterChip as Chip, PageHeader, Pagination, Tabs, paginate } from "@/components/ui";
 
 const PER_PAGE = 24;
 
@@ -101,7 +101,17 @@ export default async function RadarPage({ searchParams }: PageProps<"/radar">) {
           ))}
         </div>
 
-        <div className="flex items-center gap-1.5" title="Quantas vezes o vídeo passou a mediana do próprio canal">
+        <Collapsible
+          title={<span className="text-xs text-zinc-400">Mais filtros</span>}
+          open={f.minMult !== 3 || f.sort !== "mult" || !!f.onlySmall || !!f.onlyRising || !!f.includeAll}
+          className="w-full"
+          bodyClassName="mt-2 flex flex-wrap items-center gap-x-5 gap-y-2.5"
+        >
+        <p className="w-full text-xs text-zinc-500">
+          &ldquo;x média&rdquo; é quantas vezes o vídeo passou o normal do próprio canal: 3x já é bom, 10x é estouro. &ldquo;x inscritos&rdquo; é views ÷
+          inscritos.
+        </p>
+        <div className="flex flex-wrap items-center gap-1.5" title="Quantas vezes o vídeo passou a mediana do próprio canal">
           <span className="mr-1 text-xs text-zinc-500">Mínimo</span>
           {[3, 5, 10, 20].map((m) => (
             <Chip key={m} href={href({ mult: m })} active={f.minMult === m}>
@@ -110,7 +120,7 @@ export default async function RadarPage({ searchParams }: PageProps<"/radar">) {
           ))}
         </div>
 
-        <div className="flex items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-1.5">
           <span className="mr-1 text-xs text-zinc-500">Ordenar</span>
           {(
             [
@@ -126,7 +136,7 @@ export default async function RadarPage({ searchParams }: PageProps<"/radar">) {
           ))}
         </div>
 
-        <div className="flex items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-1.5">
           <Chip href={href({ small: f.onlySmall ? undefined : "1" })} active={!!f.onlySmall}>
             Só canal pequeno
           </Chip>
@@ -137,6 +147,7 @@ export default async function RadarPage({ searchParams }: PageProps<"/radar">) {
             Mostrar todos
           </Chip>
         </div>
+        </Collapsible>
       </div>
 
       {channelCount === 0 ? (

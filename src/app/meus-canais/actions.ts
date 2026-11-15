@@ -62,6 +62,7 @@ export async function saveProfile(id: string, _prev: FormState, fd: FormData): P
       tone: optStr(fd, "tone"),
       audience: optStr(fd, "audience"),
       rules: optStr(fd, "rules"),
+      ...(fd.has("examples") ? { examples: optStr(fd, "examples") } : {}),
       notes: optStr(fd, "notes"),
       analytics,
       ...(analytics !== before.analytics ? { analyticsAt: analytics ? new Date() : null } : {}),

@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { Collapsible } from "@/components/ui";
-import { ClampText } from "@/components/ui-client";
+import { CopyScript, FlowSteps, OpenSection, ReturnInput, WorkSection } from "@/components/workflow";
+import { ClampText, Menu } from "@/components/ui-client";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { fmtDateTime } from "@/lib/format";
 import { modelLabel, usdToBrl, type CostEstimate } from "@/lib/claude";
 import { findSimilarTitles } from "@/lib/catalog";
-import { estimateScript, revisionDefaults, scriptPending, type FormatMeta, type IdeaData, type ScriptContent, type ScriptMetrics, type VoiceCheck } from "@/lib/generator";
+import { estimateScript, revisionDefaults, scriptPending, type FormatMeta, type IdeaData, type ScriptContent, type ScriptMetrics, type ScriptReview, type VoiceCheck } from "@/lib/generator";
 import type { PlaybookStats } from "@/lib/playbook";
 import { formatsOfNiche, isDraft } from "@/lib/formats";
 import type { PlaybookFormat } from "@/lib/playbook";
@@ -137,6 +138,57 @@ function MetricsVsPlaybook({ m, st, label }: { m: ScriptMetrics; st: PlaybookSta
   );
 }
 
+/** Segunda passada: leitura de espectador (modelo barato) + conferência de lógica e graça em código. */
+function ReviewPanel({ r }: { r: ScriptReview }) {
+  const left = r.final.problems;
+  const good = !r.error && !left.length;
+  return (
+    <div className={`rounded-lg border p-3 text-sm ${good ? "border-line" : "border-amber-700 bg-amber-950/30"}`}>
+      <div className={good ? "text-emerald-300" : "font-medium text-amber-200"}>
+        {r.error
+          ? "⚠ A leitura de espectador falhou: confira o roteiro com atenção."
+          : r.rewritten
+            ? `Reescrito uma vez depois da leitura (${r.points.length} ${r.points.length === 1 ? "ponto" : "pontos"})${left.length ? ` · ainda ${left.length} para olhar` : " · agora passa"}`
+            : `✓ Passou de primeira: ${r.laughs} risadas com reação da família`}
+      </div>
+      {r.critique && <p className="mt-1 text-xs text-zinc-400">{r.critique.veredito}</p>}
+      {r.critique && r.critique.risadas.length > 0 && (
+        <div className="mt-2">
+          <div className="text-xs text-zinc-400">Onde o espectador riu (1ª versão):</div>
+          <ul className="mt-0.5 space-y-0.5 text-xs text-zinc-300">
+            {r.critique.risadas.map((x, i) => (
+              <li key={i}>
+                Cena {x.cena}: esperava {x.esperado}, mas {x.aconteceu}
+                {x.reacao.trim() ? <span className="text-zinc-500"> · {x.reacao}</span> : <span className="text-amber-300"> · ninguém reage</span>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {r.points.length > 0 && (
+        <div className="mt-2">
+          <div className="text-xs text-amber-200">{r.rewritten ? "O que mandou reescrever:" : "Pontos:"}</div>
+          <ul className="mt-0.5 list-disc space-y-0.5 pl-4 text-xs text-zinc-300">
+            {r.points.map((p, i) => (
+              <li key={i}>{p}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {r.rewritten && left.length > 0 && (
+        <div className="mt-2">
+          <div className="text-xs text-amber-200">Ainda no roteiro final (conferência em código):</div>
+          <ul className="mt-0.5 list-disc space-y-0.5 pl-4 text-xs text-zinc-300">
+            {left.map((p, i) => (
+              <li key={i}>{p}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** Conferência da voz feita em código depois de gerar: frases longas, frases/bordões repetidos e falas copiadas. */
 function VoicePanel({ v }: { v: VoiceCheck }) {
   const issues = v.long.length + v.repeats.length + v.copied.length;
@@ -199,12 +251,27 @@ function ScriptView({ c, formatName }: { c: ScriptContent; formatName?: string |
   const hasOrigin = items.some((x) => x.origem);
   const groups = hasOrigin
     ? [
-        { title: `Checklist do formato${formatName ? ` (${formatName})` : ""}`, items: items.filter((x) => x.origem !== "regra geral") },
+        { title: "Checklist de lógica e graça", items: items.filter((x) => x.origem === "lógica e graça") },
+        { title: `Checklist do formato${formatName ? ` (${formatName})` : ""}`, items: items.filter((x) => x.origem !== "regra geral" && x.origem !== "lógica e graça") },
         { title: "Checklist da regra geral do nicho", items: items.filter((x) => x.origem === "regra geral") },
       ].filter((g) => g.items.length)
     : [{ title: "Checklist da cartilha", items }];
   return (
     <div className="space-y-4 text-sm">
+      {c.formatoCombina && !c.formatoCombina.combina && (
+        <div className="rounded-lg border border-amber-700/60 bg-amber-950/30 p-3 text-amber-100">
+          <div className="font-medium">O formato pode não combinar com o tema</div>
+          <p className="mt-1 text-amber-200/90">{c.formatoCombina.motivo}</p>
+          {c.formatoCombina.sugestao && <p className="mt-1 text-amber-200/90">Sugestão: {c.formatoCombina.sugestao}</p>}
+          <p className="mt-1 text-xs text-amber-300/70">O app não troca sozinho. Para trocar, use “Escrever em outro formato” mais abaixo.</p>
+        </div>
+      )}
+      {c.historinha?.trim() && (
+        <p className="text-zinc-300">
+          <span className="text-zinc-500">A historinha: </span>
+          {c.historinha}
+        </p>
+      )}
       <ClampText lines={3} className="text-[15px] leading-relaxed text-zinc-200">
         {c.resumo}
       </ClampText>
@@ -248,7 +315,7 @@ function ScriptView({ c, formatName }: { c: ScriptContent; formatName?: string |
         title={hasOrigin ? "Checklist do formato e da regra geral, fatos para conferir" : "Checklist, fatos para conferir e como a cartilha virou cena"}
         meta={`${c.checklist.filter((x) => x.ok).length} de ${c.checklist.length} itens ok${c.conferirFatos.length ? ` · ${c.conferirFatos.length} fatos para conferir` : ""}`}
         className="rounded-lg border border-line p-4"
-        open={c.checklist.some((x) => !x.ok) || c.conferirFatos.length > 0}
+        
       >
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-4">
@@ -321,7 +388,7 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
   if (!idea) notFound();
   const d = parse<IdeaData>(idea.ideaData);
   const titles = parse<string[]>(idea.titles) ?? [];
-  const sd = parse<ScriptContent & { metrics?: ScriptMetrics; playbookId?: string | null; voice?: VoiceCheck; meta?: FormatMeta }>(idea.scriptData);
+  const sd = parse<ScriptContent & { metrics?: ScriptMetrics; playbookId?: string | null; voice?: VoiceCheck; review?: ScriptReview; meta?: FormatMeta }>(idea.scriptData);
   const refIds = parse<string[]>(idea.referenceIds) ?? [];
   const pbId = sd?.playbookId ?? idea.playbookId;
   const recipeId = sd?.meta?.recipeId ?? idea.recipeId;
@@ -334,7 +401,7 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
     findSimilarTitles(`${idea.theme} ${idea.chosenTitle ?? ""}`, { nicheId: idea.nicheId ?? undefined, limit: 5 }),
     idea.myChannelId && idea.formatId ? estimateScript(idea.id) : null,
     runningJobsFor([idea.id]),
-    !idea.formatId && nicheForFormats ? formatChoicesFor(nicheForFormats, idea.format === "long" ? "long" : "short") : Promise.resolve([]),
+    (!idea.formatId || sd?.formatoCombina?.combina === false) && nicheForFormats ? formatChoicesFor(nicheForFormats, idea.format === "long" ? "long" : "short") : Promise.resolve([]),
   ]);
   const scriptJob = jobs.find((j) => j.kind === "script");
   const repeats = (await repeatsForIdeas([idea])).get(idea.id) ?? [];
@@ -344,13 +411,60 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
   const pending = sd ? scriptPending(sd) : null;
   const allTitles = [...new Set([...(idea.chosenTitle ? [idea.chosenTitle] : []), ...titles])];
   const rev = revisionDefaults(idea);
+  const currentStep = idea.publishedVideo || idea.status === "PUBLISHED" ? 7 : idea.status === "PRODUCED" ? 6 : idea.status === "RETURNED" ? 4 : sd ? 5 : 4;
+  // Trocar o formato: ideia de antes dos formatos, ou o roteiro avisou que o formato não combina com o tema.
+  const otherFormats = formatChoices.filter((f) => f.id !== idea.formatId);
+  const formatForm = (
+          <StateForm
+            action={regenerateWithFormatAction.bind(null, idea.id)}
+            label="Escrever neste formato"
+            busy="Começando…"
+            hint="Opus + leitura de espectador · mesmo custo de escrever um roteiro · roda em segundo plano (até 3 min)"
+          >
+            <fieldset>
+              <legend className="label">Qual formato usar?</legend>
+              <div className="space-y-2">
+                {otherFormats.map((f) => (
+                  <label key={f.id} className="flex items-start gap-2 rounded-lg border border-line p-2 text-sm hover:border-zinc-500">
+                    <input type="radio" name="formatId" value={f.id} required className="mt-1" />
+                    <span>
+                      <span className="font-medium text-zinc-100">{f.name}</span>
+                      {!f.ready && <span className="badge ml-2 bg-amber-600/30 text-amber-200">{f.recipes.length ? "rascunho" : "sem receita"}</span>}
+                      <span className="block text-xs text-zinc-400">{f.line || "Sem descrição."}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+              {!otherFormats.some((f) => f.ready) && (
+                <p className="mt-1 text-xs text-amber-300">Nenhum formato pronto ainda (3+ vídeos e receita); estes ainda são rascunho.</p>
+              )}
+            </fieldset>
+            <div>
+              <label className="label">Título</label>
+              <div className="space-y-1 text-sm">
+                {allTitles.map((t, i) => (
+                  <label key={t} className="flex items-center gap-2">
+                    <input type="radio" name="title" value={t} defaultChecked={i === 0} />
+                    <span>{t}</span>
+                  </label>
+                ))}
+                <input name="customTitle" className="input mt-1" placeholder="…ou escreva outro título (opcional)" />
+              </div>
+            </div>
+            <div>
+              <label className="label">Pedido extra (opcional)</label>
+              <textarea name="extra" rows={2} className="input" placeholder="Ex.: mais curto, até 35s · coloca a avó no final" />
+            </div>
+            {otherFormats.some((f) => !f.recipes.length) && <NoRecipeConfirm onlyIf />}
+          </StateForm>
+  );
   const scriptForm = est ? (
             <StateForm
               action={generateScriptAction.bind(null, idea.id)}
-              label={sd ? "Escrever de novo" : "Escrever roteiro"}
+              label={rev.defaultMode === "corrigir" ? "Corrigir roteiro" : sd ? "Escrever história nova" : "Escrever roteiro"}
               busy="Começando…"
-              hint={`${estimateHint(est)}${est.basedOn ? ` · pela média ${est.basedOn === 1 ? "do último roteiro" : `dos últimos ${est.basedOn} roteiros`}` : ""}${rev.defaultMode === "corrigir" ? " · corrigindo" : ""} · roda em segundo plano (até 3 min)`}
-              className={sd ? "btn-secondary" : "btn-primary"}
+              hint={`${estimateHint(est)} (com a leitura de espectador; o máximo inclui uma reescrita)${est.basedOn ? ` · pela média ${est.basedOn === 1 ? "do último roteiro" : `dos últimos ${est.basedOn} roteiros`}` : ""}${rev.defaultMode === "corrigir" ? " · corrigindo" : ""} · roda em segundo plano (até 3 min)`}
+              className="btn-primary"
             >
               {rev.canRevise && (
                 <div>
@@ -359,7 +473,7 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
                     <label className="flex items-start gap-2">
                       <input type="radio" name="mode" value="corrigir" defaultChecked={rev.defaultMode === "corrigir"} className="mt-1" />
                       <span>
-                        Corrigir só os pontos {rev.pendingReturn ? "da devolução" : "do pedido extra"} e manter o resto
+                        Corrigir roteiro
                         <span className="block text-xs text-zinc-500">mesma história, mesmas cenas e falas onde nada foi apontado</span>
                       </span>
                     </label>
@@ -389,11 +503,12 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
                 <label className="label">Pedido extra (opcional)</label>
                 <textarea name="extra" rows={2} className="input" placeholder="Ex.: mais curto, até 35s · coloca a irmã no final · fala do pai mais engraçada" />
               </div>
+              {est.noRecipe && <NoRecipeConfirm />}
             </StateForm>
   ) : null;
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="mx-auto max-w-6xl space-y-4">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <Link href={idea.myChannelId ? `/ideias?canal=${idea.myChannelId}` : "/ideias"} className="text-xs text-zinc-500 hover:text-zinc-300">
@@ -401,7 +516,7 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
           </Link>
           <h1 className="text-2xl font-semibold tracking-tight">{idea.chosenTitle || titles[0] || idea.theme}</h1>
           <p className="text-sm text-zinc-400">
-            {idea.theme} · {idea.myChannel ? <Link href={`/meus-canais/${idea.myChannel.id}`} className="hover:underline">{idea.myChannel.name}</Link> : "sem canal"} ·{" "}
+            {idea.myChannel ? <Link href={`/meus-canais/${idea.myChannel.id}`} className="hover:underline">{idea.myChannel.name}</Link> : "sem canal"} ·{" "}
             {idea.format === "long" ? "vídeo longo" : "Short"} · criada {fmtDateTime(idea.createdAt)}
             {idea.niche && ` · nicho ${idea.niche.name}`}
           </p>
@@ -424,13 +539,19 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
         </div>
         <div className="flex items-center gap-2">
           <StatusBadge status={idea.status} />
-          <IdeaStatusSelect action={setIdeaStatus.bind(null, idea.id)} value={idea.status} />
+          <Menu><div className="p-2"><label className="label">Alterar estado</label><IdeaStatusSelect action={setIdeaStatus.bind(null, idea.id)} value={idea.status} /></div></Menu>
         </div>
       </header>
 
+      <FlowSteps current={currentStep} referenceDone={refs.length > 0} />
+      <div className="flex flex-wrap gap-3 text-xs text-zinc-400">
+        <span className="card px-3 py-2">Custo do roteiro <strong className="ml-2 text-zinc-200">{usd(idea.scriptCostUsd)}</strong></span>
+        <span className="card px-3 py-2">Etapa atual <strong className="ml-2 text-zinc-200">{currentStep} de 7</strong></span>
+      </div>
+
       {/* A ideia */}
-      <section className="card space-y-4 p-5 text-sm">
-        <h2 className="text-lg font-semibold">A ideia</h2>
+      <WorkSection id="ideia" title="3 · Ideia">
+        
         {!idea.publishedVideo && <RepeatWarning repeats={repeats} />}
         {d ? (
           <>
@@ -494,12 +615,12 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
             </ul>
           )}
         </Collapsible>
-      </section>
+      </WorkSection>
 
       {/* Roteiro */}
-      <section className="card space-y-4 p-5">
+      <WorkSection id="roteiro" title="4 · Roteiro" open={currentStep === 4} version={idea.status}>
         <header className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-lg font-semibold">Roteiro</h2>
+          <span className="text-sm text-zinc-400">{sd ? "Cenas e falas" : "Escolha o título e escreva o roteiro"}</span>
           {idea.script && (
             <span className="text-xs text-zinc-500">
               {modelLabel(idea.scriptModel)} · custo acumulado {usd(idea.scriptCostUsd)}
@@ -510,14 +631,14 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
         {sd ? (
           <>
             <div className="flex flex-wrap items-center gap-3">
-              <a href={`/api/ideias/${idea.id}/roteiro`} download className="btn-secondary">
-                Baixar roteiro (.md) para o Maestri
+              <CopyScript url={`/api/ideias/${idea.id}/roteiro`} />
+              <a href={`/api/ideias/${idea.id}/roteiro`} download className="btn-secondary btn-sm">
+                Baixar .md
               </a>
-              <span className="text-xs text-zinc-500">
-                No topo vão o formato usado e as pendências; depois o roteiro cena a cena + personagens, estilo visual e tom do canal.
-              </span>
+              
             </div>
-            {sd.voice && <VoicePanel v={sd.voice} />}
+            {sd.review && <Collapsible title="Leitura de espectador (lógica e graça)"><ReviewPanel r={sd.review} /></Collapsible>}
+            {sd.voice && <Collapsible title="Conferência das falas"><VoicePanel v={sd.voice} /></Collapsible>}
             <ScriptView c={sd} formatName={sd.meta?.formatName ?? idea.videoFormat?.name} />
             {sd.metrics && (
               <Collapsible title={`Medidas do roteiro × ${recipe ? "receita do formato" : "cartilha"}`} className="rounded-lg border border-line p-4">
@@ -540,9 +661,17 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
         ) : est ? (
           <div className={sd ? "border-t border-line pt-4" : ""}>
             {sd ? (
-              <Collapsible title={<span className="text-sm">Escrever o roteiro de novo</span>}>
-                {scriptForm}
-              </Collapsible>
+              <>
+                <Collapsible title={rev.defaultMode === "corrigir" ? "Corrigir roteiro" : "Escrever de novo"} open={rev.defaultMode === "corrigir"}>
+                  {scriptForm}
+                </Collapsible>
+                {sd.formatoCombina?.combina === false && otherFormats.length > 0 && (
+                  <Collapsible title="Escrever em outro formato" open>
+                    <p className="mb-3 text-sm text-amber-300">O roteiro avisou que o formato pode não combinar com o tema. O tema fica; só o jeito de contar muda.</p>
+                    {formatForm}
+                  </Collapsible>
+                )}
+              </>
             ) : (
               scriptForm
             )}
@@ -555,48 +684,8 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
               Esta ideia é de antes dos formatos. Para {sd ? "regenerar" : "escrever"} o roteiro, escolha primeiro o formato: o tema da ideia fica, só o jeito de
               contar muda (segue o motor da receita do formato).
             </p>
-            {formatChoices.length ? (
-              <StateForm
-                action={regenerateWithFormatAction.bind(null, idea.id)}
-                label={sd ? "Regenerar neste formato" : "Escrever neste formato"}
-                busy="Começando…"
-                hint="Opus · mesmo custo de escrever um roteiro · roda em segundo plano (até 3 min)"
-              >
-                <fieldset>
-                  <legend className="label">Qual formato usar?</legend>
-                  <div className="space-y-2">
-                    {formatChoices.map((f) => (
-                      <label key={f.id} className="flex items-start gap-2 rounded-lg border border-line p-2 text-sm hover:border-zinc-500">
-                        <input type="radio" name="formatId" value={f.id} required className="mt-1" />
-                        <span>
-                          <span className="font-medium text-zinc-100">{f.name}</span>
-                          {!f.ready && <span className="badge ml-2 bg-amber-600/30 text-amber-200">{f.recipes.length ? "rascunho" : "sem receita"}</span>}
-                          <span className="block text-xs text-zinc-400">{f.line || "Sem descrição."}</span>
-                        </span>
-                      </label>
-                    ))}
-                  </div>
-                  {!formatChoices.some((f) => f.ready) && (
-                    <p className="mt-1 text-xs text-amber-300">Nenhum formato pronto ainda (3+ vídeos e receita); estes ainda são rascunho.</p>
-                  )}
-                </fieldset>
-                <div>
-                  <label className="label">Título</label>
-                  <div className="space-y-1 text-sm">
-                    {allTitles.map((t, i) => (
-                      <label key={t} className="flex items-center gap-2">
-                        <input type="radio" name="title" value={t} defaultChecked={i === 0} />
-                        <span>{t}</span>
-                      </label>
-                    ))}
-                    <input name="customTitle" className="input mt-1" placeholder="…ou escreva outro título (opcional)" />
-                  </div>
-                </div>
-                <div>
-                  <label className="label">Pedido extra (opcional)</label>
-                  <textarea name="extra" rows={2} className="input" placeholder="Ex.: mais curto, até 35s · coloca a avó no final" />
-                </div>
-              </StateForm>
+            {otherFormats.length ? (
+              formatForm
             ) : (
               <p className="text-sm text-zinc-400">
                 Nenhum formato criado neste nicho ainda.{" "}
@@ -607,17 +696,19 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
             )}
           </div>
         ) : null}
-      </section>
+      </WorkSection>
 
       {/* Devolução do Estúdio */}
       {idea.myChannelId && (idea.script || idea.lessons.length > 0) && (
-        <section className={`card space-y-3 p-5 ${idea.status === "RETURNED" ? "border-red-800" : ""}`}>
+        <WorkSection id="revisao" title="5 · Revisão do Estúdio" open={currentStep === 5} version={idea.status}>
+          <p className="text-sm text-zinc-400">Leia o roteiro, confira as pendências e leve ao Estúdio.</p>
+          <OpenSection target="roteiro">Ler roteiro</OpenSection>
           <header className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-base font-semibold">Devolução do Estúdio</h2>
+            <span className="text-sm text-zinc-400">A aprovação acontece com você, fora do Radar.</span>
             {idea.returnedAt && <span className="text-xs text-zinc-500">devolvida em {fmtDateTime(idea.returnedAt)}</span>}
           </header>
           {idea.lessons.length > 0 && (
-            <div>
+            <Collapsible title="Histórico de devoluções" meta={`${idea.lessons.length} aprendizados`}>
               <p className="mb-1 text-xs text-zinc-500">
                 Estes pontos viraram aprendizado do canal: entram em toda geração de ideia e roteiro, com peso maior que a receita do formato.
               </p>
@@ -633,27 +724,26 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
                   </li>
                 ))}
               </ul>
-            </div>
+            </Collapsible>
           )}
           <Collapsible
-            title={<span className="text-sm">{idea.lessons.length ? "Colar outra devolução" : "O Estúdio reprovou este roteiro? Cole os pontos aqui"}</span>}
+            title="Devolver"
           >
             <StateForm action={returnIdeaAction.bind(null, idea.id)} label="Registrar devolução" className="btn-secondary">
-              <textarea
-                name="returnNotes"
-                rows={5}
-                className="input"
-                placeholder={"Um ponto por linha. Ex.:\n- O fim usa o carro do pai, que não apareceu antes\n- Texto na tela em cima do rosto da avó\n- Frase longa demais no gancho"}
-              />
-              <p className="text-xs text-zinc-500">Cada linha vira um aprendizado do canal e a ideia fica marcada como devolvida.</p>
+              <ReturnInput />
             </StateForm>
           </Collapsible>
-        </section>
+        </WorkSection>
       )}
 
+      <WorkSection id="producao" title="6 · Produção" open={currentStep === 6} version={idea.status}>
+        <p className="text-sm text-zinc-400">Depois de aprovar o roteiro, leve o .md ao Estúdio para produzir.</p>
+        {idea.script && <a href={`/api/ideias/${idea.id}/roteiro`} download className="btn-secondary btn-sm">Baixar .md</a>}
+        <IdeaStatusSelect action={setIdeaStatus.bind(null, idea.id)} value={idea.status} />
+      </WorkSection>
+
       {/* Virou vídeo? */}
-      <section className="card space-y-3 p-5">
-        <h2 className="text-base font-semibold">Virou vídeo no seu canal?</h2>
+      <WorkSection id="publicacao" title="7 · Virou vídeo no seu canal?" open={currentStep === 7} version={idea.status}>
         {idea.publishedVideo ? (
           <div className="flex flex-wrap items-center gap-3">
             <PublishedNote v={idea.publishedVideo} />
@@ -712,18 +802,33 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
             )}
           </StateForm>
         )}
-      </section>
+      </WorkSection>
 
-      <section className="card space-y-3 p-5">
-        <h2 className="text-base font-semibold">Anotações</h2>
+      <WorkSection id="anotacoes" title="Anotações">
         <StateForm action={saveIdeaNotes.bind(null, idea.id)} label="Salvar" className="btn-secondary">
           <textarea name="notes" rows={3} className="input" defaultValue={idea.notes ?? ""} placeholder="O que mudar, quando gravar, link do vídeo publicado…" />
         </StateForm>
-      </section>
+      </WorkSection>
 
       <div className="flex justify-end">
         <ConfirmDelete action={deleteIdea.bind(null, idea.id)} label="Apagar ideia" message="Apagar esta ideia e o roteiro dela?" />
       </div>
+    </div>
+  );
+}
+
+/** Formato sem receita: aviso e confirmação obrigatória antes de escrever o roteiro. */
+function NoRecipeConfirm({ onlyIf = false }: { onlyIf?: boolean }) {
+  return (
+    <div className="rounded-lg border border-amber-600/40 bg-amber-950/30 p-3 text-sm text-amber-100">
+      <p>
+        {onlyIf ? "Se escolher um formato marcado “sem receita”: " : "Este formato ainda não tem receita. "}o roteiro sai só da descrição e dos estudos dos vídeos, e costuma
+        sair pior. O melhor é criar a receita antes, em Formatos.
+      </p>
+      <label className="mt-2 flex items-start gap-2">
+        <input type="checkbox" name="noRecipeOk" className="mt-1" required={!onlyIf} />
+        <span>Entendi, escrever mesmo sem receita</span>
+      </label>
     </div>
   );
 }

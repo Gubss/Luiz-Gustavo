@@ -160,6 +160,7 @@ model MyChannel {
   storyFormats      String? // formatos de história que se repetem (ex.: "menino fala algo errado e o pai corrige")
   audience          String? // público
   rules             String? // sempre / nunca
+  examples          String? // roteiros aprovados colados pelo dono: exemplo de ritmo e humor no prompt (nunca copiar falas)
   durationSec       Int? // duração alvo
   catalogFetchedAt  DateTime? // última leitura da lista de vídeos do canal no YouTube
   analytics         String? // números do canal colados/importados (ex.: do YouTube Studio via Maestri)

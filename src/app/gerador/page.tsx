@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { FilterChip, PageHeader } from "@/components/ui";
+import { Collapsible, FilterChip, PageHeader } from "@/components/ui";
 import { prisma } from "@/lib/db";
 import { fmtCompact, fmtDateTime } from "@/lib/format";
 import { modelLabel, usdToBrl, type CostEstimate } from "@/lib/claude";
@@ -90,7 +90,7 @@ export default async function GeneratorPage({ searchParams }: PageProps<"/gerado
     <div className="mx-auto max-w-6xl space-y-6">
       <PageHeader
         title="Gerador de ideias"
-        subtitle="Ideias e roteiros num formato do nicho, contados com os personagens do seu canal."
+        subtitle="3 · Escolha o canal e o formato para gerar ideias."
         help={
           <p>
             Escolha um <b>formato</b> (uma receita tirada de 3 a 5 vídeos parecidos). O roteiro segue só essa receita, aplica a <b>regra geral do
@@ -146,10 +146,11 @@ export default async function GeneratorPage({ searchParams }: PageProps<"/gerado
               .
             </span>
           )}
-          {formats.length > 0 && !formatId && <span className="text-sm text-amber-300">← escolha um (obrigatório)</span>}
+          {formats.length > 0 && !formatId && <span className="text-sm text-amber-300">Escolha um formato</span>}
         </div>
       </div>
 
+      <Collapsible title="Opções avançadas e referências" className="card p-4">
       {/* O que entra no pedido */}
       <section className="grid gap-3 md:grid-cols-3">
         <div className="card space-y-1 p-4 text-sm">
@@ -228,7 +229,7 @@ export default async function GeneratorPage({ searchParams }: PageProps<"/gerado
       </section>
 
       {studies.length > 0 && (
-        <details className="card" open={!ctx?.reference && studies.length <= 6}>
+        <details className="card">
           <summary className="cursor-pointer px-4 py-3 text-sm text-zinc-300">
             Adaptar um vídeo do formato ({studies.length} {studies.length === 1 ? "vídeo" : "vídeos"} em {ctx?.videoFormat.name})
           </summary>
@@ -255,9 +256,11 @@ export default async function GeneratorPage({ searchParams }: PageProps<"/gerado
         </details>
       )}
 
+      </Collapsible>
+
       {/* Pedido */}
       <section className="card space-y-3 p-5">
-        <h2 className="text-lg font-semibold">Sugerir ideias</h2>
+        <h2 className="text-lg font-semibold">Gerar ideias</h2>
         <div className="flex flex-wrap items-center gap-2 text-sm">
           <span className="text-zinc-500">Quantas:</span>
           {[3, 5, 8].map((n) => (
@@ -276,7 +279,7 @@ export default async function GeneratorPage({ searchParams }: PageProps<"/gerado
         {!ideasJob && req && est && (
         <StateForm
           action={generateIdeasAction.bind(null, req)}
-          label={`Sugerir ${count} ideias`}
+          label={`Gerar ${count} ideias`}
           busy="Começando…"
           hint={`${estimateHint(est)} · roda em segundo plano (até 2 min)`}
         >
@@ -286,15 +289,12 @@ export default async function GeneratorPage({ searchParams }: PageProps<"/gerado
               name="ponto"
               rows={2}
               className="input"
-              placeholder="Ex.: o pote de sorvete da avó · um trabalho da escola · uma ideia de cena · deixe vazio para o gerador escolher dentro do formato"
+              placeholder="Ex.: o pote de sorvete da avó. Deixe vazio para receber sugestões."
             />
           </div>
         </StateForm>
         )}
-        <p className="text-xs text-zinc-500">
-          Cada ideia vem no formato escolhido, com o gancho falado, 3 a 5 títulos e o que veio da receita × o que é do seu canal. Depois,
-          abra a ideia para escrever o roteiro completo (outro custo, mostrado no botão).
-        </p>
+
       </section>
 
       <section className="space-y-3">

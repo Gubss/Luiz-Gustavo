@@ -1,3 +1,5 @@
+import { AnalyticsOverview } from "@/components/AnalyticsOverview";
+import { WorkSection } from "@/components/workflow";
 import Link from "next/link";
 import { Collapsible } from "@/components/ui";
 import { notFound } from "next/navigation";
@@ -114,7 +116,7 @@ export default async function MyChannelProfilePage({ params }: PageProps<"/meus-
           </Link>
           <h1 className="text-2xl font-semibold tracking-tight">{c.name}</h1>
           <p className="text-sm text-zinc-400">
-            Perfil do canal. Quanto mais claro, melhor o gerador traduz o que funciona no nicho para o seu formato.
+            Resultados primeiro; perfil e referências logo abaixo.
           </p>
         </div>
         <div className="flex gap-2">
@@ -126,6 +128,7 @@ export default async function MyChannelProfilePage({ params }: PageProps<"/meus-
           </Link>
         </div>
       </header>
+      <AnalyticsOverview channelId={c.id} />
 
       {gaps.length > 0 && (
         <p className="rounded-lg border border-amber-700 bg-amber-950/40 p-3 text-sm text-amber-200">
@@ -206,7 +209,7 @@ export default async function MyChannelProfilePage({ params }: PageProps<"/meus-
 
       </Collapsible>
 
-      <section className="card p-5">
+      <WorkSection id="detail-1" title="Perfil do canal">
         <h2 className="mb-4 text-lg font-semibold">Perfil</h2>
         <StateForm action={saveProfile.bind(null, c.id)} label="Salvar perfil">
           <div className="grid gap-3 md:grid-cols-3">
@@ -280,10 +283,10 @@ export default async function MyChannelProfilePage({ params }: PageProps<"/meus-
             </div>
           </div>
         </StateForm>
-      </section>
+      </WorkSection>
 
       {c.lessons.length > 0 && (
-        <section className="card space-y-3 p-5">
+        <WorkSection id="detail-2" title="Devoluções do Estúdio">
           <div>
             <h2 className="text-lg font-semibold">Devoluções do Estúdio ({c.lessons.length})</h2>
             <p className="text-sm text-zinc-400">
@@ -314,10 +317,10 @@ export default async function MyChannelProfilePage({ params }: PageProps<"/meus-
               </li>
             ))}
           </ul>
-        </section>
+        </WorkSection>
       )}
 
-      <section className="card space-y-4 p-5">
+      <WorkSection id="detail-3" title="Roteiros aprovados">
         <div>
           <h2 className="text-lg font-semibold">Roteiros aprovados ({c.scripts.length})</h2>
           <p className="text-sm text-zinc-400">
@@ -349,9 +352,9 @@ export default async function MyChannelProfilePage({ params }: PageProps<"/meus-
             <ScriptFields formats={formatOptions} />
           </StateForm>
         </div>
-      </section>
+      </WorkSection>
 
-      <section className="card space-y-4 p-5">
+      <WorkSection id="detail-4" title="Vídeos publicados">
         <div>
           <h2 className="text-lg font-semibold">Vídeos que o canal já publicou ({videoCount})</h2>
           <p className="text-sm text-zinc-400">
@@ -388,7 +391,7 @@ export default async function MyChannelProfilePage({ params }: PageProps<"/meus-
             </ul>
           </details>
         )}
-      </section>
+      </WorkSection>
 
       <div className="flex justify-end">
         <ConfirmDelete

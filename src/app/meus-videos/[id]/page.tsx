@@ -1,3 +1,5 @@
+import { AnalyticsOverview } from "@/components/AnalyticsOverview";
+import { WorkSection } from "@/components/workflow";
 import Link from "next/link";
 import { Collapsible } from "@/components/ui";
 import { ClampText } from "@/components/ui-client";
@@ -266,8 +268,10 @@ export default async function MyVideoPage({ params }: { params: Promise<{ id: st
         </div>
       </header>
 
+      <AnalyticsOverview channelId={v.myChannelId} videoId={v.id} />
+      <p className="max-w-3xl text-sm text-zinc-300">{latestC?.resumo ?? "Ainda sem análise. Comece comparando as visualizações nas primeiras 24 h e a parte assistida do vídeo."}</p>
       {/* Diagnóstico */}
-      <section className="card space-y-4 p-5">
+      <WorkSection id="detail-1" title="Análise e próximos passos">
         <h2 className="text-lg font-semibold">Diagnóstico</h2>
         {latest && latestC ? (
           <>
@@ -304,10 +308,10 @@ export default async function MyVideoPage({ params }: { params: Promise<{ id: st
             })}
           </div>
         )}
-      </section>
+      </WorkSection>
 
       {/* Marcos */}
-      <section className="card space-y-4 p-5">
+      <WorkSection id="detail-2" title="Visualizações ao longo do tempo">
         <div>
           <h2 className="text-lg font-semibold">Ao longo do tempo</h2>
           <p className="text-sm text-zinc-400">
@@ -421,10 +425,10 @@ export default async function MyVideoPage({ params }: { params: Promise<{ id: st
             </StateForm>
           </div>
         </details>
-      </section>
+      </WorkSection>
 
       {/* Analytics */}
-      <section className="card space-y-4 p-5">
+      <WorkSection id="detail-3" title="Retenção e origem do público">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-lg font-semibold">YouTube Analytics</h2>
           {v.analyticsFetchedAt && (
@@ -521,10 +525,10 @@ export default async function MyVideoPage({ params }: { params: Promise<{ id: st
             </div>
           </>
         )}
-      </section>
+      </WorkSection>
 
       {/* Roteiro */}
-      <section className="card space-y-4 p-5">
+      <WorkSection id="detail-4" title="Roteiro e anotações">
         <div>
           <h2 className="text-lg font-semibold">Roteiro</h2>
           <p className="text-sm text-zinc-400">
@@ -576,7 +580,7 @@ export default async function MyVideoPage({ params }: { params: Promise<{ id: st
             </StateForm>
           </div>
         </div>
-      </section>
+      </WorkSection>
     </div>
   );
 }

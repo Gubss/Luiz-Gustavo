@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { usdToBrl } from "@/lib/claude";
-import { generateIdeas, generateScript, IDEA_STATUS, revisionDefaults, type IdeasRequest, type ScriptMode } from "@/lib/generator";
+import { generateIdeas, generateScript, IDEA_STATUS, NO_RECIPE_MSG, revisionDefaults, scriptMissingRecipe, type IdeasRequest, type ScriptMode } from "@/lib/generator";
 import { startJob } from "@/lib/jobs";
 import { returnPoints } from "@/lib/speech";
 import type { FormState } from "@/app/video/actions";
@@ -39,14 +39,26 @@ export async function generateIdeasAction(req: Omit<IdeasRequest, "ponto">, _pre
   }
 }
 
-function startScriptJob(ideaId: string, label: string, title: string, extra: string, mode?: ScriptMode) {
+function startScriptJob(ideaId: string, label: string, title: string, extra: string, mode: ScriptMode | undefined, noRecipeOk: boolean) {
   return startJob(
-    { kind: "script", targetId: ideaId, label: `${mode === "corrigir" ? "Correção do roteiro" : "Roteiro"}: ${label}`, href: `/ideias/${ideaId}`, expectedSec: 90 },
+    { kind: "script", targetId: ideaId, label: `${mode === "corrigir" ? "Correção do roteiro" : "Roteiro"}: ${label}`, href: `/ideias/${ideaId}`, expectedSec: 150 },
     async () => {
-      const r = await generateScript(ideaId, { title, extra, mode });
-      return `${r.mode === "corrigir" ? "Roteiro corrigido: " : ""}${r.metrics.scenes} cenas, ~${r.metrics.durationSec}s. Custo: ${money(r.costUsd)}.`;
+      const r = await generateScript(ideaId, { title, extra, mode, noRecipeOk });
+      const rv = r.review;
+      const check = rv.error
+        ? " A leitura de espectador falhou; confira o roteiro com atenção."
+        : rv.rewritten
+          ? ` A leitura de espectador achou ${rv.points.length} ${rv.points.length === 1 ? "ponto" : "pontos"} e o roteiro foi reescrito uma vez.`
+          : ` Passou na leitura de espectador (${rv.laughs} risadas).`;
+      return `${r.mode === "corrigir" ? "Roteiro corrigido: " : ""}${r.metrics.scenes} cenas, ~${r.metrics.durationSec}s.${check} Custo: ${money(r.costUsd)}.`;
     },
   );
+}
+
+/** Formato sem receita: só escreve com a caixa de confirmação marcada. */
+async function recipeBlock(ideaId: string, fd: FormData): Promise<{ error: string } | null> {
+  if (fd.get("noRecipeOk") === "on") return null;
+  return (await scriptMissingRecipe(ideaId)) ? { error: NO_RECIPE_MSG } : null;
 }
 
 const pickedTitle = (fd: FormData) => {
@@ -66,7 +78,9 @@ export async function generateScriptAction(ideaId: string, _prev: FormState, fd:
       if (!revisionDefaults(full).pendingReturn)
         return { error: "Para corrigir o roteiro, diga no pedido extra o que mudar (ou registre a devolução do Estúdio). Para recomeçar, escolha “história nova”." };
     }
-    await startScriptJob(ideaId, idea.chosenTitle || idea.theme, pickedTitle(fd), extra, mode);
+    const blocked = await recipeBlock(ideaId, fd);
+    if (blocked) return blocked;
+    await startScriptJob(ideaId, idea.chosenTitle || idea.theme, pickedTitle(fd), extra, mode, fd.get("noRecipeOk") === "on");
     refresh(ideaId);
     return { ok: BACKGROUND_OK };
   } catch (e) {
@@ -170,7 +184,9 @@ export async function regenerateWithFormatAction(ideaId: string, _prev: FormStat
   try {
     const f = await assignFormat(ideaId, formatId);
     const idea = await prisma.idea.findUniqueOrThrow({ where: { id: ideaId }, select: { theme: true, chosenTitle: true } });
-    await startScriptJob(ideaId, idea.chosenTitle || idea.theme, pickedTitle(fd), String(fd.get("extra") ?? ""), "nova");
+    const blocked = await recipeBlock(ideaId, fd);
+    if (blocked) return { error: `Formato escolhido: ${f.name}. ${blocked.error}` };
+    await startScriptJob(ideaId, idea.chosenTitle || idea.theme, pickedTitle(fd), String(fd.get("extra") ?? ""), "nova", fd.get("noRecipeOk") === "on");
     refresh(ideaId);
     return { ok: `Formato: ${f.name}. ${BACKGROUND_OK}` };
   } catch (e) {
