@@ -163,9 +163,17 @@ export default async function FormatsPage({ searchParams }: PageProps<"/formatos
           </p>
         }
         actions={
+          <>
+          <Link href={`/formatos/classificar?niche=${niche.id}`} className="btn-secondary">
+            Classificar estudos automaticamente
+          </Link>
           <Link href={`/cartilha?niche=${niche.id}&format=${length}`} className="text-xs text-zinc-500 hover:text-zinc-300" title="A cartilha antiga juntava todos os estudos. Fica guardada só para consulta.">
             Cartilha antiga (histórico)
           </Link>
+          <Link href={`/formatos/limpeza?niche=${niche.id}`} className="text-xs text-zinc-500 hover:text-zinc-300" title="Apaga a cartilha antiga e as ideias sem formato, com cópia de segurança antes.">
+            Limpeza
+          </Link>
+          </>
         }
       />
 
@@ -230,7 +238,10 @@ export default async function FormatsPage({ searchParams }: PageProps<"/formatos
           )}
           {loose > 0 && (
             <p className="text-sm text-zinc-400">
-              {loose} {loose === 1 ? "vídeo estudado" : "vídeos estudados"} de {formatLabel(length, true)} neste nicho ainda {loose === 1 ? "não está" : "não estão"} em nenhum formato.
+              {loose} {loose === 1 ? "vídeo estudado" : "vídeos estudados"} de {formatLabel(length, true)} neste nicho ainda {loose === 1 ? "não está" : "não estão"} em nenhum formato.{" "}
+              <Link href={`/formatos/classificar?niche=${niche.id}`} className="text-red-400 hover:underline">
+                Deixar o Radar sugerir
+              </Link>
             </p>
           )}
           <Collapsible title="Novo formato" className="card p-4" open={formats.length === 0}>

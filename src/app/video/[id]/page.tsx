@@ -26,7 +26,7 @@ import { runningJobsFor } from "@/lib/jobs";
 import { RunningNote } from "@/components/RunningNote";
 import { CompareWithPlaybook } from "@/components/CompareWithPlaybook";
 import { StateForm } from "@/components/StateForm";
-import { setVideoFormatAction } from "@/app/formatos/actions";
+import { confirmSuggestionAction, setVideoFormatAction } from "@/app/formatos/actions";
 import { latestPlaybook, type PlaybookStats } from "@/lib/playbook";
 
 const ts = (s: number) => {
@@ -386,13 +386,14 @@ export default async function VideoStudyPage({ params }: PageProps<"/video/[id]"
   const cmpNicheIds = [...new Set([...channelNiches.map((n) => n.id), v.studyNicheId, myChannel?.nicheId].filter((x): x is string => !!x))];
   // Formatos do vídeo (um por nicho) e opções para escolher
   const videoNicheIds = [...new Set([...channelNiches.map((n) => n.id), v.studyNicheId].filter((x): x is string => !!x))];
-  const [inFormats, formatOptions] = await Promise.all([
+  const [inFormats, formatOptions, suggestions] = await Promise.all([
     prisma.formatVideo.findMany({ where: { videoId: v.id }, include: { format: { include: { recipes: { orderBy: { createdAt: "desc" }, take: 1 } } } } }),
     prisma.videoFormat.findMany({
       where: { nicheId: { in: videoNicheIds }, length: v.isShort ? "short" : "long" },
       orderBy: { createdAt: "asc" },
       include: { niche: { select: { name: true } }, _count: { select: { videos: true } } },
     }),
+    prisma.formatSuggestion.findMany({ where: { videoId: v.id, nicheId: { in: videoNicheIds } }, include: { niche: { select: { name: true } } } }),
   ]);
   let cmp: { st: PlaybookStats; label: string; href: string } | null = null;
   for (const fv of inFormats) {
@@ -494,6 +495,24 @@ export default async function VideoStudyPage({ params }: PageProps<"/video/[id]"
           </div>
           {videoNicheIds.length > 0 && !myChannel && (
             <div id="formato" className="text-sm text-zinc-400">
+              {suggestions.map((sg) => (
+                <div key={sg.id} className={`mb-2 rounded-lg border px-3 py-2 ${sg.status === "pending" ? "border-violet-700/60 bg-violet-950/30" : "border-line"}`}>
+                  <p>
+                    <span className="text-zinc-400">Sugestão do Radar{suggestions.length > 1 ? ` em ${sg.niche.name}` : ""}:</span>{" "}
+                    <span className="font-medium text-zinc-100">{sg.label}</span>{" "}
+                    <span className="text-xs text-zinc-500">(confiança {sg.confidence})</span>
+                    {sg.status !== "pending" && (
+                      <span className="ml-2 text-xs text-zinc-500">{sg.status === "confirmed" ? "· confirmada" : `· você trocou por ${sg.chosen}`}</span>
+                    )}
+                  </p>
+                  <p className="text-xs text-zinc-400">{sg.reason}</p>
+                  {sg.status === "pending" && (
+                    <div className="mt-1.5">
+                      <ActionButton action={confirmSuggestionAction.bind(null, v.id, sg.nicheId)} label="Confirmar" busy="Gravando…" className="btn-secondary px-2 py-1 text-xs" hint="ou troque no campo abaixo" />
+                    </div>
+                  )}
+                </div>
+              ))}
               {diag?.content || diag?.markdown ? (
                 formatOptions.length ? (
                   <StateForm action={setVideoFormatAction.bind(null, v.id, formatOptions[0].nicheId)} label="Salvar" className="btn-ghost" formClassName="flex flex-wrap items-center gap-2">

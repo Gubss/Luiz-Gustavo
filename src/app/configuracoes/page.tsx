@@ -573,6 +573,12 @@ export default async function SettingsPage() {
         desc="Tudo do app (nichos, estudos, cartilhas, roteiros, histórico de views) fica num arquivo só: prisma/radar.db. A cópia é feita com o app aberto, sem parar nada."
       >
         <ActionButton action={backupNowAction} label="Fazer uma cópia agora" busy="Copiando…" className="btn-secondary" />
+        <p className="text-xs text-zinc-500">
+          Para apagar a cartilha antiga e as ideias feitas antes dos formatos (com cópia antes):{" "}
+          <Link href="/formatos/limpeza" className="text-red-400 hover:underline">
+            Limpeza
+          </Link>
+        </p>
         <div className="text-sm">
           <p className="text-xs text-zinc-500">
             Pasta: <code>{backupDir()}</code>

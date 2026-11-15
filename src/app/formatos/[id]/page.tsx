@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { FormatGaps } from "@/components/FormatGaps";
+import { gapHint } from "@/lib/classify";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { fmtCompact, fmtDateTime } from "@/lib/format";
@@ -301,6 +303,7 @@ export default async function FormatPage({ params, searchParams }: PageProps<"/f
             })}
           </ol>
         )}
+        {draft && <FormatGaps formatId={f.id} videos={studies.length} gaps={gapHint(f)} />}
         <Collapsible
           title={<span className="text-sm">Adicionar vídeos estudados</span>}
           meta={`${toAdd.length} ${toAdd.length === 1 ? "disponível" : "disponíveis"}`}

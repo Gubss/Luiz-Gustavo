@@ -9,6 +9,7 @@ import { ensureVideo } from "@/lib/videos";
 import { prisma } from "@/lib/db";
 import { usdToBrl } from "@/lib/claude";
 import { startJob } from "@/lib/jobs";
+import { suggestAfterStudy } from "@/lib/classify";
 
 export type FormState = { ok?: string; error?: string } | null;
 
@@ -51,6 +52,16 @@ export async function deleteTranscriptAction(videoId: string) {
 
 const BACKGROUND_OK = "Começou em segundo plano. Pode sair desta tela: o aviso no canto mostra quando terminar.";
 
+/** Quando o estudo termina: sugere o formato (sem gravar; eu confirmo na tela do estudo). Falha aqui não estraga o estudo. */
+async function suggestFormat(videoId: string): Promise<{ costUsd: number; note: string }> {
+  try {
+    const r = await suggestAfterStudy(videoId);
+    return { costUsd: r.costUsd, note: r.labels.length ? `Formato sugerido: ${r.labels.join(", ")} (confirme na tela do estudo). ` : "" };
+  } catch (e) {
+    return { costUsd: 0, note: `Não consegui sugerir o formato (${errMsg(e)}). ` };
+  }
+}
+
 const shortTitle = (t: string) => (t.length > 50 ? t.slice(0, 48) + "…" : t);
 
 /** Roda em segundo plano (a tela não fica presa). */
@@ -60,7 +71,8 @@ export async function diagnoseAction(videoId: string): Promise<FormState> {
     await startJob({ kind: "diagnosis", targetId: videoId, label: `Diagnóstico: ${shortTitle(v.title)}`, href: `/video/${videoId}`, expectedSec: 70 },
       async () => {
         const r = await runDiagnosis(videoId);
-        return `Custo: ${money(r.costUsd)}.`;
+        const sug = await suggestFormat(videoId);
+        return `${sug.note}Custo: ${money(r.costUsd + sug.costUsd)}.`;
       },
       ["study"],
     );
@@ -111,6 +123,9 @@ export async function studyAllAction(videoId: string): Promise<FormState> {
         await report(10, "Diagnóstico (2 de 3)");
         const d = await runDiagnosis(videoId);
         cost += d.costUsd;
+        const sug = await suggestFormat(videoId);
+        cost += sug.costUsd;
+        if (sug.note) notes.push(sug.note.replace(/\.\s*$/, ""));
         await report(75, "Comentários (3 de 3)");
         try {
           const c = await analyzeComments(videoId);
