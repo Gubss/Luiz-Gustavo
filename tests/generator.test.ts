@@ -18,30 +18,11 @@ const G = () => import("../src/lib/generator");
 type Body = { system: string; model?: string; messages: { content: { text?: string }[] }[] };
 const bodies: Body[] = [];
 const isScriptBody = (b: Body) => String(b.system).includes("TAREFA: escrever o roteiro");
-const isCriticBody = (b: Body) => String(b.system).includes("espectador exigente");
 /** Último pedido de roteiro (a leitura de espectador vem depois dele). */
 const lastScript = () => bodies.filter(isScriptBody).at(-1)!;
 const textOf = (b: Body) => b.messages[0].content.map((c) => c.text ?? "").join("");
 
 /** Leitura de espectador simulada: 3 risadas com reação, nada a corrigir. */
-const CRITIC_OK = {
-  risadas: [
-    { cena: 1, esperado: "rugido de leão", aconteceu: "o pai diz que nem abria a boca", reacao: "Theo cai do sofá" },
-    { cena: 3, esperado: "som assustador", aconteceu: "som de pombo", reacao: "Theo ri" },
-    { cena: 4, esperado: "o T-Rex é feroz", aconteceu: "era um pombo", reacao: "o pai engasga" },
-  ],
-  passosSemMotivo: [],
-  frasesAula: [],
-  bordoes: [],
-  fechoExplicaPiada: false,
-  historinha: "Theo quer rugir igual T-Rex e descobre que o T-Rex arrulhava.",
-  temaDeDesenho: false,
-  contas: [],
-  viradaPlantada: true,
-  fechoCerto: true,
-  veredito: "Assistiria até o fim.",
-};
-let criticReply: unknown = CRITIC_OK;
 
 const IDEAS = {
   leitura: "Uso o gancho mito vs. verdade, dito pelo Theo e corrigido pelo pai.",
@@ -106,7 +87,7 @@ before(() => {
     if (url.hostname === "api.anthropic.com") {
       const body = JSON.parse(String(init?.body));
       bodies.push(body);
-      const reply = isCriticBody(body) ? criticReply : isScriptBody(body) ? SCRIPT : IDEAS;
+      const reply = body.system.includes("Corrija somente") ? (textOf(body).includes("Trecho selecionado: falas 1 a 2")?{falado:[{personagem:"Menino",fala:"Eu contei esse trecho de outro jeito."}],pendencias:[]}:{fala:"Pai, eu achei que ele rugia!",pendencias:[]}) : body.system.includes("Crítica solicitada") ? {observacoes:["Premissa preservada"],hipoteses:[],pendencias:[]} : isScriptBody(body) ? {titulo:SCRIPT.titulo,duracaoSeg:SCRIPT.duracaoSeg,falado:SCRIPT.cenas.filter(c=>c.fala).map(c=>({personagem:c.personagem,fala:c.fala})),pendencias:SCRIPT.conferirFatos} : {ideias:IDEAS.ideias.map(i=>({titulo:i.titulos[0].titulo,premissa:i.premissa,gancho:i.gancho,formato:i.formatoDeHistoria,interesse:i.porQueVaiFuncionar}))};
       return new Response(
         JSON.stringify({
           id: "msg_test",
@@ -163,10 +144,10 @@ test("gerador: formato obrigatório; receita + regra geral + perfil viram ideias
   const fMito = await prisma.videoFormat.create({ data: { nicheId: niche.id, name: "Mito vs. verdade", description: "alguém afirma um mito e é desmentido" } });
   const fObra = await prisma.videoFormat.create({ data: { nicheId: niche.id, name: "Construir resolvendo problemas" } });
   await prisma.myChannelScript.create({
-    data: { myChannelId: ch.id, formatId: fMito.id, title: "Theo e o arco-íris", script: "THEO: Pai, o arco-íris tem fim!\nPAI: Na verdade ele é um círculo.", views: 12000 },
+    data: { myChannelId: ch.id, formatId: fMito.id, integrity: "complete", title: "Theo e o arco-íris", script: "THEO: Pai, o arco-íris tem fim!\nPAI: Na verdade ele é um círculo.", views: 12000 },
   });
   await prisma.myChannelScript.create({
-    data: { myChannelId: ch.id, formatId: fObra.id, title: "O vulcão", script: "Você faz o óbvio.\nMas a espuma escorre pro tapete.\nChinelada.", views: 1000 },
+    data: { myChannelId: ch.id, formatId: fObra.id, integrity: "complete", title: "O vulcão", script: "Você faz o óbvio.\nMas a espuma escorre pro tapete.\nChinelada.", views: 1000 },
   });
 
   const other = await prisma.channel.create({ data: { externalId: "UCnarr000000000000000001", title: "Canal Narrador" } });
@@ -226,9 +207,9 @@ test("gerador: formato obrigatório; receita + regra geral + perfil viram ideias
   assert.match(ctx.block, /Theo \(7 anos\)/);
   assert.match(ctx.block, /Theo e o arco-íris/);
   assert.doesNotMatch(ctx.block, /O vulcão/, "roteiro de outro formato não entra");
-  assert.match(ctx.block, /Receita do formato — Mito vs\. verdade/);
+  assert.match(ctx.block, /1 exemplo, não é regra/);
   assert.doesNotMatch(ctx.block, /Cada solução cria o próximo problema/, "nunca duas receitas juntas");
-  assert.match(ctx.block, /Pergunta falada de duas opções/);
+  assert.doesNotMatch(ctx.block, /Pergunta falada de duas opções/);
   assert.doesNotMatch(ctx.block, /narrador fala você/, "o que é específico de outro formato não vira regra");
   assert.match(ctx.block, /AMOSTRAS DE VOZ/);
   assert.match(ctx.block, /Mentiras sobre dinossauros/);
@@ -250,8 +231,8 @@ test("gerador: formato obrigatório; receita + regra geral + perfil viram ideias
   assert.equal(r.ideas.length, 2);
   assert.equal(bodies.length, 1);
   const sys = bodies[0].system;
-  assert.match(sys, /UM FORMATO SÓ/);
-  assert.match(sys, /SOA FALADO, NÃO ESCRITO/);
+  assert.match(sys, /formato escolhido/);
+  assert.match(sys, /fala deve soar natural/);
   const user = bodies[0].messages[0].content.map((c) => c.text ?? "").join("");
   assert.match(user, /mitos de dinossauro/);
   assert.match(user, /Theo e o arco-íris \[roteiro cadastrado\]/, "temas já feitos entram para não repetir");
@@ -277,55 +258,25 @@ test("gerador: formato obrigatório; receita + regra geral + perfil viram ideias
   assert.equal(sEst.basedOn, 0, "sem roteiro real ainda: usa a saída típica");
   assert.equal(sEst.outputTokens, 26000, "raciocínio adaptativo conta como saída");
   assert.ok(Math.abs(sEst.script.usdMax - (sEst.inputTokens * 4 + 32000 * 20) / 1e6) < 1e-9, "teto do roteiro = limite de 32 mil tokens");
-  assert.ok(sEst.critic.usd > 0 && sEst.critic.usd < sEst.script.usd / 5, "leitura de espectador é barata");
-  assert.ok(Math.abs(sEst.usd - (sEst.script.usd + sEst.critic.usd)) < 1e-9, "estimativa mostrada inclui a leitura");
-  assert.ok(Math.abs(sEst.usdMax - (sEst.script.usdMax + sEst.critic.usdMax + sEst.rewriteMaxUsd)) < 1e-9, "teto inclui uma reescrita");
-  assert.equal(sEst.noRecipe, false);
-  const s = await generateScript(saved[0].id, { extra: "mais curto" });
-  assert.equal(bodies.length, 3, "ideias, roteiro e leitura de espectador");
-  assert.match(bodies[1].system, /TAREFA: escrever o roteiro/);
-  assert.match(bodies[1].system, /CADA PASSO TEM MOTIVO E CONSEQUÊNCIA/);
-  assert.match(bodies[1].system, /SEM AULA DISFARÇADA/);
-  assert.match(bodies[1].system, /Pelo menos 3 viradas cômicas/);
-  // Regra fixa do Gubs (15/11): vale com formato ou sem, no topo do pedido.
-  assert.match(bodies[1].system, /A REGRA DE TODO ROTEIRO \(vale com formato ou sem[\s\S]*É UM DESENHO CONTANDO UMA HISTORINHA[\s\S]*sem conta, sem número exato[\s\S]*O título é a desculpa, não a aula/);
-  assert.ok(bodies[1].system.indexOf("A REGRA DE TODO ROTEIRO") < bodies[1].system.indexOf("COMO SEGUIR O FORMATO"));
-  assert.match(textOf(bodies[2]), /Formato: Mito vs\. verdade/);
-  assert.match(String(bodies[2].system), /historinha em 1 frase[\s\S]*conta, medida ou número exato[\s\S]*virada final foi plantada/);
-  assert.ok(isCriticBody(bodies[2]));
-  assert.equal(bodies[2].model, "claude-sonnet-5-5", "leitura de espectador no modelo barato");
-  assert.match(textOf(bodies[2]), /Cena 3 \(desenvolvimento, 8-22s\) \[Pai imita, Theo ri\] Pai: Ele fazia um som grave/);
-  assert.match(bodies[1].system, /Nenhum texto em cima de rosto/);
-  assert.equal((bodies[1] as unknown as { max_tokens: number }).max_tokens, 32000, "roteiro tem limite de 32 mil tokens");
-  assert.equal((bodies[1] as unknown as { stream: boolean }).stream, true, "roteiro vem por streaming");
-  const sUser = bodies[1].messages[0].content.map((c) => c.text ?? "").join("");
-  assert.match(sUser, /Premissa: Theo jura/);
-  assert.match(sUser, /duração alvo ≈ 35s/, "duração do perfil vence a da receita");
-  assert.match(sUser, /Pedido extra: mais curto/);
-  assert.match(sUser, /DEVOLUÇÕES DO ESTÚDIO[\s\S]*Texto na tela em cima do rosto do pai/);
-
-  assert.equal(s.idea.status, "SCRIPT");
-  const md = s.idea.script!;
-  assert.match(md.split("\n")[1], /^\*\*Formato:\*\* Mito vs\. verdade · receita v1 \(1 vídeo\) · rascunho · \*\*Nicho:\*\* 3D animado · Regra geral v1$/);
-  assert.equal(md.split("\n")[2], "**Pendências:** 1 fato para conferir");
-  assert.match(md, /\*\*Theo:\*\* Pai, o T-Rex rugia igual leão!/);
-  assert.match(md, /- \[x\] Gancho em até 3s/);
-  const data = JSON.parse(s.idea.scriptData!);
-  assert.equal(data.metrics.scenes, 5);
-  assert.equal(data.meta.formatName, "Mito vs. verdade");
-  assert.ok(data.voice, "conferência da voz salva");
-  assert.equal(data.review.laughs, 3);
-  assert.equal(data.review.rewritten, false, "passou: não reescreve");
-  assert.deepEqual(data.review.points, []);
-  assert.ok(data.checklist.some((c: { origem: string; ok: boolean }) => c.origem === "lógica e graça" && c.ok), "caixas de lógica e graça marcadas pelo app");
-  assert.match(md, /## Checklist de lógica e graça/);
-  assert.match(md, /\*\*A historinha:\*\* Theo quer provar/);
-  assert.doesNotMatch(md, /formato pode não combinar/);
-  const genCost = (await prisma.generation.findMany()).filter((g) => g.kind !== "ideas").reduce((a, g) => a + (g.costUsd ?? 0), 0);
-  assert.ok(Math.abs(s.idea.scriptCostUsd! - genCost) < 1e-9, "custo gravado inclui a leitura de espectador");
-
-  const gens = await prisma.generation.findMany({ orderBy: { createdAt: "asc" } });
-  assert.deepEqual(gens.map((g) => g.kind), ["ideas", "script", "script-critic"]);
+  assert.equal(sEst.usd,sEst.script.usd);
+  assert.equal(sEst.usdMax,sEst.script.usdMax);
+  assert.equal(sEst.rewriteMaxUsd,0);
+  const s=await generateScript(saved[0].id,{extra:"mais curto"});
+  assert.equal(bodies.length,2,"somente ideias e roteiro");
+  assert.match(bodies[1].system,/TAREFA: escrever o roteiro FALADO/);
+  assert.doesNotMatch(bodies[1].system,/Pelo menos 3|A REGRA DE TODO ROTEIRO|sem conta, sem número/);
+  assert.match(textOf(bodies[1]),/Premissa invariável: Theo/);
+  assert.match(textOf(bodies[1]),/Duração estimada desejada: 35s/);
+  assert.match(textOf(bodies[1]),/Texto na tela em cima do rosto do pai/);
+  assert.equal(s.idea.status,"SCRIPT");
+  assert.equal(s.version.number,1);
+  assert.match(s.idea.script!,/Referência do canal/);
+  assert.match(s.idea.script!,/Roteiro falado/);
+  assert.match(s.idea.script!,/Som de boca fechada/);
+  assert.doesNotMatch(s.idea.script!,/\[x\]|Pendências:\*\* nenhuma/);
+  assert.deepEqual(JSON.parse(s.idea.scriptData!).checklist,[]);
+  assert.equal(await prisma.scriptVersion.count({where:{ideaId:s.idea.id}}),1);
+  assert.deepEqual((await prisma.generation.findMany({orderBy:{createdAt:"asc"}})).map(g=>g.kind),["ideas","script"]);
 
   // Estimativa pela média dos roteiros reais (a resposta cortada no limite não entra na média).
   await prisma.generation.create({
@@ -335,70 +286,39 @@ test("gerador: formato obrigatório; receita + regra geral + perfil viram ideias
   assert.equal(sEst2.basedOn, 1);
   assert.equal(sEst2.outputTokens, 3000, "média dos roteiros que terminaram inteiros");
 
-  // Devolução "corrija só estes pontos": manda o roteiro anterior e a última devolução, pede para manter o resto.
-  await prisma.idea.update({
-    where: { id: saved[0].id },
-    data: {
-      status: "RETURNED",
-      returnNotes:
-        "Devolução de 13/11/2026:\nRefaça do zero, não reenvie o mesmo texto.\n\nDevolução de 14/11/2026:\nEstá quase pronto, corrija só estes pontos e mantenha o resto.\nO pai fala rápido demais na cena do pombo",
-    },
-  });
-  const { revisionDefaults, latestReturn } = await G();
-  const fresh = await prisma.idea.findUniqueOrThrow({ where: { id: saved[0].id } });
-  assert.equal(revisionDefaults(fresh).defaultMode, "corrigir");
-  assert.match(latestReturn(fresh.returnNotes)!, /^Devolução de 14\/11\/2026:\nEstá quase pronto/);
-  const fixed = await generateScript(saved[0].id);
-  assert.equal(fixed.mode, "corrigir");
-  const fx = lastScript();
-  assert.match(fx.system, /MODO CORRIGIR/);
-  assert.match(fx.system, /Mantenha igual tudo o que não foi citado/);
-  const fxUser = fx.messages[0].content.map((c) => c.text ?? "").join("");
-  assert.match(fxUser, /# ROTEIRO ANTERIOR[\s\S]*Pai, o T-Rex rugia igual leão!/);
-  assert.match(fxUser, /# DEVOLUÇÃO DO ESTÚDIO PARA ESTE ROTEIRO[\s\S]*O pai fala rápido demais na cena do pombo/);
-  assert.doesNotMatch(fxUser, /Refaça do zero/, "só a devolução mais recente");
-  assert.doesNotMatch(fxUser, /"metrics"/, "o roteiro anterior vai sem as medidas");
-  assert.equal(fixed.idea.status, "SCRIPT");
-  assert.equal(JSON.parse(fixed.idea.scriptData!).mode, "corrigir");
+  const original=s.version.content;
+  await generateScript(saved[0].id,{mode:"nova"});
+  assert.equal(await prisma.scriptVersion.count({where:{ideaId:s.idea.id}}),2);
+  assert.equal((await prisma.scriptVersion.findUniqueOrThrow({where:{id:s.version.id}})).content,original);
+  await assert.rejects(()=>generateScript(saved[0].id,{mode:"corrigir",extra:"troca o fecho"}),/Selecione a fala/);
 
-  // Já reescrito (não está mais devolvido): o padrão volta a ser história nova; corrigir pede o que mudar.
-  assert.equal(revisionDefaults(fixed.idea).defaultMode, "nova");
-  await assert.rejects(() => generateScript(saved[0].id, { mode: "corrigir" }), /diga no pedido extra o que mudar/);
-  const tweak = await generateScript(saved[0].id, { mode: "corrigir", extra: "troca o fecho" });
-  assert.equal(tweak.mode, "corrigir");
-  assert.doesNotMatch(textOf(lastScript()), /DEVOLUÇÃO DO ESTÚDIO PARA ESTE ROTEIRO/);
+  const {correctScript,requestCritique}=await G();
+  const before=await prisma.idea.findUniqueOrThrow({where:{id:s.idea.id}});
+  const previous=JSON.parse(before.scriptData!);
+  previous.cenas=[{inicio:0,fim:4,parte:"gancho",acao:"Direção legada preservada",falas:[1]}];
+  await prisma.scriptVersion.update({where:{id:before.currentVersionId!},data:{content:JSON.stringify(previous)}});
+  const corrected=await correctScript(s.idea.id,before.currentVersionId!,1,"Deixe essa fala mais natural","voz");
+  const after=JSON.parse(corrected.content);
+  assert.equal(after.falado[0].fala,"Pai, eu achei que ele rugia!");
+  assert.deepEqual(after.falado.slice(1),previous.falado.slice(1));
+  assert.equal(corrected.category,"voz");
+  assert.deepEqual(after.cenas,previous.cenas,"correção de fala preserva direção existente");
+  const countBefore=await prisma.scriptVersion.count({where:{ideaId:s.idea.id}});
+  const critique=await requestCritique(s.idea.id,corrected.id);
+  assert.equal(await prisma.scriptVersion.count({where:{ideaId:s.idea.id}}),countBefore);
+  assert.equal((await prisma.generation.findUniqueOrThrow({where:{id:critique.generationId}})).scriptVersionId,corrected.id);
+  assert.match(textOf(bodies.at(-1)!),/Premissa invariável/);
+  await assert.rejects(()=>correctScript(s.idea.id,before.currentVersionId!,1,"stale","voz"),/mudou/);
+  const {ideaExport}=await import("../src/lib/script-export");
+  assert.match((await ideaExport(s.idea.id))!,/Crítica solicitada/);
+  assert.equal(await ideaExport(s.idea.id),(await prisma.idea.findUniqueOrThrow({where:{id:s.idea.id}})).script);
 
-  // "História nova": sem roteiro anterior no pedido.
-  const again = await generateScript(saved[0].id, { mode: "nova" });
-  assert.equal(again.mode, "nova");
-  assert.doesNotMatch(lastScript().system, /MODO CORRIGIR/);
-  assert.doesNotMatch(textOf(lastScript()), /ROTEIRO ANTERIOR/);
-
-  // Leitura de espectador reprova (1 risada, passo sem motivo): reescreve UMA vez só esses trechos, no modo corrigir.
-  criticReply = { ...CRITIC_OK, risadas: CRITIC_OK.risadas.slice(0, 1), passosSemMotivo: [{ cena: 3, problema: "o pai imita sem ninguém pedir" }] };
-  const n0 = bodies.length;
-  const costBefore = (await prisma.idea.findUniqueOrThrow({ where: { id: saved[0].id } })).scriptCostUsd!;
-  const redo = await generateScript(saved[0].id, { mode: "nova" });
-  criticReply = CRITIC_OK;
-  assert.equal(bodies.length - n0, 3, "roteiro, leitura e uma reescrita (sem segunda leitura)");
-  const fix = bodies[bodies.length - 1];
-  assert.ok(isScriptBody(fix));
-  assert.match(fix.system, /MODO CORRIGIR/);
-  const fixUser = textOf(fix);
-  assert.match(fixUser, /# ROTEIRO ANTERIOR[\s\S]*Pai, o T-Rex rugia igual leão!/);
-  assert.match(fixUser, /Conferência de lógica e graça[\s\S]*Só 1 risada com reação da família[\s\S]*Cena 3: passo sem motivo/);
-  assert.equal(redo.review.rewritten, true);
-  const redoGens = await prisma.generation.findMany({ orderBy: { createdAt: "desc" }, take: 3 });
-  assert.deepEqual(redoGens.map((g) => g.kind).reverse(), ["script", "script-critic", "script-fix"]);
-  assert.ok(Math.abs(redo.idea.scriptCostUsd! - costBefore - redoGens.reduce((a, g) => a + (g.costUsd ?? 0), 0)) < 1e-9, "as três chamadas entram no custo");
-
-  // A leitura falhou (resposta fora do formato): o roteiro é salvo assim mesmo, com o aviso.
-  criticReply = { nada: true };
-  const noCritic = await generateScript(saved[0].id, { mode: "nova" });
-  criticReply = CRITIC_OK;
-  assert.ok(noCritic.review.error, "falha da leitura fica registrada");
-  assert.equal(noCritic.review.rewritten, false);
-
+  const ranged=await correctScript(s.idea.id,corrected.id,1,"Reorganize só as duas primeiras falas","história",2);
+  const rangedData=JSON.parse(ranged.content);
+  assert.deepEqual(rangedData.falado.slice(1),after.falado.slice(2),"fora do intervalo nada muda");
+  assert.deepEqual(rangedData.cenas,after.cenas);
+  assert.match(rangedData.pendencias.join(" "),/quantidade de falas/);
+  await assert.rejects(()=>correctScript(s.idea.id,ranged.id,2,"inválido","voz",1),/intervalo/);
   // Formato sem receita: não escreve sem a confirmação.
   const fSem = await prisma.videoFormat.create({ data: { nicheId: niche.id, name: "Sem receita ainda" } });
   const ideaSem = await prisma.idea.create({ data: { myChannelId: ch.id, nicheId: niche.id, formatId: fSem.id, format: "short", theme: "balões", titles: "[]" } });
@@ -412,7 +332,7 @@ test("gerador: formato obrigatório; receita + regra geral + perfil viram ideias
   // Exemplos aprovados colados no perfil: entram no pedido como ritmo e humor, com a ordem de não copiar.
   await prisma.myChannel.update({ where: { id: ch.id }, data: { examples: "# ROTEIRO APROVADO: O fiozinho da avó\nEu puxei um fiozinho e desmanchei quarenta anos de tricô." } });
   await generateScript(saved[0].id, { mode: "nova" });
-  assert.match(textOf(lastScript()), /EXEMPLOS APROVADOS PELO DONO DO CANAL[\s\S]*NUNCA copie falas[\s\S]*desmanchei quarenta anos de tricô/);
+  assert.doesNotMatch(textOf(lastScript()), /desmanchei quarenta anos de tricô/, "exemplo sem formato não entra");
 
   // Ideia antiga sem formato: o roteiro pede o formato antes.
   const old = await prisma.idea.create({ data: { myChannelId: ch.id, format: "short", theme: "antiga", titles: "[]" } });

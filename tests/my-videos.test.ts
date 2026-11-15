@@ -276,10 +276,14 @@ test("meus vídeos: lê o canal, acompanha marcos, Analytics, diagnóstico e li�
   const vfNiche = (await prisma.myChannel.findUniqueOrThrow({ where: { id: ch.id } })).nicheId ?? (await prisma.niche.create({ data: { name: "Nicho do teste" } })).id;
   const vf = await prisma.videoFormat.create({ data: { nicheId: vfNiche, name: "Família constrói" } });
   const ctx = await loadContext({ myChannelId: ch.id, formatId: vf.id });
-  assert.match(ctx.block, /APRENDIZADOS DOS MEUS VÍDEOS/);
-  assert.match(ctx.block, /Mostrar o resultado antes de explicar/);
-  assert.match(ctx.block, /NÃO funcionaram no meu canal: Narração rápida/);
-  assert.ok(ctx.learnings >= 2);
+  assert.doesNotMatch(ctx.block,/APRENDIZADOS DOS MEUS VÍDEOS/,"relatório global sem formato não entra");
+  assert.equal(ctx.learnings,0);
+  const linkedIdeaForFormat=await prisma.idea.create({data:{myChannelId:ch.id,nicheId:vfNiche,formatId:vf.id,format:"short",theme:"Vulcão",titles:"[]"}});
+  await prisma.myVideo.update({where:{id:vulcao.id},data:{inspiredIdeaId:linkedIdeaForFormat.id}});
+  const scoped=await loadContext({myChannelId:ch.id,formatId:vf.id});
+  assert.match(scoped.block,/APRENDIZADOS DOS MEUS VÍDEOS/);
+  assert.ok(scoped.learnings>0);
+  assert.doesNotMatch(scoped.block,/NÃO funcionaram no meu canal: Narração rápida/);
 
   // Títulos já publicados entram na lista de "não repita" (o caso da tampa da caneta).
   const { ownItems } = await import("../src/lib/my-catalog");

@@ -910,7 +910,7 @@ export async function generateScript(ideaId:string,opts:{title?:string;extra?:st
  return {...r,data,idea:await prisma.idea.findUniqueOrThrow({where:{id:ideaId}}),version,mode:"nova"};
 }
 const CorrectionSchema=z.object({fala:z.string().min(1),pendencias:z.array(z.string())});
-export async function correctScript(ideaId:string,versionId:string,lineNumber:number,request:string,category:string) {
+export async function correctScript(ideaId:string,versionId:string,lineNumber:number,request:string,category:string,endLineNumber=lineNumber) {
  const {idea,ctx}=await ideaContext(ideaId);
  if(!request.trim()||request.length>4000) throw new GeneratorError("Descreva a correção em até 4.000 caracteres.");
  if(idea.currentVersionId!==versionId) throw new GeneratorError("O roteiro mudou. Reabra a versão atual.");
@@ -919,10 +919,13 @@ export async function correctScript(ideaId:string,versionId:string,lineNumber:nu
  if(!saved) throw new GeneratorError("Versão não pertence ao projeto.");
  const data=JSON.parse(saved.content) as ScriptContent;
  const lines=spokenLines(data); const line=lines[lineNumber-1];
- if(!Number.isInteger(lineNumber)||!line) throw new GeneratorError("Selecione uma fala válida.");
+ if(!Number.isInteger(lineNumber)||!line||!Number.isInteger(endLineNumber)||endLineNumber<lineNumber||endLineNumber>lines.length) throw new GeneratorError("Selecione um intervalo de falas válido.");
  const s=await getSettings();
- const r=await callStructured({kind:"script-correction",model:s.modelDeep,effort:"low",system:BASE_RULES+"\nCorrija apenas a fala selecionada. Preserve personagem, premissa e regra central. Se o pedido exige mudar a premissa ou outras falas, mantenha a fala e registre a pendência.",user:scriptPrompt(ctx,idea,idea.chosenTitle||idea.theme,"")+"\nRoteiro para contexto: "+JSON.stringify(lines)+"\nFala selecionada: "+lineNumber+"\nPedido: "+request,schema:CorrectionSchema,maxTokens:8000});
- const updated={...data,falado:lines.map((l,i)=>({personagem:l.who,fala:i===lineNumber-1?r.data.fala:l.text})),cenas:[],pendencias:Array.from(new Set([...(data.pendencias??[]),...r.data.pendencias]))};
+ const options={kind:"script-correction",model:s.modelDeep,effort:"low" as const,system:BASE_RULES+"\nCorrija somente o trecho selecionado conforme o pedido explícito. Preserve a premissa e a regra central. Não altere as falas fora da seleção. Dentro de um intervalo você pode reorganizar, inserir ou retirar falas quando o pedido exigir. Pendências: somente dúvidas reais desta correção; não invente problemas já resolvidos.",user:scriptPrompt(ctx,idea,idea.chosenTitle||idea.theme,"")+"\nRoteiro para contexto: "+JSON.stringify(lines)+"\nTrecho selecionado: falas "+lineNumber+" a "+endLineNumber+"\nPedido: "+request,maxTokens:8000};
+ const r=endLineNumber===lineNumber?await callStructured({...options,schema:CorrectionSchema}):await callStructured({...options,schema:z.object({falado:z.array(z.object({personagem:z.string(),fala:z.string()})).min(1),pendencias:z.array(z.string())})});
+ const replacement="falado" in r.data?r.data.falado:[{personagem:line.who,fala:r.data.fala}];
+ const original=lines.map(l=>({personagem:l.who,fala:l.text}));
+ const updated={...data,falado:[...original.slice(0,lineNumber-1),...replacement,...original.slice(endLineNumber)],cenas:data.cenas??[],pendencias:Array.from(new Set([...(data.pendencias??[]),...r.data.pendencias,...(data.cenas?.length&&replacement.length!==endLineNumber-lineNumber+1?["A correção alterou a quantidade de falas; revisar vínculos e tempos da direção legada antes de produzir."]:[])]))};
  const ref=await referenceFor(ctx);
  return appendVersion({ideaId,expectedVersionId:versionId,content:JSON.stringify({...updated,channelReference:ref}),markdown:(code,n)=>exportScript(updated,ref,code,n,ctx.meta),request,category:categoryValue,origin:"correction",generationId:r.generationId,model:r.model,costUsd:r.costUsd});
 }
@@ -996,7 +999,7 @@ type ChecklistItem = ScriptContent["checklist"][number] & { origem?: ScriptConte
 
 /** Pendências do roteiro: caixas do checklist desmarcadas e fatos para conferir. */
 export function scriptPending(c: Pick<ScriptContent, "checklist" | "conferirFatos">) {
-  return { unchecked: c.checklist.filter((x) => !x.ok).length, facts: c.conferirFatos.length };
+  return { unchecked: (c.checklist??[]).filter((x) => !x.ok).length, facts: (c.conferirFatos??[]).length };
 }
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;

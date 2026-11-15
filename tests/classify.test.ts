@@ -63,7 +63,7 @@ function answer(b: Body) {
     return { formato, motivo: `Pelo título ${title}.`, confianca: "alta" };
   }
   if (sys.includes("completar um formato")) return { faltam: "Mais desastres em cadeia em casa.", palavrasChave: ["domino", "chain reaction"], candidatos: [{ n: 1, motivo: "parece" }] };
-  if (sys.includes("TAREFA: escrever o roteiro")) return SCRIPT;
+  if (sys.includes("TAREFA: escrever o roteiro")) return {titulo:SCRIPT.titulo,duracaoSeg:SCRIPT.duracaoSeg,falado:SCRIPT.cenas.map(c=>({personagem:c.personagem,fala:c.fala})),pendencias:[]};
   return RECIPE;
 }
 
@@ -259,7 +259,7 @@ test("regenerar ideia antiga num formato: o tema fica e o gancho antigo não val
   const sent = userText(bodies.find((b) => String(b.system).includes("TAREFA: escrever o roteiro"))!);
   assert.ok(sent.includes("Tema: Balões da festa"));
   assert.ok(sent.includes("RECONTAR NO FORMATO"));
-  assert.ok(sent.includes('motor da receita de "Desastre em cadeia"'));
+  assert.ok(sent.includes('Formato: Desastre em cadeia'));
   assert.ok(!sent.includes("Você sabia que o balão foi inventado"), "gancho antigo fica de fora");
   assert.ok(!sent.includes("Lista de curiosidades"), "formato de história antigo fica de fora");
   assert.equal(r.idea.status, "SCRIPT");

@@ -18,6 +18,7 @@ export async function VersionReview({idea}:{idea:Idea}) {
  <StateForm action={correctScriptAction.bind(null,idea.id)} label="Corrigir trecho" busy="Iniciando correção…" hint="Uma chamada de IA. As outras falas ficam iguais.">
  <input type="hidden" name="versionId" value={current.id}/>
  <label className="label">Fala a corrigir<select className="input" name="line">{lines.map(l=><option key={l.n} value={l.n}>{l.n}. {l.who}: {l.text}</option>)}</select></label>
+ <label className="label">Até a fala<select className="input" name="endLine" defaultValue=""><option value="">Somente a fala escolhida</option>{lines.map(l=><option key={l.n} value={l.n}>{l.n}. {l.who}: {l.text}</option>)}</select></label>
  <label className="label">O que você quer mudar?<textarea className="input" name="request" required maxLength={4000} rows={2}/></label>
  <label className="label">Tipo de mudança<select className="input" name="category">{CHANGE_CATEGORIES.map(c=><option key={c}>{c}</option>)}</select></label>
  </StateForm>

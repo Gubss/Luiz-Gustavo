@@ -222,7 +222,7 @@ export async function deleteLessonAction(lessonId: string) {
 
 export async function correctScriptAction(ideaId:string,_prev:FormState,fd:FormData):Promise<FormState> {
  try { const versionId=String(fd.get("versionId")??""); const line=Number(fd.get("line")); const request=String(fd.get("request")??""); const category=String(fd.get("category")??"");
- await startJob({kind:"script",targetId:ideaId,label:"Correção de fala",href:"/ideias/"+ideaId,expectedSec:60},async()=>{const v=await correctScript(ideaId,versionId,line,request,category);return "Versão "+v.number+" salva; demais falas preservadas.";}); refresh(ideaId);return {ok:BACKGROUND_OK}; } catch(e){return {error:errMsg(e)}}
+ await startJob({kind:"script",targetId:ideaId,label:"Correção de fala",href:"/ideias/"+ideaId,expectedSec:60},async()=>{const v=await correctScript(ideaId,versionId,line,request,category,Number(fd.get("endLine"))||line);return "Versão "+v.number+" salva; demais falas preservadas.";}); refresh(ideaId);return {ok:BACKGROUND_OK}; } catch(e){return {error:errMsg(e)}}
 }
 export async function critiqueAction(ideaId:string,_prev:FormState,fd:FormData):Promise<FormState> {
  try {const versionId=String(fd.get("versionId")??"");await startJob({kind:"script",targetId:ideaId,label:"Crítica opcional",href:"/ideias/"+ideaId,expectedSec:45},async()=>{const r=await requestCritique(ideaId,versionId);return "Crítica registrada, sem alterar o roteiro. Custo: "+money(r.costUsd);});refresh(ideaId);return {ok:BACKGROUND_OK};} catch(e){return {error:errMsg(e)}}

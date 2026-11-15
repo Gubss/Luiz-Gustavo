@@ -1,0 +1,14 @@
+{
+  "ok": true,
+  "ids": [
+    "cmwi4qkio0002fsc00abje7zi",
+    "cmwi4rz3t0008fsc09dm6ljr4"
+  ],
+  "automatedCalls": 4,
+  "manualCorrections": 1,
+  "changedLine": 2,
+  "restoredExact": true,
+  "approvedVersion": 4,
+  "totalCostUsd": 1.5911080000000002,
+  "runnerNote": "O assert final original contou a correção manual concorrente; corrigido para distinguir gerações automáticas. Revalidado com registros reais preservados, sem repetir chamadas."
+}
