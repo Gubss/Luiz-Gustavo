@@ -12,7 +12,7 @@ import { z } from "zod";
 import type { MyChannel, MyChannelScript } from "@prisma/client";
 import { prisma } from "./db";
 import { getSettings } from "./settings";
-import { callStructured, estimateCost, type CostEstimate } from "./claude";
+import { callStructured, estimateCost, estimateFromHistory, recentOutputTokens, type CostEstimate } from "./claude";
 import { formatLabel, statsBlock, studyBlock, type PlaybookFormat } from "./playbook";
 import {
   formatStudies,
@@ -587,7 +587,10 @@ function scriptPrompt(ctx: GeneratorContext, idea: { theme: string; chosenTitle:
     .join("\n");
 }
 
-const SCRIPT_OUT = { short: 4500, long: 11000 } as const;
+/** Limite de saída do roteiro: raciocínio adaptativo + roteiro inteiro (a chamada é em streaming). */
+export const SCRIPT_MAX_TOKENS = 32000;
+/** Saída típica sem histórico (o raciocínio conta como saída): roteiros reais de nov/2026 ficaram entre 26 e 31 mil. */
+const SCRIPT_OUT = { short: 26000, long: 28000 } as const;
 
 async function ideaContext(ideaId: string) {
   const idea = await prisma.idea.findUniqueOrThrow({ where: { id: ideaId } });
@@ -598,11 +601,85 @@ async function ideaContext(ideaId: string) {
   return { idea, ctx };
 }
 
-export async function estimateScript(ideaId: string, extra = ""): Promise<CostEstimate> {
+// ---------- Corrigir o roteiro anterior (depois de uma devolução) ----------
+
+/** "corrigir" = mexe só nos pontos da devolução/pedido e mantém o resto; "nova" = história nova do zero. */
+export type ScriptMode = "corrigir" | "nova";
+
+type IdeaForRevision = { status: string; scriptData: string | null; returnNotes: string | null };
+
+/** A devolução mais recente (o campo guarda todas, uma depois da outra, cada uma começando com "Devolução de dd/mm/aaaa:"). */
+export function latestReturn(returnNotes: string | null | undefined): string | null {
+  if (!returnNotes?.trim()) return null;
+  const parts = returnNotes.split(/\n\n(?=Devolução de \d{2}\/\d{2}\/\d{4}:)/);
+  return parts[parts.length - 1].trim() || null;
+}
+
+/** Dá para corrigir quando já existe roteiro. O padrão é corrigir quando a ideia está devolvida (o roteiro atual foi reprovado). */
+export function revisionDefaults(idea: IdeaForRevision): { canRevise: boolean; defaultMode: ScriptMode; pendingReturn: string | null } {
+  const canRevise = !!parse<ScriptContent>(idea.scriptData)?.cenas?.length;
+  const pendingReturn = idea.status === "RETURNED" ? latestReturn(idea.returnNotes) : null;
+  return { canRevise, defaultMode: canRevise && pendingReturn ? "corrigir" : "nova", pendingReturn };
+}
+
+/** Só os campos do roteiro (sem medidas, conferência e cabeçalho), para mandar de volta ao Claude. */
+function previousScriptJson(scriptData: string | null): string | null {
+  const d = parse<ScriptContent>(scriptData);
+  if (!d?.cenas?.length) return null;
+  const keys = Object.keys(ScriptSchema.shape) as (keyof ScriptContent)[];
+  return JSON.stringify(Object.fromEntries(keys.filter((k) => k in d).map((k) => [k, d[k]])), null, 1);
+}
+
+const REVISE_TASK = `MODO CORRIGIR: abaixo vem o ROTEIRO ANTERIOR desta ideia e o que precisa mudar (a devolução do Estúdio e/ou o pedido extra).
+- NÃO escreva uma história nova. Devolva o mesmo roteiro com só esses pontos corrigidos.
+- Mantenha igual tudo o que não foi citado: a história, a ordem das cenas, as falas, os personagens, o gancho, o fecho, os tempos, o texto na tela e o título.
+- Se uma correção obrigar a mexer em outra cena (ex.: algo que precisa aparecer antes para a causa vir antes do efeito), mexa o mínimo possível.
+- Refaça o checklist com honestidade para o roteiro corrigido e liste em "conferirFatos" o que ainda falta conferir.`;
+
+function revisionBlock(previous: string, pendingReturn: string | null) {
+  return [
+    "",
+    "# ROTEIRO ANTERIOR (corrija este; não comece outro)",
+    previous,
+    pendingReturn ? "\n# DEVOLUÇÃO DO ESTÚDIO PARA ESTE ROTEIRO (corrija só estes pontos)\n" + pendingReturn : "",
+  ]
+    .filter((x) => x !== "")
+    .join("\n");
+}
+
+type ScriptRequest = { system: string; user: string; mode: ScriptMode };
+
+function buildScriptRequest(
+  ctx: GeneratorContext,
+  idea: { theme: string; chosenTitle: string | null; ideaData: string | null } & IdeaForRevision,
+  title: string,
+  extra: string,
+  mode: ScriptMode | undefined,
+): ScriptRequest {
+  const base = scriptPrompt(ctx, idea, title, extra);
+  const { canRevise, defaultMode, pendingReturn } = revisionDefaults(idea);
+  const want = mode ?? defaultMode;
+  const previous = canRevise ? previousScriptJson(idea.scriptData) : null;
+  if (want !== "corrigir" || !previous) return { system: `${BASE_RULES}\n\n${SCRIPT_TASK}`, user: base, mode: "nova" };
+  if (!pendingReturn && !extra.trim())
+    throw new GeneratorError("Para corrigir o roteiro, diga no pedido extra o que mudar (ou registre a devolução do Estúdio). Para recomeçar, escolha “história nova”.");
+  return { system: `${BASE_RULES}\n\n${SCRIPT_TASK}\n\n${REVISE_TASK}`, user: base + "\n" + revisionBlock(previous, pendingReturn), mode: "corrigir" };
+}
+
+export async function estimateScript(ideaId: string, opts: { extra?: string; mode?: ScriptMode } = {}): Promise<CostEstimate & { basedOn: number }> {
   const s = await getSettings();
   const { idea, ctx } = await ideaContext(ideaId);
-  const prompt = scriptPrompt(ctx, idea, idea.chosenTitle ?? idea.theme, extra);
-  return estimateCost(s.modelDeep, BASE_RULES + SCRIPT_TASK + prompt, SCRIPT_OUT[ctx.format], ctx.format === "short" ? 12000 : 20000);
+  let req: ScriptRequest;
+  try {
+    req = buildScriptRequest(ctx, idea, idea.chosenTitle ?? idea.theme, opts.extra ?? "", opts.mode);
+  } catch {
+    // corrigir sem nada para corrigir: estima como história nova
+    req = buildScriptRequest(ctx, idea, idea.chosenTitle ?? idea.theme, opts.extra ?? "", "nova");
+  }
+  return estimateFromHistory(s.modelDeep, req.system + req.user, await recentOutputTokens("script"), {
+    fallbackTypical: SCRIPT_OUT[ctx.format],
+    maxTokens: SCRIPT_MAX_TOKENS,
+  });
 }
 
 // ---------- Conferência da voz (em código) ----------
@@ -665,21 +742,22 @@ export async function checkVoice(c: Pick<ScriptContent, "cenas">, ctx: Generator
   };
 }
 
-export async function generateScript(ideaId: string, opts: { title?: string; extra?: string } = {}) {
+export async function generateScript(ideaId: string, opts: { title?: string; extra?: string; mode?: ScriptMode } = {}) {
   const s = await getSettings();
   const { idea, ctx } = await ideaContext(ideaId);
   const title = (opts.title ?? "").trim() || idea.chosenTitle || idea.theme;
   const extra = (opts.extra ?? "").slice(0, 1500);
+  const req = buildScriptRequest(ctx, idea, title, extra, opts.mode);
 
   const r = await callStructured({
     kind: "script",
     model: s.modelDeep,
     effort: "medium",
-    system: `${BASE_RULES}\n\n${SCRIPT_TASK}`,
-    user: scriptPrompt(ctx, idea, title, extra),
+    system: req.system,
+    user: req.user,
     schema: ScriptSchema,
     videoId: ctx.reference?.id,
-    maxTokens: 32000, // raciocínio adaptativo + roteiro inteiro; a chamada é em streaming
+    maxTokens: SCRIPT_MAX_TOKENS,
   });
 
   const metrics = computeScriptMetrics(r.data);
@@ -689,7 +767,7 @@ export async function generateScript(ideaId: string, opts: { title?: string; ext
     data: {
       chosenTitle: r.data.titulo,
       script: scriptMarkdown(r.data, ctx.channel.name, ctx.meta),
-      scriptData: JSON.stringify({ ...r.data, metrics, voice, meta: ctx.meta, extra: extra || undefined }),
+      scriptData: JSON.stringify({ ...r.data, metrics, voice, meta: ctx.meta, extra: extra || undefined, mode: req.mode }),
       scriptModel: r.model,
       scriptCostUsd: (idea.scriptCostUsd ?? 0) + r.costUsd,
       nicheId: ctx.nicheId,
@@ -699,7 +777,7 @@ export async function generateScript(ideaId: string, opts: { title?: string; ext
       status: ["IDEA", "DISCARDED", "RETURNED"].includes(idea.status) ? "SCRIPT" : idea.status,
     },
   });
-  return { ...r, idea: updated, metrics, voice };
+  return { ...r, idea: updated, metrics, voice, mode: req.mode };
 }
 
 // ---------- Medidas do roteiro (em código) ----------

@@ -163,6 +163,40 @@ test("devolução: uma linha vira um ponto, sem marcadores", async () => {
   ]);
 });
 
+test("devolução: nota colada inteira não vira lixo (frontmatter, tabela, separador, citação)", async () => {
+  const { returnPoints } = await S();
+  const nota = [
+    "---",
+    "tipo: devolucao",
+    "criado: 2026-11-14 21:26",
+    'regras: "[[Estúdio novo]] §3"',
+    "---",
+    "",
+    '# Devolução ao Radar: "Quantos balões levantam um cachorro?"',
+    "",
+    "## Para colar no Radar",
+    "",
+    "> 1. **Um formato só.** Hoje mistura três jeitos de narrar.",
+    ">",
+    "> 2. **Sem furo de lógica.** A causa precisa vir antes do efeito.",
+    "",
+    "***",
+    "status: devolvido",
+    "Gancho: frase longa demais",
+    "",
+    "| # | Item | Resultado |",
+    "|---|---|---|",
+    "| 1 | Um formato só | não |",
+    "  |:--|--:|  ",
+    "",
+  ].join("\r\n");
+  assert.deepEqual(returnPoints(nota), [
+    "Um formato só. Hoje mistura três jeitos de narrar.",
+    "Sem furo de lógica. A causa precisa vir antes do efeito.",
+    "Gancho: frase longa demais",
+  ]);
+});
+
 async function seed() {
   const { prisma } = await import("../src/lib/db");
   const niche = await prisma.niche.create({ data: { name: "Animação 3D" } });

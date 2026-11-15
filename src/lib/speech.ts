@@ -213,10 +213,30 @@ export function findOverlaps(newLines: string[], sources: { label: string; text:
   return out;
 }
 
-/** Separa o texto colado da devolução em pontos (uma linha = um ponto; tira marcadores de lista). */
+/** Linha que é só separador: ---, ***, ===, ___ ou a linha de traços de uma tabela (|---|:--:|). */
+const SEPARATOR = /^[\s|:=*_-]*[-=*_]{3,}[\s|:=*_-]*$/;
+/** "chave: valor" de frontmatter (chave minúscula sem espaço; valor de uma palavra, lista [..] ou entre aspas). */
+const FRONTMATTER_KV = /^[a-z][\w-]*:\s*(?:\S*|\[.*\]|".*"|'.*')$/;
+
+/**
+ * Separa o texto colado da devolução em pontos (uma linha = um ponto).
+ * Tira marcadores de lista, citação (>) e negrito; ignora linhas vazias, títulos (#), linhas de tabela (|…|),
+ * separadores e o frontmatter da nota (o bloco entre --- no começo e linhas "chave: valor").
+ */
 export function returnPoints(raw: string): string[] {
-  return raw
-    .split(/\r?\n/)
-    .map((l) => l.replace(/^\s*(?:[-*•–]|\d+[.)]|\[[ xX]?\])\s*/, "").trim())
-    .filter((l) => l.length >= 3 && !/^#+\s/.test(l));
+  const lines = raw.split(/\r?\n/);
+  const first = lines.findIndex((l) => l.trim() !== "");
+  if (first >= 0 && lines[first].trim() === "---") {
+    const end = lines.findIndex((l, i) => i > first && l.trim() === "---");
+    if (end > first) lines.splice(0, end + 1);
+  }
+  return lines
+    .map((l) =>
+      l
+        .replace(/^\s*(?:>\s*)+/, "")
+        .replace(/^\s*(?:[-*•–]|\d+[.)]|\[[ xX]?\])\s*/, "")
+        .replace(/\*\*(.+?)\*\*/g, "$1")
+        .trim(),
+    )
+    .filter((l) => l.length >= 3 && !/^#+\s/.test(l) && !/^\|.*\|$/.test(l) && !SEPARATOR.test(l) && !FRONTMATTER_KV.test(l));
 }

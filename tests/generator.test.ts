@@ -246,6 +246,9 @@ test("gerador: formato obrigatório; receita + regra geral + perfil viram ideias
 
   const sEst = await estimateScript(saved[0].id);
   assert.ok(sEst.usd > 0);
+  assert.equal(sEst.basedOn, 0, "sem roteiro real ainda: usa a saída típica");
+  assert.equal(sEst.outputTokens, 26000, "raciocínio adaptativo conta como saída");
+  assert.ok(Math.abs(sEst.usdMax - (sEst.inputTokens * 4 + 32000 * 20) / 1e6) < 1e-9, "teto = limite de 32 mil tokens");
   const s = await generateScript(saved[0].id, { extra: "mais curto" });
   assert.equal(bodies.length, 2);
   assert.match(bodies[1].system, /TAREFA: escrever o roteiro/);
@@ -271,6 +274,53 @@ test("gerador: formato obrigatório; receita + regra geral + perfil viram ideias
 
   const gens = await prisma.generation.findMany({ orderBy: { createdAt: "asc" } });
   assert.deepEqual(gens.map((g) => g.kind), ["ideas", "script"]);
+
+  // Estimativa pela média dos roteiros reais (a resposta cortada no limite não entra na média).
+  await prisma.generation.create({
+    data: { kind: "script", model: "claude-opus-5-5", input: "{}", output: JSON.stringify({ stop_reason: "max_tokens", text: "{" }), inputTokens: 20000, outputTokens: 32000, costUsd: 0.72 },
+  });
+  const sEst2 = await estimateScript(saved[0].id);
+  assert.equal(sEst2.basedOn, 1);
+  assert.equal(sEst2.outputTokens, 3000, "média dos roteiros que terminaram inteiros");
+
+  // Devolução "corrija só estes pontos": manda o roteiro anterior e a última devolução, pede para manter o resto.
+  await prisma.idea.update({
+    where: { id: saved[0].id },
+    data: {
+      status: "RETURNED",
+      returnNotes:
+        "Devolução de 13/11/2026:\nRefaça do zero, não reenvie o mesmo texto.\n\nDevolução de 14/11/2026:\nEstá quase pronto, corrija só estes pontos e mantenha o resto.\nO pai fala rápido demais na cena do pombo",
+    },
+  });
+  const { revisionDefaults, latestReturn } = await G();
+  const fresh = await prisma.idea.findUniqueOrThrow({ where: { id: saved[0].id } });
+  assert.equal(revisionDefaults(fresh).defaultMode, "corrigir");
+  assert.match(latestReturn(fresh.returnNotes)!, /^Devolução de 14\/11\/2026:\nEstá quase pronto/);
+  const fixed = await generateScript(saved[0].id);
+  assert.equal(fixed.mode, "corrigir");
+  const fx = bodies[bodies.length - 1];
+  assert.match(fx.system, /MODO CORRIGIR/);
+  assert.match(fx.system, /Mantenha igual tudo o que não foi citado/);
+  const fxUser = fx.messages[0].content.map((c) => c.text ?? "").join("");
+  assert.match(fxUser, /# ROTEIRO ANTERIOR[\s\S]*Pai, o T-Rex rugia igual leão!/);
+  assert.match(fxUser, /# DEVOLUÇÃO DO ESTÚDIO PARA ESTE ROTEIRO[\s\S]*O pai fala rápido demais na cena do pombo/);
+  assert.doesNotMatch(fxUser, /Refaça do zero/, "só a devolução mais recente");
+  assert.doesNotMatch(fxUser, /"metrics"/, "o roteiro anterior vai sem as medidas");
+  assert.equal(fixed.idea.status, "SCRIPT");
+  assert.equal(JSON.parse(fixed.idea.scriptData!).mode, "corrigir");
+
+  // Já reescrito (não está mais devolvido): o padrão volta a ser história nova; corrigir pede o que mudar.
+  assert.equal(revisionDefaults(fixed.idea).defaultMode, "nova");
+  await assert.rejects(() => generateScript(saved[0].id, { mode: "corrigir" }), /diga no pedido extra o que mudar/);
+  const tweak = await generateScript(saved[0].id, { mode: "corrigir", extra: "troca o fecho" });
+  assert.equal(tweak.mode, "corrigir");
+  assert.doesNotMatch(bodies[bodies.length - 1].messages[0].content.map((c) => c.text ?? "").join(""), /DEVOLUÇÃO DO ESTÚDIO PARA ESTE ROTEIRO/);
+
+  // "História nova": sem roteiro anterior no pedido.
+  const again = await generateScript(saved[0].id, { mode: "nova" });
+  assert.equal(again.mode, "nova");
+  assert.doesNotMatch(bodies[bodies.length - 1].system, /MODO CORRIGIR/);
+  assert.doesNotMatch(bodies[bodies.length - 1].messages[0].content.map((c) => c.text ?? "").join(""), /ROTEIRO ANTERIOR/);
 
   // Ideia antiga sem formato: o roteiro pede o formato antes.
   const old = await prisma.idea.create({ data: { myChannelId: ch.id, format: "short", theme: "antiga", titles: "[]" } });

@@ -6,7 +6,7 @@ import { prisma } from "@/lib/db";
 import { fmtDateTime } from "@/lib/format";
 import { modelLabel, usdToBrl, type CostEstimate } from "@/lib/claude";
 import { findSimilarTitles } from "@/lib/catalog";
-import { estimateScript, scriptPending, type FormatMeta, type IdeaData, type ScriptContent, type ScriptMetrics, type VoiceCheck } from "@/lib/generator";
+import { estimateScript, revisionDefaults, scriptPending, type FormatMeta, type IdeaData, type ScriptContent, type ScriptMetrics, type VoiceCheck } from "@/lib/generator";
 import type { PlaybookStats } from "@/lib/playbook";
 import { formatsOfNiche, isDraft } from "@/lib/formats";
 import type { PlaybookFormat } from "@/lib/playbook";
@@ -343,14 +343,36 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
   const pbLabel = recipe ? `Receita v${recipe.version}` : "Cartilha";
   const pending = sd ? scriptPending(sd) : null;
   const allTitles = [...new Set([...(idea.chosenTitle ? [idea.chosenTitle] : []), ...titles])];
+  const rev = revisionDefaults(idea);
   const scriptForm = est ? (
             <StateForm
               action={generateScriptAction.bind(null, idea.id)}
               label={sd ? "Escrever de novo" : "Escrever roteiro"}
               busy="Começando…"
-              hint={`${estimateHint(est)} · roda em segundo plano (até 3 min)`}
+              hint={`${estimateHint(est)}${est.basedOn ? ` · pela média ${est.basedOn === 1 ? "do último roteiro" : `dos últimos ${est.basedOn} roteiros`}` : ""}${rev.defaultMode === "corrigir" ? " · corrigindo" : ""} · roda em segundo plano (até 3 min)`}
               className={sd ? "btn-secondary" : "btn-primary"}
             >
+              {rev.canRevise && (
+                <div>
+                  <label className="label">O que fazer com o roteiro atual</label>
+                  <div className="space-y-1 text-sm">
+                    <label className="flex items-start gap-2">
+                      <input type="radio" name="mode" value="corrigir" defaultChecked={rev.defaultMode === "corrigir"} className="mt-1" />
+                      <span>
+                        Corrigir só os pontos {rev.pendingReturn ? "da devolução" : "do pedido extra"} e manter o resto
+                        <span className="block text-xs text-zinc-500">mesma história, mesmas cenas e falas onde nada foi apontado</span>
+                      </span>
+                    </label>
+                    <label className="flex items-start gap-2">
+                      <input type="radio" name="mode" value="nova" defaultChecked={rev.defaultMode === "nova"} className="mt-1" />
+                      <span>
+                        História nova
+                        <span className="block text-xs text-zinc-500">recomeça do zero (as devoluções continuam valendo como aprendizado)</span>
+                      </span>
+                    </label>
+                  </div>
+                </div>
+              )}
               <div>
                 <label className="label">Título</label>
                 <div className="space-y-1 text-sm">
