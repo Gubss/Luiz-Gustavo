@@ -102,7 +102,7 @@ test("balões v3 continua reprovado mesmo com os limites do vulcão aprovado", (
 
 test("vulcão aprovado passa com os próprios limites: nomes de peça sem aula, bordão do formato, fecho com virada", () => {
   const lim = limitsFromApproved([VULCAO]);
-  assert.deepEqual(lim, { namingLimit: 4, catchphraseLimit: 4 });
+  assert.deepEqual(lim, { namingLimit: 4, catchphraseLimit: 4, measureLimit: 1 });
   const r = checkScriptText(lines(VULCAO), lim);
   assert.equal(r.explained, 0, "dar nome à peça que o menino acabou de construir não é explicar conceito");
   assert.equal(r.explainingEnd, null);
@@ -124,4 +124,15 @@ test("1 termo explicado dentro da piada passa", () => {
   const r = checkScriptText(lines("O balão sobe igual rolha no balde. Esse é o empuxo.\nMas o Thor nem se mexe.\nA avó grita: meu bolo!"));
   assert.equal(r.explained, 1);
   assert.deepEqual(r.problems, []);
+});
+
+test("conta e número (regra do Gubs: tema de desenho sem conta): balões reprovado, vulcão passa", () => {
+  const r = checkScriptText(BALOES, limitsFromApproved([VULCAO]));
+  assert.deepEqual(
+    r.measures.map((m) => m.sentence),
+    ["Mas um balão desses levanta uns dez gramas.", "Pra levantar o Thor, com trinta quilos, você ia precisar de uns três mil balões."],
+  );
+  assert.ok(r.problems.some((p) => p.startsWith("Conta e número: 2 frases")));
+  assert.equal(checkScriptText(lines(VULCAO), limitsFromApproved([VULCAO])).measures.length, 0, "'três dias' e 'sete da manhã' não são conta");
+  assert.equal(checkScriptText(lines("Você põe dois litros de vinagre.")).problems.length, 0, "1 medida numa construção passa");
 });

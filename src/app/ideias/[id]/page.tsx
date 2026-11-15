@@ -251,12 +251,27 @@ function ScriptView({ c, formatName }: { c: ScriptContent; formatName?: string |
   const hasOrigin = items.some((x) => x.origem);
   const groups = hasOrigin
     ? [
-        { title: `Checklist do formato${formatName ? ` (${formatName})` : ""}`, items: items.filter((x) => x.origem !== "regra geral") },
+        { title: "Checklist de lógica e graça", items: items.filter((x) => x.origem === "lógica e graça") },
+        { title: `Checklist do formato${formatName ? ` (${formatName})` : ""}`, items: items.filter((x) => x.origem !== "regra geral" && x.origem !== "lógica e graça") },
         { title: "Checklist da regra geral do nicho", items: items.filter((x) => x.origem === "regra geral") },
       ].filter((g) => g.items.length)
     : [{ title: "Checklist da cartilha", items }];
   return (
     <div className="space-y-4 text-sm">
+      {c.formatoCombina && !c.formatoCombina.combina && (
+        <div className="rounded-lg border border-amber-700/60 bg-amber-950/30 p-3 text-amber-100">
+          <div className="font-medium">O formato pode não combinar com o tema</div>
+          <p className="mt-1 text-amber-200/90">{c.formatoCombina.motivo}</p>
+          {c.formatoCombina.sugestao && <p className="mt-1 text-amber-200/90">Sugestão: {c.formatoCombina.sugestao}</p>}
+          <p className="mt-1 text-xs text-amber-300/70">O app não troca sozinho. Para trocar, use “Escrever em outro formato” mais abaixo.</p>
+        </div>
+      )}
+      {c.historinha?.trim() && (
+        <p className="text-zinc-300">
+          <span className="text-zinc-500">A historinha: </span>
+          {c.historinha}
+        </p>
+      )}
       <ClampText lines={3} className="text-[15px] leading-relaxed text-zinc-200">
         {c.resumo}
       </ClampText>
@@ -386,7 +401,7 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
     findSimilarTitles(`${idea.theme} ${idea.chosenTitle ?? ""}`, { nicheId: idea.nicheId ?? undefined, limit: 5 }),
     idea.myChannelId && idea.formatId ? estimateScript(idea.id) : null,
     runningJobsFor([idea.id]),
-    !idea.formatId && nicheForFormats ? formatChoicesFor(nicheForFormats, idea.format === "long" ? "long" : "short") : Promise.resolve([]),
+    (!idea.formatId || sd?.formatoCombina?.combina === false) && nicheForFormats ? formatChoicesFor(nicheForFormats, idea.format === "long" ? "long" : "short") : Promise.resolve([]),
   ]);
   const scriptJob = jobs.find((j) => j.kind === "script");
   const repeats = (await repeatsForIdeas([idea])).get(idea.id) ?? [];
@@ -397,6 +412,52 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
   const allTitles = [...new Set([...(idea.chosenTitle ? [idea.chosenTitle] : []), ...titles])];
   const rev = revisionDefaults(idea);
   const currentStep = idea.publishedVideo || idea.status === "PUBLISHED" ? 7 : idea.status === "PRODUCED" ? 6 : idea.status === "RETURNED" ? 4 : sd ? 5 : 4;
+  // Trocar o formato: ideia de antes dos formatos, ou o roteiro avisou que o formato não combina com o tema.
+  const otherFormats = formatChoices.filter((f) => f.id !== idea.formatId);
+  const formatForm = (
+          <StateForm
+            action={regenerateWithFormatAction.bind(null, idea.id)}
+            label="Escrever neste formato"
+            busy="Começando…"
+            hint="Opus + leitura de espectador · mesmo custo de escrever um roteiro · roda em segundo plano (até 3 min)"
+          >
+            <fieldset>
+              <legend className="label">Qual formato usar?</legend>
+              <div className="space-y-2">
+                {otherFormats.map((f) => (
+                  <label key={f.id} className="flex items-start gap-2 rounded-lg border border-line p-2 text-sm hover:border-zinc-500">
+                    <input type="radio" name="formatId" value={f.id} required className="mt-1" />
+                    <span>
+                      <span className="font-medium text-zinc-100">{f.name}</span>
+                      {!f.ready && <span className="badge ml-2 bg-amber-600/30 text-amber-200">{f.recipes.length ? "rascunho" : "sem receita"}</span>}
+                      <span className="block text-xs text-zinc-400">{f.line || "Sem descrição."}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+              {!otherFormats.some((f) => f.ready) && (
+                <p className="mt-1 text-xs text-amber-300">Nenhum formato pronto ainda (3+ vídeos e receita); estes ainda são rascunho.</p>
+              )}
+            </fieldset>
+            <div>
+              <label className="label">Título</label>
+              <div className="space-y-1 text-sm">
+                {allTitles.map((t, i) => (
+                  <label key={t} className="flex items-center gap-2">
+                    <input type="radio" name="title" value={t} defaultChecked={i === 0} />
+                    <span>{t}</span>
+                  </label>
+                ))}
+                <input name="customTitle" className="input mt-1" placeholder="…ou escreva outro título (opcional)" />
+              </div>
+            </div>
+            <div>
+              <label className="label">Pedido extra (opcional)</label>
+              <textarea name="extra" rows={2} className="input" placeholder="Ex.: mais curto, até 35s · coloca a avó no final" />
+            </div>
+            {otherFormats.some((f) => !f.recipes.length) && <NoRecipeConfirm onlyIf />}
+          </StateForm>
+  );
   const scriptForm = est ? (
             <StateForm
               action={generateScriptAction.bind(null, idea.id)}
@@ -600,9 +661,17 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
         ) : est ? (
           <div className={sd ? "border-t border-line pt-4" : ""}>
             {sd ? (
-              <Collapsible title={rev.defaultMode === "corrigir" ? "Corrigir roteiro" : "Escrever de novo"} open={rev.defaultMode === "corrigir"}>
-                {scriptForm}
-              </Collapsible>
+              <>
+                <Collapsible title={rev.defaultMode === "corrigir" ? "Corrigir roteiro" : "Escrever de novo"} open={rev.defaultMode === "corrigir"}>
+                  {scriptForm}
+                </Collapsible>
+                {sd.formatoCombina?.combina === false && otherFormats.length > 0 && (
+                  <Collapsible title="Escrever em outro formato" open>
+                    <p className="mb-3 text-sm text-amber-300">O roteiro avisou que o formato pode não combinar com o tema. O tema fica; só o jeito de contar muda.</p>
+                    {formatForm}
+                  </Collapsible>
+                )}
+              </>
             ) : (
               scriptForm
             )}
@@ -615,49 +684,8 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
               Esta ideia é de antes dos formatos. Para {sd ? "regenerar" : "escrever"} o roteiro, escolha primeiro o formato: o tema da ideia fica, só o jeito de
               contar muda (segue o motor da receita do formato).
             </p>
-            {formatChoices.length ? (
-              <StateForm
-                action={regenerateWithFormatAction.bind(null, idea.id)}
-                label={sd ? "Regenerar neste formato" : "Escrever neste formato"}
-                busy="Começando…"
-                hint="Opus + leitura de espectador · mesmo custo de escrever um roteiro · roda em segundo plano (até 3 min)"
-              >
-                <fieldset>
-                  <legend className="label">Qual formato usar?</legend>
-                  <div className="space-y-2">
-                    {formatChoices.map((f) => (
-                      <label key={f.id} className="flex items-start gap-2 rounded-lg border border-line p-2 text-sm hover:border-zinc-500">
-                        <input type="radio" name="formatId" value={f.id} required className="mt-1" />
-                        <span>
-                          <span className="font-medium text-zinc-100">{f.name}</span>
-                          {!f.ready && <span className="badge ml-2 bg-amber-600/30 text-amber-200">{f.recipes.length ? "rascunho" : "sem receita"}</span>}
-                          <span className="block text-xs text-zinc-400">{f.line || "Sem descrição."}</span>
-                        </span>
-                      </label>
-                    ))}
-                  </div>
-                  {!formatChoices.some((f) => f.ready) && (
-                    <p className="mt-1 text-xs text-amber-300">Nenhum formato pronto ainda (3+ vídeos e receita); estes ainda são rascunho.</p>
-                  )}
-                </fieldset>
-                <div>
-                  <label className="label">Título</label>
-                  <div className="space-y-1 text-sm">
-                    {allTitles.map((t, i) => (
-                      <label key={t} className="flex items-center gap-2">
-                        <input type="radio" name="title" value={t} defaultChecked={i === 0} />
-                        <span>{t}</span>
-                      </label>
-                    ))}
-                    <input name="customTitle" className="input mt-1" placeholder="…ou escreva outro título (opcional)" />
-                  </div>
-                </div>
-                <div>
-                  <label className="label">Pedido extra (opcional)</label>
-                  <textarea name="extra" rows={2} className="input" placeholder="Ex.: mais curto, até 35s · coloca a avó no final" />
-                </div>
-                {formatChoices.some((f) => !f.recipes.length) && <NoRecipeConfirm onlyIf />}
-              </StateForm>
+            {otherFormats.length ? (
+              formatForm
             ) : (
               <p className="text-sm text-zinc-400">
                 Nenhum formato criado neste nicho ainda.{" "}

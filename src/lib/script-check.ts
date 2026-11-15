@@ -8,6 +8,8 @@
  * - Bordão: frase curta (1 a 4 palavras) repetida. Limite 2, ou o que os roteiros aprovados do formato repetem
  *   ("Chinelada." 4 vezes no vulcão aprovado).
  * - Fecho que explica a piada: "Parabéns: você construiu…", "Moral da história…" perto do fim sem virada ("Mas…") depois.
+ * - Conta e número: frases com medida ("dez gramas", "trinta quilos") ou milhar ("três mil balões"). Regra do Gubs (15/11):
+ *   é um desenho contando uma historinha; tema absurdo = sem conta e sem número. Limite 1, ou o dos roteiros aprovados.
  */
 
 export type Fala = { text: string; who?: string };
@@ -21,6 +23,9 @@ export type ScriptTextCheck = {
   catchphraseLimit: number;
   /** Frase do fim que explica a piada (null se não há). */
   explainingEnd: { scene: number; sentence: string } | null;
+  /** Frases com conta ou medida. */
+  measures: { scene: number; sentence: string }[];
+  measureLimit: number;
   problems: string[];
   ok: boolean;
 };
@@ -50,6 +55,14 @@ const NAMING = [
 const EXPLAIN = /\b(igual|tipo|que nem|como um|como uma|ou seja|quer dizer|significa|mais leve que|mais pesad[oa] que|serve pra|serve para|que abraca|que segura)\b/;
 const EXPLAIN_END = /^(parabens|moral|ou seja|resumindo|no fim das contas|a licao|viu so|e foi assim que|conclusao)\b/;
 
+const NUM = "(\\d+|um|uma|dois|duas|tres|quatro|cinco|seis|sete|oito|nove|dez|onze|doze|quinze|vinte|trinta|quarenta|cinquenta|sessenta|setenta|oitenta|noventa|cem|cento|duzent[oa]s|trezent[oa]s|quinhent[oa]s|meio|meia)";
+const UNIT = "(gramas?|g|quilos?|quilogramas?|kg|toneladas?|metros?|m|km|centimetros?|cm|litros?|ml|graus|newtons?|por cento)";
+// Texto já normalizado (sem acento nem pontuação): "dez gramas", "trinta quilos", "tres mil baloes".
+const MEASURE = new RegExp(`\\b${NUM}( e ${NUM})? (${UNIT}|mil)\\b`);
+
+export const isMeasure = (sentence: string) => MEASURE.test(norm(sentence)) || /\d\s*%/.test(sentence);
+export const measureCount = (text: string) => sentences(text).filter(isMeasure).length;
+
 export const isNaming = (sentence: string) => NAMING.some((re) => re.test(norm(sentence)));
 
 /** Quantas frases dão nome a algo, no máximo por roteiro (para medir os roteiros aprovados). */
@@ -76,12 +89,17 @@ export function shortRepeats(texts: string[]) {
 export function limitsFromApproved(approved: string[]) {
   const namingLimit = Math.max(1, ...approved.map(namingCount));
   const catchphraseLimit = Math.max(2, ...approved.map((a) => shortRepeats([a])[0]?.times ?? 0));
-  return { namingLimit, catchphraseLimit };
+  const measureLimit = Math.max(1, ...approved.map(measureCount));
+  return { namingLimit, catchphraseLimit, measureLimit };
 }
 
-export function checkScriptText(falas: Fala[], limits: { namingLimit?: number; catchphraseLimit?: number } = {}): ScriptTextCheck {
+export function checkScriptText(
+  falas: Fala[],
+  limits: { namingLimit?: number; catchphraseLimit?: number; measureLimit?: number } = {},
+): ScriptTextCheck {
   const namingLimit = limits.namingLimit ?? 1;
   const catchphraseLimit = limits.catchphraseLimit ?? 2;
+  const measureLimit = limits.measureLimit ?? 1;
   const lines = falas.map((f) => f.text).filter((t) => t.trim());
 
   const namings: ScriptTextCheck["namings"] = [];
@@ -94,6 +112,7 @@ export function checkScriptText(falas: Fala[], limits: { namingLimit?: number; c
     }
   });
   const explained = namings.filter((n) => n.explained).length;
+  const measures = lines.flatMap((line, i) => sentences(line).filter(isMeasure).map((sentence) => ({ scene: i + 1, sentence })));
 
   const catchphrases = shortRepeats(lines).filter((x) => x.times > catchphraseLimit);
 
@@ -122,8 +141,14 @@ export function checkScriptText(falas: Fala[], limits: { namingLimit?: number; c
         .map((n) => `"${n.sentence}"`)
         .join(", ")}.`,
     );
+  if (measures.length > measureLimit)
+    problems.push(
+      `Conta e número: ${measures.length} frases com medida ou conta (máximo ${measureLimit}): ${measures
+        .map((m) => `"${m.sentence}"`)
+        .join(", ")}. É um desenho contando uma historinha: responda com uma cena, não com número.`,
+    );
   for (const c of catchphrases) problems.push(`Bordão repetido: "${c.phrase}" ${c.times} vezes (máximo ${catchphraseLimit}).`);
   if (explainingEnd) problems.push(`O fecho explica a piada: "${explainingEnd.sentence}" (fala ${explainingEnd.scene}). Termine numa virada ou numa imagem, sem explicar.`);
 
-  return { namings, explained, namingLimit, catchphrases, catchphraseLimit, explainingEnd, problems, ok: problems.length === 0 };
+  return { namings, explained, namingLimit, catchphrases, catchphraseLimit, explainingEnd, measures, measureLimit, problems, ok: problems.length === 0 };
 }

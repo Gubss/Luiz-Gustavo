@@ -34,6 +34,11 @@ const CRITIC_OK = {
   frasesAula: [],
   bordoes: [],
   fechoExplicaPiada: false,
+  historinha: "Theo quer rugir igual T-Rex e descobre que o T-Rex arrulhava.",
+  temaDeDesenho: false,
+  contas: [],
+  viradaPlantada: true,
+  fechoCerto: true,
   veredito: "Assistiria até o fim.",
 };
 let criticReply: unknown = CRITIC_OK;
@@ -70,6 +75,8 @@ const IDEAS = {
 };
 
 const SCRIPT = {
+  historinha: "Theo quer provar que o T-Rex rugia, e o pai estraga a imitação.",
+  formatoCombina: { combina: true, motivo: "Mito e verdade cabe no tema.", sugestao: "" },
   titulo: "O T-Rex NÃO rugia?!",
   titulosAlternativos: ["O som real do T-Rex"],
   duracaoSeg: 30,
@@ -280,6 +287,11 @@ test("gerador: formato obrigatório; receita + regra geral + perfil viram ideias
   assert.match(bodies[1].system, /CADA PASSO TEM MOTIVO E CONSEQUÊNCIA/);
   assert.match(bodies[1].system, /SEM AULA DISFARÇADA/);
   assert.match(bodies[1].system, /Pelo menos 3 viradas cômicas/);
+  // Regra fixa do Gubs (15/11): vale com formato ou sem, no topo do pedido.
+  assert.match(bodies[1].system, /A REGRA DE TODO ROTEIRO \(vale com formato ou sem[\s\S]*É UM DESENHO CONTANDO UMA HISTORINHA[\s\S]*sem conta, sem número exato[\s\S]*O título é a desculpa, não a aula/);
+  assert.ok(bodies[1].system.indexOf("A REGRA DE TODO ROTEIRO") < bodies[1].system.indexOf("COMO SEGUIR O FORMATO"));
+  assert.match(textOf(bodies[2]), /Formato: Mito vs\. verdade/);
+  assert.match(String(bodies[2].system), /historinha em 1 frase[\s\S]*conta, medida ou número exato[\s\S]*virada final foi plantada/);
   assert.ok(isCriticBody(bodies[2]));
   assert.equal(bodies[2].model, "claude-sonnet-5-5", "leitura de espectador no modelo barato");
   assert.match(textOf(bodies[2]), /Cena 3 \(desenvolvimento, 8-22s\) \[Pai imita, Theo ri\] Pai: Ele fazia um som grave/);
@@ -307,7 +319,9 @@ test("gerador: formato obrigatório; receita + regra geral + perfil viram ideias
   assert.deepEqual(data.review.points, []);
   assert.ok(data.checklist.some((c: { origem: string; ok: boolean }) => c.origem === "lógica e graça" && c.ok), "caixas de lógica e graça marcadas pelo app");
   assert.match(md, /## Checklist de lógica e graça/);
-  const genCost = (await prisma.generation.findMany()).filter((g) => g.kind !== "ideas").reduce((a, g) => a + g.costUsd, 0);
+  assert.match(md, /\*\*A historinha:\*\* Theo quer provar/);
+  assert.doesNotMatch(md, /formato pode não combinar/);
+  const genCost = (await prisma.generation.findMany()).filter((g) => g.kind !== "ideas").reduce((a, g) => a + (g.costUsd ?? 0), 0);
   assert.ok(Math.abs(s.idea.scriptCostUsd! - genCost) < 1e-9, "custo gravado inclui a leitura de espectador");
 
   const gens = await prisma.generation.findMany({ orderBy: { createdAt: "asc" } });
@@ -376,7 +390,7 @@ test("gerador: formato obrigatório; receita + regra geral + perfil viram ideias
   assert.equal(redo.review.rewritten, true);
   const redoGens = await prisma.generation.findMany({ orderBy: { createdAt: "desc" }, take: 3 });
   assert.deepEqual(redoGens.map((g) => g.kind).reverse(), ["script", "script-critic", "script-fix"]);
-  assert.ok(Math.abs(redo.idea.scriptCostUsd! - costBefore - redoGens.reduce((a, g) => a + g.costUsd, 0)) < 1e-9, "as três chamadas entram no custo");
+  assert.ok(Math.abs(redo.idea.scriptCostUsd! - costBefore - redoGens.reduce((a, g) => a + (g.costUsd ?? 0), 0)) < 1e-9, "as três chamadas entram no custo");
 
   // A leitura falhou (resposta fora do formato): o roteiro é salvo assim mesmo, com o aviso.
   criticReply = { nada: true };
@@ -417,4 +431,27 @@ test("já fez esse tema? tampa de caneta × vídeo antigo; uma palavra em comum 
   assert.match(m[0].title, /tampa da caneta/);
   assert.deepEqual(findOwnRepeats("Por que o céu é azul?", items), []);
   assert.deepEqual(findOwnRepeats("Vulcão de verdade", items), [], "só 'vulcão' em comum não é o mesmo tema");
+});
+
+test("segunda passada confere o checklist do Gubs inteiro (historinha, conta em tema de desenho, virada plantada, fecho)", async () => {
+  const { reviewPoints } = await import("../src/lib/generator");
+  const { checkScriptText } = await import("../src/lib/script-check");
+  const code = checkScriptText([{ text: "O Thor sobe com o cacho." }]);
+  const base = {
+    risadas: [1, 2, 3].map((cena) => ({ cena, esperado: "a", aconteceu: "b", reacao: "a avó grita" })),
+    passosSemMotivo: [],
+    frasesAula: [],
+    bordoes: [],
+    fechoExplicaPiada: false,
+    historinha: "O menino decora a festa e o Thor quer os balões.",
+    temaDeDesenho: true,
+    contas: [],
+    viradaPlantada: true,
+    fechoCerto: true,
+    veredito: "ok",
+  };
+  assert.deepEqual(reviewPoints(code, base).points, []);
+  const bad = reviewPoints(code, { ...base, historinha: "", contas: [{ cena: 4, frase: "uns dez gramas" }], viradaPlantada: false, fechoCerto: false }).points;
+  assert.equal(bad.length, 4);
+  assert.match(bad.join("\n"), /historinha em 1 frase[\s\S]*Tema de desenho com conta[\s\S]*não foi plantada[\s\S]*duas opções/);
 });

@@ -34,6 +34,8 @@ const RECIPE = {
 };
 
 const SCRIPT = {
+  historinha: "O menino estoura os balões da festa antes de a avó chegar.",
+  formatoCombina: { combina: true, motivo: "ok", sugestao: "" },
   titulo: "Os balões da festa",
   titulosAlternativos: [],
   duracaoSeg: 30,
