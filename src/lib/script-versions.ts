@@ -1,3 +1,4 @@
+import { ideaExport } from "./script-export";
 import { Prisma } from "@prisma/client";
 import { prisma } from "./db";
 export const CHANGE_CATEGORIES = ["história", "preferência do Gubs", "limite técnico", "animação", "voz"] as const;
@@ -12,7 +13,8 @@ export async function projectCode(tx: Prisma.TransactionClient, ideaId: string) 
  const existing = [idea.notes, idea.script, idea.theme].join(" ").match(/\bPQEA-\d{3,}\b/)?.[0];
  const prefix = idea.myChannel?.name.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().includes("por que e assim") ? "PQEA" : "RDR";
  const rows = await tx.idea.findMany({where:{myChannelId:idea.myChannelId},select:{projectCode:true}});
- const max = Math.max(0,...rows.map(r=>Number(r.projectCode?.match(/-(\d+)$/)?.[1]??0)));
+ const floor=Number((await tx.setting.findUnique({where:{key:"projectCodeFloor:"+idea.myChannelId}}))?.value??0);
+ const max = Math.max(floor,...rows.map(r=>Number(r.projectCode?.match(/-(\d+)$/)?.[1]??0)));
  const code = existing ?? prefix+"-"+String(max+1).padStart(3,"0");
  await tx.idea.update({where:{id:ideaId},data:{projectCode:code}});
  return code;
@@ -51,4 +53,20 @@ export async function restoreVersion(ideaId:string,versionId:string,expectedVers
  const version=await prisma.scriptVersion.findFirst({where:{id:versionId,ideaId}});
  if(!version) throw new Error("Versão não pertence a este projeto.");
  return appendVersion({ideaId,expectedVersionId,content:version.content,markdown:(code,n)=>version.markdown.replace(/\*\*Projeto:\*\*[^\n]*/,"**Projeto:** "+code+" · versão "+n),request:"Restaurar versão "+version.number,category:"história",origin:"restore"});
+}
+
+/** Preserve an existing script without generating or approving anything. */
+export async function captureLegacyVersion(ideaId:string){
+ const snapshot=await prisma.idea.findUniqueOrThrow({where:{id:ideaId}});
+ if(snapshot.currentVersionId||!snapshot.script)return snapshot.currentVersionId;
+ const markdown=await ideaExport(ideaId);
+ return prisma.$transaction(async tx=>{
+  const current=await tx.idea.findUniqueOrThrow({where:{id:ideaId}});
+  if(current.currentVersionId)return current.currentVersionId;
+  if(current.script!==snapshot.script||current.scriptData!==snapshot.scriptData)throw new Error("Roteiro mudou durante a importação.");
+  const code=await projectCode(tx,ideaId);
+  const v=await tx.scriptVersion.create({data:{ideaId,number:1,content:snapshot.scriptData??JSON.stringify({legacyText:snapshot.script,cenas:[]}),markdown:(markdown??snapshot.script??"").replace(/\*\*Projeto:\*\*[^\n]*/,"**Projeto:** "+code+" · versão 1"),category:"história",origin:"legacy",author:"importação"}});
+  await tx.idea.update({where:{id:ideaId},data:{currentVersionId:v.id,script:v.markdown}});
+  return v.id;
+ });
 }
