@@ -7,7 +7,7 @@ import { prisma } from "@/lib/db";
 import { fmtDateTime } from "@/lib/format";
 import { modelLabel, usdToBrl, type CostEstimate } from "@/lib/claude";
 import { findSimilarTitles } from "@/lib/catalog";
-import { estimateScript, revisionDefaults, scriptPending, type FormatMeta, type IdeaData, type ScriptContent, type ScriptMetrics, type VoiceCheck } from "@/lib/generator";
+import { estimateScript, revisionDefaults, scriptPending, type FormatMeta, type IdeaData, type ScriptContent, type ScriptMetrics, type ScriptReview, type VoiceCheck } from "@/lib/generator";
 import type { PlaybookStats } from "@/lib/playbook";
 import { formatsOfNiche, isDraft } from "@/lib/formats";
 import type { PlaybookFormat } from "@/lib/playbook";
@@ -134,6 +134,57 @@ function MetricsVsPlaybook({ m, st, label }: { m: ScriptMetrics; st: PlaybookSta
         {m.words} palavras em {m.scenes} cenas. Falas: {m.speakers.map((s) => `${s.name} ${s.lines} (${s.words} palavras)`).join(" · ") || "—"}. ⚠ = longe da
         referência; vale conferir (os tempos são uma previsão do roteiro, não da animação final).
       </p>
+    </div>
+  );
+}
+
+/** Segunda passada: leitura de espectador (modelo barato) + conferência de lógica e graça em código. */
+function ReviewPanel({ r }: { r: ScriptReview }) {
+  const left = r.final.problems;
+  const good = !r.error && !left.length;
+  return (
+    <div className={`rounded-lg border p-3 text-sm ${good ? "border-line" : "border-amber-700 bg-amber-950/30"}`}>
+      <div className={good ? "text-emerald-300" : "font-medium text-amber-200"}>
+        {r.error
+          ? "⚠ A leitura de espectador falhou: confira o roteiro com atenção."
+          : r.rewritten
+            ? `Reescrito uma vez depois da leitura (${r.points.length} ${r.points.length === 1 ? "ponto" : "pontos"})${left.length ? ` · ainda ${left.length} para olhar` : " · agora passa"}`
+            : `✓ Passou de primeira: ${r.laughs} risadas com reação da família`}
+      </div>
+      {r.critique && <p className="mt-1 text-xs text-zinc-400">{r.critique.veredito}</p>}
+      {r.critique && r.critique.risadas.length > 0 && (
+        <div className="mt-2">
+          <div className="text-xs text-zinc-400">Onde o espectador riu (1ª versão):</div>
+          <ul className="mt-0.5 space-y-0.5 text-xs text-zinc-300">
+            {r.critique.risadas.map((x, i) => (
+              <li key={i}>
+                Cena {x.cena}: esperava {x.esperado}, mas {x.aconteceu}
+                {x.reacao.trim() ? <span className="text-zinc-500"> · {x.reacao}</span> : <span className="text-amber-300"> · ninguém reage</span>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {r.points.length > 0 && (
+        <div className="mt-2">
+          <div className="text-xs text-amber-200">{r.rewritten ? "O que mandou reescrever:" : "Pontos:"}</div>
+          <ul className="mt-0.5 list-disc space-y-0.5 pl-4 text-xs text-zinc-300">
+            {r.points.map((p, i) => (
+              <li key={i}>{p}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {r.rewritten && left.length > 0 && (
+        <div className="mt-2">
+          <div className="text-xs text-amber-200">Ainda no roteiro final (conferência em código):</div>
+          <ul className="mt-0.5 list-disc space-y-0.5 pl-4 text-xs text-zinc-300">
+            {left.map((p, i) => (
+              <li key={i}>{p}</li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }
@@ -322,7 +373,7 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
   if (!idea) notFound();
   const d = parse<IdeaData>(idea.ideaData);
   const titles = parse<string[]>(idea.titles) ?? [];
-  const sd = parse<ScriptContent & { metrics?: ScriptMetrics; playbookId?: string | null; voice?: VoiceCheck; meta?: FormatMeta }>(idea.scriptData);
+  const sd = parse<ScriptContent & { metrics?: ScriptMetrics; playbookId?: string | null; voice?: VoiceCheck; review?: ScriptReview; meta?: FormatMeta }>(idea.scriptData);
   const refIds = parse<string[]>(idea.referenceIds) ?? [];
   const pbId = sd?.playbookId ?? idea.playbookId;
   const recipeId = sd?.meta?.recipeId ?? idea.recipeId;
@@ -351,7 +402,7 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
               action={generateScriptAction.bind(null, idea.id)}
               label={rev.defaultMode === "corrigir" ? "Corrigir roteiro" : sd ? "Escrever história nova" : "Escrever roteiro"}
               busy="Começando…"
-              hint={`${estimateHint(est)}${est.basedOn ? ` · pela média ${est.basedOn === 1 ? "do último roteiro" : `dos últimos ${est.basedOn} roteiros`}` : ""}${rev.defaultMode === "corrigir" ? " · corrigindo" : ""} · roda em segundo plano (até 3 min)`}
+              hint={`${estimateHint(est)} (com a leitura de espectador; o máximo inclui uma reescrita)${est.basedOn ? ` · pela média ${est.basedOn === 1 ? "do último roteiro" : `dos últimos ${est.basedOn} roteiros`}` : ""}${rev.defaultMode === "corrigir" ? " · corrigindo" : ""} · roda em segundo plano (até 3 min)`}
               className="btn-primary"
             >
               {rev.canRevise && (
@@ -391,6 +442,7 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
                 <label className="label">Pedido extra (opcional)</label>
                 <textarea name="extra" rows={2} className="input" placeholder="Ex.: mais curto, até 35s · coloca a irmã no final · fala do pai mais engraçada" />
               </div>
+              {est.noRecipe && <NoRecipeConfirm />}
             </StateForm>
   ) : null;
 
@@ -524,6 +576,7 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
               </a>
               
             </div>
+            {sd.review && <Collapsible title="Leitura de espectador (lógica e graça)"><ReviewPanel r={sd.review} /></Collapsible>}
             {sd.voice && <Collapsible title="Conferência das falas"><VoicePanel v={sd.voice} /></Collapsible>}
             <ScriptView c={sd} formatName={sd.meta?.formatName ?? idea.videoFormat?.name} />
             {sd.metrics && (
@@ -567,7 +620,7 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
                 action={regenerateWithFormatAction.bind(null, idea.id)}
                 label={sd ? "Regenerar neste formato" : "Escrever neste formato"}
                 busy="Começando…"
-                hint="Opus · mesmo custo de escrever um roteiro · roda em segundo plano (até 3 min)"
+                hint="Opus + leitura de espectador · mesmo custo de escrever um roteiro · roda em segundo plano (até 3 min)"
               >
                 <fieldset>
                   <legend className="label">Qual formato usar?</legend>
@@ -603,6 +656,7 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
                   <label className="label">Pedido extra (opcional)</label>
                   <textarea name="extra" rows={2} className="input" placeholder="Ex.: mais curto, até 35s · coloca a avó no final" />
                 </div>
+                {formatChoices.some((f) => !f.recipes.length) && <NoRecipeConfirm onlyIf />}
               </StateForm>
             ) : (
               <p className="text-sm text-zinc-400">
@@ -731,6 +785,22 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
       <div className="flex justify-end">
         <ConfirmDelete action={deleteIdea.bind(null, idea.id)} label="Apagar ideia" message="Apagar esta ideia e o roteiro dela?" />
       </div>
+    </div>
+  );
+}
+
+/** Formato sem receita: aviso e confirmação obrigatória antes de escrever o roteiro. */
+function NoRecipeConfirm({ onlyIf = false }: { onlyIf?: boolean }) {
+  return (
+    <div className="rounded-lg border border-amber-600/40 bg-amber-950/30 p-3 text-sm text-amber-100">
+      <p>
+        {onlyIf ? "Se escolher um formato marcado “sem receita”: " : "Este formato ainda não tem receita. "}o roteiro sai só da descrição e dos estudos dos vídeos, e costuma
+        sair pior. O melhor é criar a receita antes, em Formatos.
+      </p>
+      <label className="mt-2 flex items-start gap-2">
+        <input type="checkbox" name="noRecipeOk" className="mt-1" required={!onlyIf} />
+        <span>Entendi, escrever mesmo sem receita</span>
+      </label>
     </div>
   );
 }

@@ -229,6 +229,8 @@ export const GENERATION_KIND_LABEL: Record<string, string> = {
   playbook: "Cartilha do nicho",
   ideas: "Ideias do gerador",
   script: "Roteiros",
+  "script-critic": "Roteiros: leitura de espectador",
+  "script-fix": "Roteiros: reescrita depois da leitura",
   "profile-from-channel": "Perfil a partir do meu canal",
   "my-video-diagnosis": "Diagnóstico de vídeo meu",
   "my-channel-report": "Diagnóstico do meu canal",

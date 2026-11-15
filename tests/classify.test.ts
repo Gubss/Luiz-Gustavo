@@ -253,7 +253,7 @@ test("regenerar ideia antiga num formato: o tema fica e o gancho antigo não val
     data: { myChannelId: ch.id, nicheId: niche.id, format: "short", formatId: fmt.id, theme: "Balões da festa", titles: "[]", status: "RETURNED", ideaData: JSON.stringify(oldData) },
   });
   bodies.length = 0;
-  const r = await generateScript(idea.id);
+  const r = await generateScript(idea.id, { noRecipeOk: true }); // formato ainda sem receita: só com a confirmação
   const sent = userText(bodies.find((b) => String(b.system).includes("TAREFA: escrever o roteiro"))!);
   assert.ok(sent.includes("Tema: Balões da festa"));
   assert.ok(sent.includes("RECONTAR NO FORMATO"));
