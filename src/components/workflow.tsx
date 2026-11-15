@@ -15,9 +15,13 @@ export function RememberDetails({ children, open, storageKey, ...props }: React.
       const saved = localStorage.getItem(key);
       el.open = saved === null ? Boolean(open) : saved === "true";
     } catch { /* Browser storage may be unavailable; disclosure still works. */ }
+    // Link com âncora (#cota, #receita…) abre o bloco de destino.
+    const openFromHash = () => { if (el.id && window.location.hash === "#" + el.id) { el.open = true; el.scrollIntoView(); } };
+    openFromHash();
     const save = () => { try { localStorage.setItem(key, String(el.open)); } catch {} };
     el.addEventListener("toggle", save);
-    return () => el.removeEventListener("toggle", save);
+    window.addEventListener("hashchange", openFromHash);
+    return () => { el.removeEventListener("toggle", save); window.removeEventListener("hashchange", openFromHash); };
   }, [pathname, storageKey, open]);
   return <details {...props} open={open} ref={ref}>{children}</details>;
 }

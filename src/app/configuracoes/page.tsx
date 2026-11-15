@@ -2,6 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { fmtDateTime, fmtInt } from "@/lib/format";
 import { DEFAULT_SETTINGS, getSettings, secretStatus, type SecretKey } from "@/lib/settings";
+import { WorkSection } from "@/components/workflow";
 import { claudeSpendSummary, GENERATION_KIND_LABEL, modelLabel, PRICING, usdToBrl } from "@/lib/claude";
 import { quotaBreakdown, quotaHistory, quotaResetAt, quotaUsedToday } from "@/lib/quota";
 import { lastCollection } from "@/lib/collect";
@@ -29,16 +30,29 @@ const brl = (n: number) => `R$ ${(n * usdToBrl()).toFixed(2).replace(".", ",")}`
 const timeBr = (d: Date) => d.toLocaleTimeString("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" });
 const dayLabel = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
 const numBr = (n: number) => String(n).replace(".", ",");
+const daysSince = (d: Date) => (Date.now() - d.getTime()) / 86_400_000;
 
-function Section({ id, title, desc, children }: { id: string; title: string; desc?: React.ReactNode; children: React.ReactNode }) {
+/** Bloco que abre e fecha; lembra o estado e abre sozinho quando o link tem a âncora (#cota…). */
+function Section({ id, title, desc, open, children }: { id: string; title: string; desc?: React.ReactNode; open?: boolean; children: React.ReactNode }) {
   return (
-    <section id={id} className="card scroll-mt-6 space-y-4 p-5">
-      <div>
-        <h2 className="text-lg font-semibold">{title}</h2>
-        {desc && <p className="mt-0.5 text-sm text-zinc-400">{desc}</p>}
-      </div>
+    <WorkSection id={id} title={title} open={open}>
+      {desc && <p className="-mt-2 text-sm text-zinc-400">{desc}</p>}
       {children}
-    </section>
+    </WorkSection>
+  );
+}
+
+/** Cartão de resumo do topo: título, número e se está tudo bem. */
+function StatusCard({ href, label, value, note, ok }: { href: string; label: string; value: string; note: string; ok: boolean }) {
+  return (
+    <a href={href} className="block rounded-lg border border-line p-3 hover:border-zinc-600">
+      <div className="flex items-center justify-between gap-2 text-xs text-zinc-500">
+        {label}
+        <span className={`rounded-full px-2 py-0.5 text-[11px] ${ok ? "bg-emerald-950 text-emerald-300" : "bg-amber-950 text-amber-300"}`}>{ok ? "ok" : "ver"}</span>
+      </div>
+      <div className="mt-1 text-lg font-semibold tabular-nums">{value}</div>
+      <div className="text-xs text-zinc-500">{note}</div>
+    </a>
   );
 }
 
@@ -139,7 +153,7 @@ async function KeyBox({ k, title, where, free }: { k: SecretKey; title: string; 
 
 export default async function SettingsPage() {
   const s = await getSettings();
-  const [used, breakdown, history, monitored, myLinked, spend, last, googleAccounts] = await Promise.all([
+  const [used, breakdown, history, monitored, myLinked, spend, last, googleAccounts, ytKey, aiKey] = await Promise.all([
     quotaUsedToday(),
     quotaBreakdown(),
     quotaHistory(14),
@@ -148,6 +162,8 @@ export default async function SettingsPage() {
     claudeSpendSummary(),
     lastCollection(),
     prisma.googleAuth.findMany({ select: { channelTitle: true, status: true, lastError: true } }),
+    secretStatus("youtubeApiKey"),
+    secretStatus("anthropicApiKey"),
   ]);
   const backups = listBackups();
   const resetAt = quotaResetAt();
@@ -156,35 +172,34 @@ export default async function SettingsPage() {
   const freeForSearch = Math.max(0, s.dailyQuota - expected);
   const budgetPct = s.monthlyBudgetUsd > 0 ? (spend.usd / s.monthlyBudgetUsd) * 100 : 0;
   const pricingOptions = Object.entries(PRICING);
+  const keysOk = ytKey.source !== "none" && aiKey.source !== "none";
+  const lastBackup = backups.reduce<Date | null>((a, b) => (!a || b.createdAt > a ? b.createdAt : a), null);
+  const backupOld = !lastBackup || daysSince(lastBackup) > 7;
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       <header>
         <h1 className="text-2xl font-semibold tracking-tight">Configurações</h1>
-        <p className="text-sm text-zinc-400">
-          Chaves, cota do YouTube, gastos com o Claude, regras do radar e o que o app faz sozinho. Tudo que você salvar aqui vale na hora, sem
-          reiniciar.
-        </p>
-        <nav className="mt-3 flex flex-wrap gap-2 text-sm">
-          {[
-            ["#chaves", "Chaves"],
-            ["#cota", "Cota do YouTube"],
-            ["#gastos", "Gastos com o Claude"],
-            ["#radar", "Regras do radar"],
-            ["#automatico", "Automático"],
-            ["#backup", "Cópia de segurança"],
-          ].map(([href, label]) => (
-            <a key={href} href={href} className="rounded-full border border-zinc-700 px-3 py-1 text-zinc-400 hover:border-zinc-500 hover:text-white">
-              {label}
-            </a>
-          ))}
-        </nav>
+        <p className="text-sm text-zinc-400">Quase nunca precisa mexer aqui. O resumo abaixo mostra se está tudo certo; clique num cartão para ver os detalhes.</p>
+        <div className="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-4">
+          <StatusCard href="#chaves" label="Chaves" value={keysOk ? "As 2 funcionando" : "Falta chave"} note="YouTube e Claude" ok={keysOk} />
+          <StatusCard href="#cota" label="Cota do YouTube hoje" value={`${Math.round((used / s.dailyQuota) * 100)}%`} note={`sobram ${fmtInt(left)}`} ok={used < s.dailyQuota * 0.8} />
+          <StatusCard
+            href="#gastos"
+            label="Gasto com o Claude no mês"
+            value={usd(spend.usd)}
+            note={s.monthlyBudgetUsd > 0 ? `limite ${usd(s.monthlyBudgetUsd)}` : "sem limite"}
+            ok={s.monthlyBudgetUsd <= 0 || budgetPct < 80}
+          />
+          <StatusCard href="#backup" label="Cópia de segurança" value={lastBackup ? fmtDateTime(lastBackup).split(",")[0] : "Nenhuma"} note={backupOld ? "faça uma cópia" : "em dia"} ok={!backupOld} />
+        </div>
       </header>
 
       {/* ---------- Chaves ---------- */}
       <Section
         id="chaves"
         title="Chaves"
+        open={!keysOk}
         desc="O app testa a chave antes de salvar. A chave fica só no banco do seu computador (prisma/radar.db); a tela mostra só o começo e o fim dela. Uma chave salva aqui vale mais que a do arquivo .env."
       >
         <div className="grid gap-4 lg:grid-cols-2">
