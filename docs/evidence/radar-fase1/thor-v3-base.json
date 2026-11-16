@@ -1,0 +1,331 @@
+{
+  "source": "C:/Users/gubsB/Documents/GUBS OS/tmp/thor-radar-v3/projeto/transcr-mp4.txt",
+  "falado": [
+    {
+      "personagem": "Narrador",
+      "fala": "Neste mundo, os cachorros entendem tudo ao contrário."
+    },
+    {
+      "personagem": "Narrador",
+      "fala": "Manda o Thor sentar, ele levanta, manda largar a bola, ele agarra mais forte."
+    },
+    {
+      "personagem": "Narrador",
+      "fala": "Pra chamar cachorro, só dizendo, vai embora."
+    },
+    {
+      "personagem": "Avó",
+      "fala": "Vai embora, meu lindo."
+    },
+    {
+      "personagem": "Narrador",
+      "fala": "E tem uma regra séria. Cada vem cá empurra o cachorro pra mais longe."
+    },
+    {
+      "personagem": "Narrador",
+      "fala": "Se ele passar da esquina lá debaixo da rua, não volta nunca mais."
+    },
+    {
+      "personagem": "Narrador",
+      "fala": "E a mãe começa tudo com um vem cá."
+    },
+    {
+      "personagem": "Mãe",
+      "fala": "Vem cá, menino, dá a ração do Thor."
+    },
+    {
+      "personagem": "Narrador",
+      "fala": "O menino serviu, o Thor pulou no pote antes da hora e choveu a ração no tapete."
+    },
+    {
+      "personagem": "Mãe",
+      "fala": "Limpa esse chão agora, olha o que esse cachorro fez. Ele vai pro sítio."
+    },
+    {
+      "personagem": "Mãe",
+      "fala": "Volta aqui agora, garoto, vem limpar o chão."
+    },
+    {
+      "personagem": "Narrador",
+      "fala": "Ela falou com o menino, mas o Thor ouviu também."
+    },
+    {
+      "personagem": "Narrador",
+      "fala": "Tum, tum, tum. Porta fora e ladeira abaixo."
+    },
+    {
+      "personagem": "Narrador",
+      "fala": "O menino foi atrás calado, com medo de errar a palavra."
+    },
+    {
+      "personagem": "Narrador",
+      "fala": "Ele balançou um biscoito. O Thor parou, cheirou e começou a subir."
+    },
+    {
+      "personagem": "Mãe",
+      "fala": "Volta aqui agora, garoto. Esse chão não vai se limpar sozinho."
+    },
+    {
+      "personagem": "Narrador",
+      "fala": "O Thor deu meia volta com o biscoito e desceu até depois do carro."
+    },
+    {
+      "personagem": "Mãe",
+      "fala": "Eu tava falando com o menino."
+    },
+    {
+      "personagem": "Narrador",
+      "fala": "A esquina tava perto. O menino jogou a bola, ladeira acima, pro Thor subir atrás."
+    },
+    {
+      "personagem": "Narrador",
+      "fala": "Só que é ladeira. A bola voltou rolando, passou pelo Thor e ele foi junto."
+    },
+    {
+      "personagem": "Narrador",
+      "fala": "O Thor parou na beiradinha da esquina, deitado na bola."
+    },
+    {
+      "personagem": "Narrador",
+      "fala": "Eu fiquei tão assustado que tive que sentar no meio fio. Fiquei até zonzo."
+    },
+    {
+      "personagem": "Mãe",
+      "fala": "Thor, vem..."
+    },
+    {
+      "personagem": "Avó",
+      "fala": "Xiii. Deixa comigo. Vai embora, Thor. Vai embora, meu lindo."
+    },
+    {
+      "personagem": "Narrador",
+      "fala": "Tum, tum, tum. Rua acima."
+    },
+    {
+      "personagem": "Narrador",
+      "fala": "O Thor largou a bola no colo do menino."
+    },
+    {
+      "personagem": "Mãe",
+      "fala": "Era isso que eu ia falar."
+    },
+    {
+      "personagem": "Avó",
+      "fala": "Agora espalhe essa ração bem espalhadinha, Thor."
+    },
+    {
+      "personagem": "Narrador",
+      "fala": "O Thor juntou cada grão do tapete, com a língua."
+    },
+    {
+      "personagem": "Mãe",
+      "fala": "Limpou sozinho? Tá bom. Ninguém vai pro sítio."
+    },
+    {
+      "personagem": "Mãe",
+      "fala": "Isso merece um abraço. Vem cá. Vai embora, menino."
+    },
+    {
+      "personagem": "Narrador",
+      "fala": "E o menino foi."
+    },
+    {
+      "personagem": "Narrador",
+      "fala": "Neste mundo, os cachorros entendem tudo ao contrário."
+    },
+    {
+      "personagem": "Narrador",
+      "fala": "Os meninos não."
+    },
+    {
+      "personagem": "Narrador",
+      "fala": "Na sua casa, quem fala mais vem cá. A mãe ou a avó?"
+    },
+    {
+      "personagem": "Narrador",
+      "fala": "Se inscreve que essa mãe ainda tá aprendendo."
+    }
+  ],
+  "mapping": [
+    {
+      "key": "n01",
+      "personagem": "Narrador",
+      "fala": "Neste mundo, os cachorros entendem tudo ao contrário."
+    },
+    {
+      "key": "n02",
+      "personagem": "Narrador",
+      "fala": "Manda o Thor sentar, ele levanta, manda largar a bola, ele agarra mais forte."
+    },
+    {
+      "key": "n03",
+      "personagem": "Narrador",
+      "fala": "Pra chamar cachorro, só dizendo, vai embora."
+    },
+    {
+      "key": "a01",
+      "personagem": "Avó",
+      "fala": "Vai embora, meu lindo."
+    },
+    {
+      "key": "n04",
+      "personagem": "Narrador",
+      "fala": "E tem uma regra séria. Cada vem cá empurra o cachorro pra mais longe."
+    },
+    {
+      "key": "n05",
+      "personagem": "Narrador",
+      "fala": "Se ele passar da esquina lá debaixo da rua, não volta nunca mais."
+    },
+    {
+      "key": "n06",
+      "personagem": "Narrador",
+      "fala": "E a mãe começa tudo com um vem cá."
+    },
+    {
+      "key": "m01",
+      "personagem": "Mãe",
+      "fala": "Vem cá, menino, dá a ração do Thor."
+    },
+    {
+      "key": "n07",
+      "personagem": "Narrador",
+      "fala": "O menino serviu, o Thor pulou no pote antes da hora e choveu a ração no tapete."
+    },
+    {
+      "key": "m02",
+      "personagem": "Mãe",
+      "fala": "Limpa esse chão agora, olha o que esse cachorro fez. Ele vai pro sítio."
+    },
+    {
+      "key": "m03",
+      "personagem": "Mãe",
+      "fala": "Volta aqui agora, garoto, vem limpar o chão."
+    },
+    {
+      "key": "n08",
+      "personagem": "Narrador",
+      "fala": "Ela falou com o menino, mas o Thor ouviu também."
+    },
+    {
+      "key": "n09",
+      "personagem": "Narrador",
+      "fala": "Tum, tum, tum. Porta fora e ladeira abaixo."
+    },
+    {
+      "key": "n10",
+      "personagem": "Narrador",
+      "fala": "O menino foi atrás calado, com medo de errar a palavra."
+    },
+    {
+      "key": "n11",
+      "personagem": "Narrador",
+      "fala": "Ele balançou um biscoito. O Thor parou, cheirou e começou a subir."
+    },
+    {
+      "key": "m04",
+      "personagem": "Mãe",
+      "fala": "Volta aqui agora, garoto. Esse chão não vai se limpar sozinho."
+    },
+    {
+      "key": "n12",
+      "personagem": "Narrador",
+      "fala": "O Thor deu meia volta com o biscoito e desceu até depois do carro."
+    },
+    {
+      "key": "m05",
+      "personagem": "Mãe",
+      "fala": "Eu tava falando com o menino."
+    },
+    {
+      "key": "n13",
+      "personagem": "Narrador",
+      "fala": "A esquina tava perto. O menino jogou a bola, ladeira acima, pro Thor subir atrás."
+    },
+    {
+      "key": "n14",
+      "personagem": "Narrador",
+      "fala": "Só que é ladeira. A bola voltou rolando, passou pelo Thor e ele foi junto."
+    },
+    {
+      "key": "n15",
+      "personagem": "Narrador",
+      "fala": "O Thor parou na beiradinha da esquina, deitado na bola."
+    },
+    {
+      "key": "n15b",
+      "personagem": "Narrador",
+      "fala": "Eu fiquei tão assustado que tive que sentar no meio fio. Fiquei até zonzo."
+    },
+    {
+      "key": "m06",
+      "personagem": "Mãe",
+      "fala": "Thor, vem..."
+    },
+    {
+      "key": "a02",
+      "personagem": "Avó",
+      "fala": "Xiii. Deixa comigo. Vai embora, Thor. Vai embora, meu lindo."
+    },
+    {
+      "key": "n16",
+      "personagem": "Narrador",
+      "fala": "Tum, tum, tum. Rua acima."
+    },
+    {
+      "key": "n17",
+      "personagem": "Narrador",
+      "fala": "O Thor largou a bola no colo do menino."
+    },
+    {
+      "key": "m07",
+      "personagem": "Mãe",
+      "fala": "Era isso que eu ia falar."
+    },
+    {
+      "key": "a03",
+      "personagem": "Avó",
+      "fala": "Agora espalhe essa ração bem espalhadinha, Thor."
+    },
+    {
+      "key": "n18",
+      "personagem": "Narrador",
+      "fala": "O Thor juntou cada grão do tapete, com a língua."
+    },
+    {
+      "key": "m08",
+      "personagem": "Mãe",
+      "fala": "Limpou sozinho? Tá bom. Ninguém vai pro sítio."
+    },
+    {
+      "key": "m09",
+      "personagem": "Mãe",
+      "fala": "Isso merece um abraço. Vem cá. Vai embora, menino."
+    },
+    {
+      "key": "n19",
+      "personagem": "Narrador",
+      "fala": "E o menino foi."
+    },
+    {
+      "key": "n20",
+      "personagem": "Narrador",
+      "fala": "Neste mundo, os cachorros entendem tudo ao contrário."
+    },
+    {
+      "key": "n21",
+      "personagem": "Narrador",
+      "fala": "Os meninos não."
+    },
+    {
+      "key": "n22",
+      "personagem": "Narrador",
+      "fala": "Na sua casa, quem fala mais vem cá. A mãe ou a avó?"
+    },
+    {
+      "key": "n23",
+      "personagem": "Narrador",
+      "fala": "Se inscreve que essa mãe ainda tá aprendendo."
+    }
+  ]
+}

@@ -13,7 +13,10 @@
     "postinstall": "prisma generate",
     "collect": "tsx --env-file=.env scripts/collect.ts",
     "test": "tsx --test tests/*.test.ts",
-    "track": "tsx --env-file=.env scripts/track.ts"
+    "track": "tsx --env-file=.env scripts/track.ts",
+    "phase1:setup": "tsx scripts/radar-phase1-setup.ts",
+    "typecheck": "next typegen && tsc --noEmit",
+    "phase1:regression": "tsx scripts/radar-phase1-regression.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.8.0",

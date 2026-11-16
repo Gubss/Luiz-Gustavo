@@ -152,3 +152,9 @@ export function checkScriptText(
 
   return { namings, explained, namingLimit, catchphrases, catchphraseLimit, explainingEnd, measures, measureLimit, problems, ok: problems.length === 0 };
 }
+
+/** Integrity warnings only; never requests a rewrite or counts jokes/numbers. */
+export function narrationWarnings(lines: {personagem:string;fala:string}[]) {
+ const narrator=lines.filter(l=>/narrador|narradora/i.test(l.personagem)).map(l=>l.fala).join(" ");
+ return /\beu\b/i.test(narrator)&&/\bo menino\b/i.test(narrator)?["Narração alterna primeira pessoa e menino em terceira pessoa; Gubs precisa decidir a voz narrativa."]:[];
+}

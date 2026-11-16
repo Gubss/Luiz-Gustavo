@@ -569,11 +569,11 @@ export async function runChannelReport(myChannelId: string, trigger: "auto" | "m
  * Aprendizados dos meus vídeos para o gerador: lições do último diagnóstico do canal + lições dos
  * diagnósticos de vídeo feitos depois dele. Vazio se ainda não houver nenhum.
  */
-export async function learningsBlock(myChannelId: string): Promise<{ block: string; count: number }> {
-  const report = await prisma.myChannelReport.findFirst({ where: { myChannelId }, orderBy: { createdAt: "desc" } });
+export async function learningsBlock(myChannelId: string, formatId?: string): Promise<{ block: string; count: number }> {
+  const report = formatId ? null : await prisma.myChannelReport.findFirst({ where: { myChannelId }, orderBy: { createdAt: "desc" } });
   const rc = parse<ChannelReportContent>(report?.content);
   const diags = await prisma.myVideoDiagnosis.findMany({
-    where: { myVideo: { myChannelId }, ...(report ? { createdAt: { gt: report.createdAt } } : {}) },
+    where: { myVideo: { myChannelId, ...(formatId ? { inspiredIdea: { formatId } } : {}) }, ...(report ? { createdAt: { gt: report.createdAt } } : {}) },
     orderBy: { createdAt: "desc" },
     take: 12,
     include: { myVideo: { select: { id: true, title: true } } },
@@ -601,7 +601,7 @@ export async function learningsBlock(myChannelId: string): Promise<{ block: stri
   return {
     block: [
       `# APRENDIZADOS DOS MEUS VÍDEOS (o que os números do MEU canal mostraram)`,
-      `Quando isto contrariar a cartilha, siga isto: é o que aconteceu no meu canal, com o meu público.`,
+      `Hipóteses dos vídeos vinculados a este formato; não substituem premissa ou regras fixas.`,
       ...out,
     ].join("\n"),
     count,

@@ -1,3 +1,4 @@
+import { ideaExport } from "@/lib/script-export";
 import Link from "next/link";
 import { Collapsible } from "@/components/ui";
 import { CopyScript, FlowSteps, OpenSection, ReturnInput, WorkSection } from "@/components/workflow";
@@ -7,7 +8,7 @@ import { prisma } from "@/lib/db";
 import { fmtDateTime } from "@/lib/format";
 import { modelLabel, usdToBrl, type CostEstimate } from "@/lib/claude";
 import { findSimilarTitles } from "@/lib/catalog";
-import { estimateScript, revisionDefaults, scriptPending, type FormatMeta, type IdeaData, type ScriptContent, type ScriptMetrics, type ScriptReview, type VoiceCheck } from "@/lib/generator";
+import { estimateScript, scriptPending, type FormatMeta, type IdeaData, type ScriptContent, type ScriptMetrics, type ScriptReview, type VoiceCheck } from "@/lib/generator";
 import type { PlaybookStats } from "@/lib/playbook";
 import { formatsOfNiche, isDraft } from "@/lib/formats";
 import type { PlaybookFormat } from "@/lib/playbook";
@@ -48,7 +49,9 @@ import {
   unlinkPublishedAction,
 } from "@/app/gerador/actions";
 import { publishedCandidates } from "@/lib/my-catalog";
-import { IdeaStatusSelect } from "./forms";
+import { spokenLines } from "@/lib/script-lines";
+import { VersionReview } from "./version-review";
+import { IdeaStatusSelect, ScriptTabs } from "./forms";
 import { runningJobsFor } from "@/lib/jobs";
 import { RunningNote } from "@/components/RunningNote";
 
@@ -65,19 +68,8 @@ const usd = (n: number | null | undefined) => (n == null ? "—" : `US$ ${n.toFi
 const brl = (n: number) => `R$ ${(n * usdToBrl()).toFixed(2).replace(".", ",")}`;
 const estimateHint = (e: CostEstimate) => `${modelLabel(e.model)} · custo estimado ${usd(e.usd)} a ${usd(e.usdMax)} (≈ ${brl(e.usd)} a ${brl(e.usdMax)})`;
 const num = (n: number | null | undefined) => (n == null ? "—" : String(n).replace(".", ","));
-const mmss = (s: number) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`;
 
-function H3({ children }: { children: React.ReactNode }) {
-  return <h3 className="mb-2 text-sm font-semibold text-zinc-400">{children}</h3>;
-}
 
-const PART_STYLE: Record<string, string> = {
-  gancho: "text-red-300",
-  virada: "text-amber-300",
-  desenvolvimento: "text-sky-300",
-  clímax: "text-fuchsia-300",
-  fecho: "text-emerald-300",
-};
 
 /** Roteiro × medidas da receita do formato (tudo calculado em código). */
 function MetricsVsPlaybook({ m, st, label }: { m: ScriptMetrics; st: PlaybookStats | null; label: string }) {
@@ -243,140 +235,9 @@ function VoicePanel({ v }: { v: VoiceCheck }) {
   );
 }
 
-type CheckItem = ScriptContent["checklist"][number] & { origem?: string };
 
-function ScriptView({ c, formatName }: { c: ScriptContent; formatName?: string | null }) {
-  const scenes = [...c.cenas].sort((a, b) => a.inicio - b.inicio);
-  const items = c.checklist as CheckItem[];
-  const hasOrigin = items.some((x) => x.origem);
-  const groups = hasOrigin
-    ? [
-        { title: "Checklist de lógica e graça", items: items.filter((x) => x.origem === "lógica e graça") },
-        { title: `Checklist do formato${formatName ? ` (${formatName})` : ""}`, items: items.filter((x) => x.origem !== "regra geral" && x.origem !== "lógica e graça") },
-        { title: "Checklist da regra geral do nicho", items: items.filter((x) => x.origem === "regra geral") },
-      ].filter((g) => g.items.length)
-    : [{ title: "Checklist da cartilha", items }];
-  return (
-    <div className="space-y-4 text-sm">
-      {c.formatoCombina && !c.formatoCombina.combina && (
-        <div className="rounded-lg border border-amber-700/60 bg-amber-950/30 p-3 text-amber-100">
-          <div className="font-medium">O formato pode não combinar com o tema</div>
-          <p className="mt-1 text-amber-200/90">{c.formatoCombina.motivo}</p>
-          {c.formatoCombina.sugestao && <p className="mt-1 text-amber-200/90">Sugestão: {c.formatoCombina.sugestao}</p>}
-          <p className="mt-1 text-xs text-amber-300/70">O app não troca sozinho. Para trocar, use “Escrever em outro formato” mais abaixo.</p>
-        </div>
-      )}
-      {c.historinha?.trim() && (
-        <p className="text-zinc-300">
-          <span className="text-zinc-500">A historinha: </span>
-          {c.historinha}
-        </p>
-      )}
-      <ClampText lines={3} className="text-[15px] leading-relaxed text-zinc-200">
-        {c.resumo}
-      </ClampText>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left text-xs text-zinc-500">
-              <th className="w-20 py-1 font-normal">Tempo</th>
-              <th className="py-1 font-normal">Fala</th>
-              <th className="py-1 font-normal">Na animação</th>
-            </tr>
-          </thead>
-          <tbody>
-            {scenes.map((s, i) => (
-              <tr key={i} className="border-t border-line align-top">
-                <td className="py-2 pr-2 text-xs tabular-nums text-zinc-500">
-                  {mmss(s.inicio)}–{mmss(s.fim)}
-                  <div className={PART_STYLE[s.parte] ?? ""}>{s.parte}</div>
-                </td>
-                <td className="py-2 pr-4">
-                  {s.fala.trim() ? (
-                    <>
-                      <span className="font-semibold text-zinc-100">{s.personagem || "—"}:</span> <span className="text-zinc-200">{s.fala}</span>
-                    </>
-                  ) : (
-                    <span className="text-zinc-600">(sem fala)</span>
-                  )}
-                  {s.textoNaTela.trim() && <div className="mt-1 text-xs text-amber-300">na tela: {s.textoNaTela}</div>}
-                </td>
-                <td className="py-2 text-zinc-400">
-                  {s.acao}
-                  {s.novidade && <div className="mt-1 text-xs text-zinc-500">novo aqui: {s.novidade}</div>}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      <Collapsible
-        title={hasOrigin ? "Checklist do formato e da regra geral, fatos para conferir" : "Checklist, fatos para conferir e como a cartilha virou cena"}
-        meta={`${c.checklist.filter((x) => x.ok).length} de ${c.checklist.length} itens ok${c.conferirFatos.length ? ` · ${c.conferirFatos.length} fatos para conferir` : ""}`}
-        className="rounded-lg border border-line p-4"
-        
-      >
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="space-y-4">
-          {groups.map((g) => (
-            <div key={g.title}>
-              <H3>{g.title}</H3>
-              <ul className="space-y-1">
-                {g.items.map((x, i) => (
-                  <li key={i} className={x.ok ? "text-zinc-200" : "text-amber-300"}>
-                    {x.ok ? "✓" : "✗"} {x.item}
-                    {x.comentario && <span className="text-xs text-zinc-500"> — {x.comentario}</span>}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </div>
-        <div className="space-y-4">
-          <div>
-            <H3>{hasOrigin ? "Como a receita virou cena" : "Como a cartilha virou cena"}</H3>
-            <p className="text-zinc-300">{c.adaptacao}</p>
-          </div>
-          {c.conferirFatos.length > 0 && (
-            <div>
-              <H3>Conferir antes de publicar</H3>
-              <ul className="list-disc space-y-1 pl-5 text-amber-200/90">
-                {c.conferirFatos.map((x, i) => (
-                  <li key={i}>{x}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-      </div>
-
-      </Collapsible>
-
-      <Collapsible title="Capa, descrição e dicas de produção" className="rounded-lg border border-line p-4">
-      <div className="grid gap-4 md:grid-cols-3">
-        <div>
-          <H3>Capa</H3>
-          <p className="text-zinc-300">{c.capa}</p>
-        </div>
-        <div>
-          <H3>Descrição</H3>
-          <p className="whitespace-pre-line text-zinc-300">{c.descricao}</p>
-          <p className="mt-1 text-xs text-sky-300">{c.hashtags.map((h) => (h.startsWith("#") ? h : `#${h}`)).join(" ")}</p>
-        </div>
-        <div>
-          <H3>Dicas de produção</H3>
-          <ul className="list-disc space-y-1 pl-5 text-zinc-300">
-            {c.dicasDeProducao.map((x, i) => (
-              <li key={i}>{x}</li>
-            ))}
-          </ul>
-        </div>
-      </div>
-      {c.titulosAlternativos.length > 0 && <p className="mt-3 text-xs text-zinc-500">Títulos alternativos: {c.titulosAlternativos.join(" · ")}</p>}
-      </Collapsible>
-    </div>
-  );
+function ScriptView({c}: {c:ScriptContent;formatName?:string|null}) {
+ return <ScriptTabs spoken={<div className="space-y-3">{spokenLines(c).map(l=><p key={l.n}><strong>{l.who}:</strong> {l.text}</p>)}</div>} animation={<div>{c.cenas.length?c.cenas.map((s,i)=><p key={i}>{s.inicio}–{s.fim}s (estimado): {s.acao}</p>):<p>A direção será preparada após a aprovação das falas, na etapa de produção.</p>}</div>}/>;
 }
 
 export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
@@ -388,6 +249,7 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
   if (!idea) notFound();
   const d = parse<IdeaData>(idea.ideaData);
   const titles = parse<string[]>(idea.titles) ?? [];
+  const scriptForCopy=idea.script?await ideaExport(idea.id):null;
   const sd = parse<ScriptContent & { metrics?: ScriptMetrics; playbookId?: string | null; voice?: VoiceCheck; review?: ScriptReview; meta?: FormatMeta }>(idea.scriptData);
   const refIds = parse<string[]>(idea.referenceIds) ?? [];
   const pbId = sd?.playbookId ?? idea.playbookId;
@@ -410,7 +272,6 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
   const pbLabel = recipe ? `Receita v${recipe.version}` : "Cartilha";
   const pending = sd ? scriptPending(sd) : null;
   const allTitles = [...new Set([...(idea.chosenTitle ? [idea.chosenTitle] : []), ...titles])];
-  const rev = revisionDefaults(idea);
   const currentStep = idea.publishedVideo || idea.status === "PUBLISHED" ? 7 : idea.status === "PRODUCED" ? 6 : idea.status === "RETURNED" ? 4 : sd ? 5 : 4;
   // Trocar o formato: ideia de antes dos formatos, ou o roteiro avisou que o formato não combina com o tema.
   const otherFormats = formatChoices.filter((f) => f.id !== idea.formatId);
@@ -419,7 +280,7 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
             action={regenerateWithFormatAction.bind(null, idea.id)}
             label="Escrever neste formato"
             busy="Começando…"
-            hint="Opus + leitura de espectador · mesmo custo de escrever um roteiro · roda em segundo plano (até 3 min)"
+            hint="Uma geração · mesmo custo de escrever um roteiro · roda em segundo plano (até 3 min)"
           >
             <fieldset>
               <legend className="label">Qual formato usar?</legend>
@@ -461,32 +322,12 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
   const scriptForm = est ? (
             <StateForm
               action={generateScriptAction.bind(null, idea.id)}
-              label={rev.defaultMode === "corrigir" ? "Corrigir roteiro" : sd ? "Escrever história nova" : "Escrever roteiro"}
+              label={sd ? "Escrever história nova" : "Escrever roteiro"}
               busy="Começando…"
-              hint={`${estimateHint(est)} (com a leitura de espectador; o máximo inclui uma reescrita)${est.basedOn ? ` · pela média ${est.basedOn === 1 ? "do último roteiro" : `dos últimos ${est.basedOn} roteiros`}` : ""}${rev.defaultMode === "corrigir" ? " · corrigindo" : ""} · roda em segundo plano (até 3 min)`}
+              hint={`${estimateHint(est)} · uma versão · em segundo plano`}
               className="btn-primary"
             >
-              {rev.canRevise && (
-                <div>
-                  <label className="label">O que fazer com o roteiro atual</label>
-                  <div className="space-y-1 text-sm">
-                    <label className="flex items-start gap-2">
-                      <input type="radio" name="mode" value="corrigir" defaultChecked={rev.defaultMode === "corrigir"} className="mt-1" />
-                      <span>
-                        Corrigir roteiro
-                        <span className="block text-xs text-zinc-500">mesma história, mesmas cenas e falas onde nada foi apontado</span>
-                      </span>
-                    </label>
-                    <label className="flex items-start gap-2">
-                      <input type="radio" name="mode" value="nova" defaultChecked={rev.defaultMode === "nova"} className="mt-1" />
-                      <span>
-                        História nova
-                        <span className="block text-xs text-zinc-500">recomeça do zero (as devoluções continuam valendo como aprendizado)</span>
-                      </span>
-                    </label>
-                  </div>
-                </div>
-              )}
+              <input type="hidden" name="mode" value="nova" />
               <div>
                 <label className="label">Título</label>
                 <div className="space-y-1 text-sm">
@@ -618,9 +459,9 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
       </WorkSection>
 
       {/* Roteiro */}
-      <WorkSection id="roteiro" title="4 · Roteiro" open={currentStep === 4} version={idea.status}>
+      <WorkSection id="roteiro" title="4 · Roteiro" open={true} version={idea.projectCode ?? idea.status}>
         <header className="flex flex-wrap items-center justify-between gap-2">
-          <span className="text-sm text-zinc-400">{sd ? "Cenas e falas" : "Escolha o título e escreva o roteiro"}</span>
+          <span className="text-sm text-zinc-400">{sd ? "Roteiro falado" : "Escolha o título e escreva o roteiro"}</span>
           {idea.script && (
             <span className="text-xs text-zinc-500">
               {modelLabel(idea.scriptModel)} · custo acumulado {usd(idea.scriptCostUsd)}
@@ -640,6 +481,7 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
             {sd.review && <Collapsible title="Leitura de espectador (lógica e graça)"><ReviewPanel r={sd.review} /></Collapsible>}
             {sd.voice && <Collapsible title="Conferência das falas"><VoicePanel v={sd.voice} /></Collapsible>}
             <ScriptView c={sd} formatName={sd.meta?.formatName ?? idea.videoFormat?.name} />
+             <VersionReview idea={idea} />
             {sd.metrics && (
               <Collapsible title={`Medidas do roteiro × ${recipe ? "receita do formato" : "cartilha"}`} className="rounded-lg border border-line p-4">
                 <MetricsVsPlaybook m={sd.metrics} st={pbStats} label={pbLabel} />
@@ -648,7 +490,7 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
             {idea.script && (
               <details className="rounded-lg border border-line">
                 <summary className="cursor-pointer px-3 py-2 text-sm text-zinc-400">Texto para copiar</summary>
-                <textarea readOnly rows={18} className="input m-3 w-[calc(100%-1.5rem)] font-mono text-xs" defaultValue={idea.script} />
+                <textarea readOnly rows={18} className="input m-3 w-[calc(100%-1.5rem)] font-mono text-xs" value={scriptForCopy??""} />
               </details>
             )}
           </>
@@ -662,7 +504,7 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
           <div className={sd ? "border-t border-line pt-4" : ""}>
             {sd ? (
               <>
-                <Collapsible title={rev.defaultMode === "corrigir" ? "Corrigir roteiro" : "Escrever de novo"} open={rev.defaultMode === "corrigir"}>
+                <Collapsible title="Escrever história nova">
                   {scriptForm}
                 </Collapsible>
                 {sd.formatoCombina?.combina === false && otherFormats.length > 0 && (
@@ -831,4 +673,5 @@ function NoRecipeConfirm({ onlyIf = false }: { onlyIf?: boolean }) {
       </label>
     </div>
   );
-}
+}               <input type="hidden" name="mode" value="nova" />
+

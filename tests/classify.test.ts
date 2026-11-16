@@ -63,7 +63,7 @@ function answer(b: Body) {
     return { formato, motivo: `Pelo título ${title}.`, confianca: "alta" };
   }
   if (sys.includes("completar um formato")) return { faltam: "Mais desastres em cadeia em casa.", palavrasChave: ["domino", "chain reaction"], candidatos: [{ n: 1, motivo: "parece" }] };
-  if (sys.includes("TAREFA: escrever o roteiro")) return SCRIPT;
+  if (sys.includes("TAREFA: escrever o roteiro")) return {titulo:SCRIPT.titulo,duracaoSeg:SCRIPT.duracaoSeg,falado:SCRIPT.cenas.map(c=>({personagem:c.personagem,fala:c.fala})),pendencias:[]};
   return RECIPE;
 }
 
@@ -109,11 +109,11 @@ async function seedNiche(name: string) {
   return { prisma, niche, ch, mk };
 }
 
-test("classificação: sugere sem gravar; ao gravar cria os dois formatos, põe os vídeos (até 5) e marca confirmada/trocada", async () => {
+test("classificação: sugere sem gravar; ao gravar cria os dois formatos, põe os vídeos (até 8) e marca confirmada/trocada", async () => {
   const { prisma, niche, mk } = await seedNiche("Animação 3D");
   const c = await C();
   const construir: { id: string }[] = [];
-  for (let i = 1; i <= 7; i++) construir.push(await mk(`Construir ${i}`, { text: "Então você faz. Mas dá errado." }));
+  for (let i = 1; i <= 10; i++) construir.push(await mk(`Construir ${i}`, { text: "Então você faz. Mas dá errado." }));
   const english = await mk("Domino house", { lang: "en", text: "Then the dog pulls the string and everything falls." });
   const desastre = await mk("Desastre do fiozinho", { text: "Eu puxei um fiozinho." });
   const fatos = await mk("Lista de fatos");
@@ -122,15 +122,15 @@ test("classificação: sugere sem gravar; ao gravar cria os dois formatos, põe 
   assert.deepEqual(cands.map((x) => [x.name, x.exists]), [["Desastre em cadeia", false], ["Construir resolvendo problemas", false]]);
 
   const rows = await c.nicheStudiesForClassify(niche.id);
-  assert.equal(rows.length, 10);
+  assert.equal(rows.length, 13);
   const r = await c.classifyMany(niche.id, rows.map((x) => x.study.id));
-  assert.equal(r.ok, 10);
+  assert.equal(r.ok, 13);
   assert.equal(r.errors.length, 0);
 
   // Nada gravado ainda: só sugestões pendentes, nenhum formato criado.
   assert.equal(await prisma.videoFormat.count({ where: { nicheId: niche.id } }), 0);
   const sug = await prisma.formatSuggestion.findMany({ where: { nicheId: niche.id } });
-  assert.equal(sug.length, 10);
+  assert.equal(sug.length, 13);
   assert.ok(sug.every((s) => s.status === "pending" && s.reason.length > 0));
   const label = (id: string) => sug.find((s) => s.videoId === id)!.label;
   assert.equal(label(english.id), "Desastre em cadeia");
@@ -140,7 +140,7 @@ test("classificação: sugere sem gravar; ao gravar cria os dois formatos, põe 
   assert.ok(userText(engBody).includes("Then the dog pulls the string"));
   assert.ok(userText(engBody).includes("transcrição em en"));
 
-  // Gravar: troco um "Construir" para desastre; o 7º construir passa de 5 e fica de reserva.
+  // Gravar: troco um "Construir" para desastre; o 10º construir passa de 8 e fica de reserva.
   const choices = rows
     .map((x) => ({ videoId: x.study.id, label: label(x.study.id) }))
     .sort((a, b) => a.videoId.localeCompare(b.videoId));
@@ -150,15 +150,15 @@ test("classificação: sugere sem gravar; ao gravar cria os dois formatos, põe 
   assert.equal(res.created.length, 2);
   const obra = res.placed.find((p) => p.name === "Construir resolvendo problemas")!;
   const des = res.placed.find((p) => p.name === "Desastre em cadeia")!;
-  assert.equal(obra.total, 5);
-  assert.deepEqual(obra.reserve, ["Construir 7"]);
+  assert.equal(obra.total, 8);
+  assert.deepEqual(obra.reserve, ["Construir 10"]);
   assert.equal(des.total, 3);
   assert.equal(res.none, 1);
   const after = await prisma.formatSuggestion.findMany({ where: { nicheId: niche.id } });
   assert.equal(after.find((s) => s.videoId === construir[0].id)!.status, "changed");
   assert.equal(after.find((s) => s.videoId === construir[0].id)!.chosen, "Desastre em cadeia");
   assert.equal(after.find((s) => s.videoId === fatos.id)!.status, "confirmed");
-  assert.equal(after.find((s) => s.videoId === construir[6].id)!.status, "confirmed", "reserva: escolha gravada, sem entrar na receita");
+  assert.equal(after.find((s) => s.videoId === construir[9].id)!.status, "confirmed", "reserva: escolha gravada, sem entrar na receita");
 
   // Agora os candidatos são os formatos que existem
   assert.ok((await c.classifyCandidates(niche.id)).every((x) => x.exists));
@@ -259,7 +259,7 @@ test("regenerar ideia antiga num formato: o tema fica e o gancho antigo não val
   const sent = userText(bodies.find((b) => String(b.system).includes("TAREFA: escrever o roteiro"))!);
   assert.ok(sent.includes("Tema: Balões da festa"));
   assert.ok(sent.includes("RECONTAR NO FORMATO"));
-  assert.ok(sent.includes('motor da receita de "Desastre em cadeia"'));
+  assert.ok(sent.includes('Formato: Desastre em cadeia'));
   assert.ok(!sent.includes("Você sabia que o balão foi inventado"), "gancho antigo fica de fora");
   assert.ok(!sent.includes("Lista de curiosidades"), "formato de história antigo fica de fora");
   assert.equal(r.idea.status, "SCRIPT");

@@ -100,6 +100,7 @@ export const DEFAULT_MAX_TOKENS = 32000;
 const fmtTokens = (n: number) => n.toLocaleString("pt-BR");
 
 export type StructuredResult<T> = {
+  generationId: string;
   data: T;
   model: string;
   inputTokens: number;
@@ -187,7 +188,7 @@ export async function callStructured<S extends z.ZodType>(opts: {
     }
   }
 
-  await prisma.generation.create({
+  const generation = await prisma.generation.create({
     data: {
       kind: opts.kind,
       model: servedBy,
@@ -208,7 +209,7 @@ export async function callStructured<S extends z.ZodType>(opts: {
       `O Claude não devolveu a resposta no formato esperado. Tente de novo.${parseError instanceof Error ? ` (${parseError.message.slice(0, 200)})` : ""}`,
     );
 
-  return { data: parsed, model: servedBy, inputTokens, outputTokens, costUsd: cost };
+  return { generationId: generation.id, data: parsed, model: servedBy, inputTokens, outputTokens, costUsd: cost };
 }
 
 /** Gasto com o Claude no mês corrente (fuso de São Paulo, aproximado pelo UTC-3). */

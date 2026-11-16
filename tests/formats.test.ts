@@ -281,3 +281,33 @@ test("formato: um vídeo por nicho, rascunho com menos de 3, receita versionada;
   assert.doesNotMatch(common, /narrador fala você/, "o específico não vai para o gerador");
   assert.match(rule.rule.markdown!, /É de cada formato \(não vira regra\)/);
 });
+
+test("formato aceita o oitavo, recusa o nono e envia oito estudos com custo e tamanho proporcionais",async()=>{
+ const {prisma}=await import("../src/lib/db");const f=await F();
+ const niche=await prisma.niche.create({data:{name:"Oito estudos"}});
+ const channel=await prisma.channel.create({data:{externalId:"UC-eight-studies",title:"Oito"}});
+ const format=await prisma.videoFormat.create({data:{nicheId:niche.id,name:"Formato de oito"}});
+ const other=await prisma.videoFormat.create({data:{nicheId:niche.id,name:"Reserva"}});
+ const videos:{id:string}[]=[];
+ for(let i=1;i<=9;i++){
+  const v=await prisma.video.create({data:{externalId:"eight-study-"+i,channelId:channel.id,title:"ESTUDO_OITO_"+i,isShort:true,publishedAt:new Date(),viewCount:1000,durationSec:60}});
+  await prisma.diagnosis.create({data:{videoId:v.id,markdown:"Diagnóstico "+i+" "+"evidência ".repeat(2000)}});
+  await prisma.transcript.create({data:{videoId:v.id,source:"manual",language:"pt",text:"TRANSCRICAO_OITO_"+i+" "+"Fala completa. ".repeat(2000)}});
+  videos.push(v);
+ }
+ for(const v of videos.slice(0,7))await f.setVideoFormat(v.id,niche.id,format.id);
+ const seven=await f.estimateRecipe(format.id);
+ await f.setVideoFormat(videos[7].id,niche.id,format.id);
+ await f.setVideoFormat(videos[7].id,niche.id,format.id); // idempotente mesmo cheio
+ const eight=await f.estimateRecipe(format.id);assert.equal(eight.studies,8);assert.ok(eight.inputTokens>seven.inputTokens);assert.ok(eight.usd>seven.usd);
+ await f.setVideoFormat(videos[8].id,niche.id,other.id);
+ await assert.rejects(()=>f.setVideoFormat(videos[8].id,niche.id,format.id),/já tem 8 vídeos/);
+ assert.deepEqual(await f.formatVideoIds(other.id),[videos[8].id],"recusa não apaga o vínculo anterior");
+ assert.equal((await f.formatVideoIds(format.id)).length,8);
+ const result=await f.generateRecipe(format.id);
+ const body=bodies.at(-1)!;const prompt=body.messages[0].content.map(c=>c.text??"").join("");
+ assert.match(body.system,/1 a 8 vídeos/);assert.match(prompt,/Vídeos no formato: 8/);
+ for(let i=1;i<=8;i++){assert.ok(prompt.includes("ESTUDO_OITO_"+i));assert.ok(prompt.includes("TRANSCRICAO_OITO_"+i));assert.ok(prompt.includes("## Vídeo #"+i+":"));}
+ assert.ok(prompt.length<75000,"prompt limitado sem remover estudos");
+ assert.equal(JSON.parse(result.recipe.videoIds).length,8);assert.equal(JSON.parse(result.recipe.stats).studies,8);
+});
