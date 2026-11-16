@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { NO_DIRECTION } from "@/lib/direction-study";
 import { Collapsible, FilterChip, PageHeader } from "@/components/ui";
 import { prisma } from "@/lib/db";
 import { fmtCompact, fmtDateTime } from "@/lib/format";
@@ -150,6 +151,7 @@ export default async function GeneratorPage({ searchParams }: PageProps<"/gerado
         </div>
       </div>
 
+      {ctx && !ctx.videoFormat.directionStudy?.trim() && <p role="status" className="text-sm text-amber-300">{NO_DIRECTION}. <Link className="underline" href={`/formatos/${ctx.videoFormat.id}`}>Abrir formato</Link></p>}
       <Collapsible title="Opções avançadas e referências" className="card p-4">
       {/* O que entra no pedido */}
       <section className="grid gap-3 md:grid-cols-3">

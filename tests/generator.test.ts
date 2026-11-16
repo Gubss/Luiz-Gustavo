@@ -88,7 +88,7 @@ before(() => {
     if (url.hostname === "api.anthropic.com") {
       const body = JSON.parse(String(init?.body));
       bodies.push(body);
-      const reply = body.system.includes("Corrija somente") ? correctionReply ?? (textOf(body).includes("Trecho selecionado: falas 1 a 2")?{falado:[{personagem:"Menino",fala:"Eu contei esse trecho de outro jeito."}],pendencias:[]}:{falado:[{personagem:"Theo",fala:"Pai, eu achei que ele rugia!"}],pendencias:[]}) : body.system.includes("Crítica solicitada") ? {observacoes:["Premissa preservada"],hipoteses:[],pendencias:[]} : isScriptBody(body) ? {titulo:SCRIPT.titulo,duracaoSeg:SCRIPT.duracaoSeg,falado:SCRIPT.cenas.filter(c=>c.fala).map(c=>({personagem:c.personagem,fala:c.fala})),pendencias:SCRIPT.conferirFatos} : {ideias:IDEAS.ideias.map(i=>({titulo:i.titulos[0].titulo,premissa:i.premissa,gancho:i.gancho,formato:i.formatoDeHistoria,interesse:i.porQueVaiFuncionar}))};
+      const reply = body.system.includes("Corrija somente") ? correctionReply ?? (textOf(body).includes("Trecho selecionado: falas 1 a 2")?{falado:[{personagem:"Menino",fala:"Eu contei esse trecho de outro jeito."}],pendencias:[]}:{falado:[{personagem:"Theo",fala:"Pai, eu achei que ele rugia!"}],pendencias:[]}) : body.system.includes("Crítica solicitada") ? {observacoes:["Premissa preservada"],hipoteses:[],pendencias:[]} : isScriptBody(body) ? {titulo:SCRIPT.titulo,duracaoSeg:SCRIPT.duracaoSeg,falado:SCRIPT.cenas.filter(c=>c.fala).map(c=>({personagem:c.personagem,fala:c.fala})),pendencias:SCRIPT.conferirFatos,...(textOf(body).includes("# Estudo de direção")?{planoCenas:[{falaInicial:1,falaFinal:5,tela:"Roda cai",camera:"Aproxima na roda",efeito:"Impacto",etiqueta:"RODA"}]}:{})} : {ideias:IDEAS.ideias.map(i=>({titulo:i.titulos[0].titulo,premissa:i.premissa,gancho:i.gancho,formato:i.formatoDeHistoria,interesse:i.porQueVaiFuncionar}))};
       return new Response(
         JSON.stringify({
           id: "msg_test",
@@ -421,4 +421,30 @@ test("sem ChannelFormat: limite de voz e narrador do perfil chegam ao prompt e �
   const legacyExport=(await ideaExport(legacy.id))!;assert.ok(legacyExport.includes(expected));assert.ok(!legacyExport.includes(excluded));
   assert.match(legacyExport,/Narrador e menino usam a mesma voz/);
  }
+});
+
+test("estudo acrescenta plano por cena, preserva falas e referência do canal", async () => {
+  const { prisma } = await import("../src/lib/db");
+  const { generateScript, loadContext } = await G();
+  const { ideaExport } = await import("../src/lib/script-export");
+  const niche = await prisma.niche.create({ data: { name: "Direção" } });
+  const channel = await prisma.myChannel.create({ data: { name: "Por Que É Assim?", nicheId: niche.id, tone: "leve", characters: "Theo e Pai" } });
+  const format = await prisma.videoFormat.create({ data: { name: "DM teste", nicheId: niche.id } });
+  const idea = await prisma.idea.create({ data: { myChannelId: channel.id, nicheId: niche.id, formatId: format.id, format: "short", theme: "Roda", titles: "[]" } });
+  const before = await generateScript(idea.id, { noRecipeOk: true });
+  const beforeExport = (await ideaExport(idea.id))!;
+  assert.equal(before.data.planoCenas, undefined);
+  assert.doesNotMatch(textOf(lastScript()), /# Estudo de direção/);
+  await prisma.videoFormat.update({ where: { id: format.id }, data: { directionStudy: "1. Peça entra com física; câmera vai até ela." } });
+  assert.match((await loadContext({ myChannelId: channel.id, formatId: format.id })).videoFormat.directionStudy!, /Peça entra/);
+  const after = await generateScript(idea.id, { noRecipeOk: true });
+  const afterExport = (await ideaExport(idea.id))!;
+  assert.deepEqual(after.data.falado, before.data.falado);
+  assert.equal(after.data.duracaoSeg, before.data.duracaoSeg);
+  assert.equal(after.data.planoCenas?.length, 1);
+  assert.equal(afterExport.split("# Referência do canal:")[1], beforeExport.split("# Referência do canal:")[1]);
+  assert.match(afterExport, /Cena 1.*Tela:.*Câmera:.*Efeito:.*Etiqueta:/);
+  assert.doesNotMatch(afterExport, /Direção de animação ainda não preparada/);
+  assert.match(textOf(lastScript()), /# Estudo de direção/);
+  assert.doesNotMatch(lastScript().system, /Não produza direção/);
 });

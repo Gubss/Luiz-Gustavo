@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
+import { normalizeStudy, STUDY_MAX, writeStudyRequest } from "@/lib/direction-study";
 import { usdToBrl } from "@/lib/claude";
 import { startJob } from "@/lib/jobs";
 import { formatLabel, type PlaybookFormat } from "@/lib/playbook";
@@ -14,6 +15,28 @@ import { NONE, applyChoices, classifyMany, findGaps, nicheStudiesForClassify, re
 const money = (usd: number) => `US$ ${usd.toFixed(usd < 0.1 ? 3 : 2).replace(".", ",")} (≈ R$ ${(usd * usdToBrl()).toFixed(2).replace(".", ",")})`;
 const errMsg = (e: unknown) => (e instanceof Error ? e.message : "Erro inesperado.");
 const BACKGROUND_OK = "Começou em segundo plano. Pode sair desta tela: o aviso no canto mostra quando terminar.";
+
+export async function importDirectionAction(formatId: string, _prev: FormState, fd: FormData): Promise<FormState> {
+  try {
+    const file = fd.get("studyFile");
+    let text = String(fd.get("directionStudy") ?? "");
+    if (file instanceof File && file.size) {
+      if (!file.name.toLowerCase().endsWith(".md") || file.size > STUDY_MAX * 4) throw new Error("Envie um arquivo .md de até 48 KB.");
+      text = await file.text();
+    }
+    await prisma.videoFormat.update({ where: { id: formatId }, data: { directionStudy: normalizeStudy(text) } });
+    refresh(formatId);
+    return { ok: "Estudo de direção importado. Os próximos roteiros terão plano de cenas." };
+  } catch (error) { return { error: errMsg(error) }; }
+}
+
+export async function requestDirectionAction(formatId: string, _prev: FormState, fd: FormData): Promise<FormState> {
+  try {
+    const format = await prisma.videoFormat.findUniqueOrThrow({ where: { id: formatId } });
+    await writeStudyRequest(format, String(fd.get("links") ?? ""));
+    return { ok: "Pedido salvo para o GEPETO estudar fora do Radar. Nenhuma API foi chamada." };
+  } catch (error) { return { error: errMsg(error) }; }
+}
 
 function refresh(formatId?: string) {
   revalidatePath("/formatos");
