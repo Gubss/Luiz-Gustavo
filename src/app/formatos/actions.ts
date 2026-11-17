@@ -1,4 +1,5 @@
 "use server";
+import { normalizeInstructions, INSTRUCTION_FIELDS } from "@/lib/direction-instructions";
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -301,4 +302,12 @@ export async function saveNarrativeRulesAction(formatId:string,_prev:FormState,f
  const text=String(fd.get("narrativeRules")??"").trim();
  if(text.length>12000)return {error:"Use até 12.000 caracteres."};
  try{await prisma.videoFormat.update({where:{id:formatId},data:{narrativeRules:text||null}});refresh(formatId);return {ok:"Regras narrativas salvas. Direção permanece separada."};}catch(e){return {error:errMsg(e)}}
+}
+
+export async function saveDirectionInstructionsAction(formatId:string,_prev:FormState,fd:FormData):Promise<FormState>{
+ try{
+  const data=normalizeInstructions(Object.fromEntries(INSTRUCTION_FIELDS.map(key=>[key,fd.get(key)])));
+  await prisma.videoFormat.update({where:{id:formatId},data});refresh(formatId);
+  return {ok:"Instruções salvas. Cada diretor recebe a Geral e somente a sua função. Direções iniciadas mantêm suas instruções."};
+ }catch(e){return {error:errMsg(e)}}
 }

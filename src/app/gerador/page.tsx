@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { NO_DIRECTION } from "@/lib/direction-study";
 import { Collapsible, FilterChip, PageHeader } from "@/components/ui";
 import { prisma } from "@/lib/db";
 import { fmtCompact, fmtDateTime } from "@/lib/format";
@@ -101,6 +100,7 @@ export default async function GeneratorPage({ searchParams }: PageProps<"/gerado
         }
       />
 
+      <p className="text-sm text-zinc-400">3. Ideia → 4.1 Roteiro (gerar, ler e aprovar) → 4.2 Direção → direção aprovada → .md para o Estúdio</p>
       <div className="space-y-2">
         <div className="flex flex-wrap items-center gap-2">
           <span className="w-24 text-sm text-zinc-500">Canal:</span>
@@ -151,7 +151,7 @@ export default async function GeneratorPage({ searchParams }: PageProps<"/gerado
         </div>
       </div>
 
-      {ctx && !ctx.videoFormat.directionStudy?.trim() && <p role="status" className="text-sm text-amber-300">{NO_DIRECTION}. <Link className="underline" href={`/formatos/${ctx.videoFormat.id}`}>Abrir formato</Link></p>}
+      {ctx && !ctx.videoFormat.directionReady && <p role="status" className="text-sm text-amber-300">Preencha as instruções por função para preparar a direção depois de aprovar as falas. <Link className="underline" href={`/formatos/${ctx.videoFormat.id}`}>Abrir formato</Link></p>}
       <Collapsible title="Opções avançadas e referências" className="card p-4">
       {/* O que entra no pedido */}
       <section className="grid gap-3 md:grid-cols-3">

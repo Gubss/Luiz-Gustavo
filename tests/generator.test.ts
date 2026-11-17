@@ -435,7 +435,7 @@ test("estudo fica fora do roteirista, preserva falas e referência do canal", as
   const beforeExport = (await ideaExport(idea.id))!;
   assert.equal(before.data.planoCenas, undefined);
   assert.doesNotMatch(textOf(lastScript()), /# Estudo de direção/);
-  await prisma.videoFormat.update({ where: { id: format.id }, data: { directionStudy: "1. Peça entra com física; câmera vai até ela." } });
+  await prisma.videoFormat.update({ where: { id: format.id }, data: { directionStudy: "1. Peça entra com física; câmera vai até ela.", directionGeneral:"GENERAL_SECRET", directionScene:"SCENE_SECRET", directionPhotography:"PHOTO_SECRET", directionSound:"SOUND_SECRET" } });
   assert.match((await loadContext({ myChannelId: channel.id, formatId: format.id })).videoFormat.directionStudy!, /Peça entra/);
   const after = await generateScript(idea.id, { noRecipeOk: true });
   const afterExport = (await ideaExport(idea.id))!;
@@ -447,6 +447,7 @@ test("estudo fica fora do roteirista, preserva falas e referência do canal", as
   assert.match(afterExport, /Ainda não preparada para esta versão/);
   assert.doesNotMatch(textOf(lastScript()), /# Estudo de direção/);
   assert.match(lastScript().system, /Não produza direção/);
+  assert.doesNotMatch(textOf(lastScript()),/GENERAL_SECRET|SCENE_SECRET|PHOTO_SECRET|SOUND_SECRET/);
 });
 
  test("seção A não muda duração nem entra no prompt do roteirista", async()=>{

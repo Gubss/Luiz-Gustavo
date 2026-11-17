@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { NO_DIRECTION, STUDY_MAX } from "@/lib/direction-study";
-import { saveNarrativeRulesAction, importDirectionAction, requestDirectionAction } from "../actions";
+import { INSTRUCTION_MAX, hasDirectionInstructions } from "@/lib/direction-instructions";
+import { saveNarrativeRulesAction, saveDirectionInstructionsAction, requestDirectionAction } from "../actions";
 import { FormatGaps } from "@/components/FormatGaps";
 import { gapHint } from "@/lib/classify";
 import { notFound } from "next/navigation";
@@ -303,21 +303,29 @@ export default async function FormatPage({ params, searchParams }: PageProps<"/f
       {/* Vídeos */}
       <section className="card space-y-4 p-5" aria-labelledby="narrative-title">
         <h2 id="narrative-title" className="text-lg font-semibold">Regras do roteirista</h2>
-        <p className="text-sm text-zinc-400">A receita e a voz do canal continuam sendo a base. Este campo é opcional: gancho, lógica, progressão, tom e fechamento. Câmera, luz e som ficam no estudo de direção abaixo.</p>
-        <StateForm action={saveNarrativeRulesAction.bind(null,f.id)} label="Salvar regras narrativas" hint="Não gera roteiro nem usa IA.">
+        <p className="text-sm text-zinc-400">A receita automática, os estudos, o perfil e a referência do canal continuam como base. Acrescente aqui somente regras comprovadas pela retenção do canal.</p>
+        <StateForm action={saveNarrativeRulesAction.bind(null,f.id)} label="Salvar regras do roteirista" hint="Não gera roteiro nem usa IA.">
           <label className="label" htmlFor="narrative-rules">Regras narrativas adicionais</label>
           <textarea id="narrative-rules" name="narrativeRules" className="input" rows={5} maxLength={12000} defaultValue={f.narrativeRules??""}/>
         </StateForm>
       </section>
       <section className="card space-y-4 p-5" aria-labelledby="direction-title">
-        <h2 id="direction-title" className="text-lg font-semibold">Estudo de direção</h2>
-        {!f.directionStudy?.trim() ? <p role="status" className="text-amber-300">{NO_DIRECTION}</p> : <p className="text-emerald-300">Estudo disponível para os diretores após aprovação. Não entra na escrita das falas.</p>}
-        <StateForm action={importDirectionAction.bind(null, f.id)} label="Importar estudo pronto">
-          <label className="label" htmlFor="direction-study">Cole o estudo de direção</label>
-          <textarea id="direction-study" name="directionStudy" className="input" rows={7} maxLength={STUDY_MAX} defaultValue={f.directionStudy ?? ""} />
-          <label className="label" htmlFor="direction-file">Ou envie o estudo em .md (substitui o texto colado)</label>
-          <input id="direction-file" type="file" name="studyFile" accept=".md,text/markdown" className="input" />
+        <h2 id="direction-title" className="text-lg font-semibold">Instruções de direção</h2>
+        <p className="text-sm text-zinc-400">Cada diretor recebe a Geral de gravação e somente a caixa da sua função. O roteirista não recebe estas instruções.</p>
+        {!hasDirectionInstructions(f)&&<p role="status" className="text-amber-300">Preencha a Geral e as três funções para preparar a direção após aprovar as falas.</p>}
+        <StateForm action={saveDirectionInstructionsAction.bind(null,f.id)} label="Salvar instruções de direção" hint="Até 30.000 caracteres por caixa. Sem IA. Direções já iniciadas preservam as instruções usadas.">
+          {([
+            ["directionGeneral","Geral de gravação"],
+            ["directionScene","Diretor de cena"],
+            ["directionPhotography","Diretor de fotografia"],
+            ["directionSound","Diretor de som e trilha"],
+          ] as const).map(([key,label])=><div key={key}>
+            <label className="label" htmlFor={key}>{label}</label>
+            <textarea id={key} name={key} className="input" rows={key==="directionGeneral"?6:8} maxLength={INSTRUCTION_MAX} defaultValue={f[key]??""}/>
+            <p className="mt-1 text-xs text-zinc-500">{(f[key]?.length??0).toLocaleString("pt-BR")} caracteres salvos · texto integral editável</p>
+          </div>)}
         </StateForm>
+        {f.directionStudy&&<details><summary className="text-sm text-zinc-400">Estudo anterior (somente consulta)</summary><pre className="mt-3 whitespace-pre-wrap break-words text-sm text-zinc-400">{f.directionStudy}</pre></details>}
         <details>
           <summary className="cursor-pointer text-sm">Pedir estudo de direção</summary>
           <StateForm action={requestDirectionAction.bind(null, f.id)} label="Pedir estudo de direção" hint="O GEPETO faz o estudo fora do Radar, sem API.">

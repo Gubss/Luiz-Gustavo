@@ -1,0 +1,18 @@
+{
+  "migrationApplied": true,
+  "formatId": "cmwid2w8d0001fsjobic0l9s5",
+  "lengths": {
+    "narrativeRules": 316,
+    "directionGeneral": 2764,
+    "directionScene": 2896,
+    "directionPhotography": 5037,
+    "directionSound": 21074
+  },
+  "phoneApprovalUnchanged": true,
+  "rowCountsUnchanged": true,
+  "integrity": {
+    "integrity_check": "ok"
+  },
+  "backupBeforeMigration": "C:/Users/gubsB/Documents/GUBS OS/GUBS OS/.maestri/tmp/radar-missao/instrucoes-funcoes/radar-antes-migration-funcoes-2026-11-17T04-10-11-030Z.db",
+  "backupBeforeImport": "C:/Users/gubsB/Documents/GUBS OS/GUBS OS/.maestri/tmp/radar-missao/instrucoes-funcoes/antes-import-2026-11-17T04-11-46-854Z.db"
+}

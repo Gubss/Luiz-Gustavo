@@ -460,7 +460,7 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
       </WorkSection>
 
       {/* Roteiro */}
-      <WorkSection id="roteiro" title="4 · Roteiro" open={true} version={idea.projectCode ?? idea.status}>
+      <WorkSection id="roteiro" title="4 · Roteiro e direção" open={true} version={idea.projectCode ?? idea.status}>
         <header className="flex flex-wrap items-center justify-between gap-2">
           <span className="text-sm text-zinc-400">{sd ? "Roteiro falado" : "Escolha o título e escreva o roteiro"}</span>
           {idea.script && (
@@ -475,7 +475,7 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
             <div className="flex flex-wrap items-center gap-3">
               <CopyScript url={`/api/ideias/${idea.id}/roteiro`} />
               <a href={`/api/ideias/${idea.id}/roteiro`} download className="btn-secondary btn-sm">
-                Baixar .md
+                Baixar roteiro para leitura
               </a>
               
             </div>
@@ -547,7 +547,7 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
           <p className="text-sm text-zinc-400">Leia o roteiro, confira as pendências e leve ao Estúdio.</p>
           <OpenSection target="roteiro">Ler roteiro</OpenSection>
           <header className="flex flex-wrap items-center justify-between gap-2">
-            <span className="text-sm text-zinc-400">A aprovação acontece com você, fora do Radar.</span>
+            <span className="text-sm text-zinc-400">Aprove o roteiro e a direção nas etapas 4.1 e 4.2 antes de produzir.</span>
             {idea.returnedAt && <span className="text-xs text-zinc-500">devolvida em {fmtDateTime(idea.returnedAt)}</span>}
           </header>
           {idea.lessons.length > 0 && (

@@ -1,0 +1,13 @@
+{
+  "ok": true,
+  "database": "isolated copy; never production",
+  "phoneVersion": 3,
+  "mockedCalls": 4,
+  "apiCost": 0,
+  "fullInstructionsSaved": true,
+  "approvalWithoutCall": true,
+  "retryPreservedScene": true,
+  "immutableScript": true,
+  "exportGated": true,
+  "pageErrors": []
+}
