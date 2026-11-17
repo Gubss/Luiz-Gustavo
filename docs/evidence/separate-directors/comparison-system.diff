@@ -1,0 +1,9 @@
+--- rolima/system
++++ gol/system
+@@ -11,5 +11,5 @@
+ 
+ TAREFA: escrever o roteiro FALADO de UMA ideia: narrador e diálogos, na ordem.
+ Entregue uma única versão. Preserve a premissa e a regra do mundo; não as substitua por conveniência.
+-Não produza direção, cenas, pacote de publicação ou autochecklist. A produção vem depois da aprovação humana.
++Não produza pacote de publicação ou autochecklist. Acrescente o plano de cenas solicitado, separado das falas; a produção depende de aprovação humana.
+ Duração é estimada. Liste dúvidas reais e incoerências de narrador em pendencias; nunca declare aprovação.

@@ -20,10 +20,8 @@ test("plano requer seis componentes e uma entrada por fala", () => {
  assert.throws(()=>ScenePlanSchema.parse([{...scene,plano:undefined}]));
  assert.throws(()=>ScenePlanSchema.parse([{...scene,trilha:" "}]));
 });
-test("avisos determinísticos do fim e duração; só a última fala", () => {
- for(const text of ["Comenta aí!","Inscreva-se!","Se inscreve","Segue o canal","Tchau!","Até a próxima!","Até mais!","Adeus!"]) assert.equal(directionWarnings([{text}],90).length,1,text);
- assert.deepEqual(directionWarnings([{text:"Tchau!"},{text:"Quem puxou meu fio?"}],100),[]);
- assert.equal(directionWarnings([{text:"Quem puxou meu fio?"}],101).length,1);
- assert.equal(directionWarnings([{text:"Tchau!"}],101).length,2);
- assert.deepEqual(directionWarnings([],0),[]);
+test("avisos respeitam a faixa do canal, sem impor 90s ou proibir fechos globalmente",()=>{
+ assert.deepEqual(directionWarnings([{text:"Tchau!"}],120),[]);
+ for(const duration of [60,61,120,179,180])assert.deepEqual(directionWarnings([],duration,{min:60,max:180}),[]);
+ for(const duration of [59,181])assert.equal(directionWarnings([],duration,{min:60,max:180}).length,1);
 });

@@ -40,6 +40,8 @@ export async function createMyChannel(fd: FormData) {
 export async function saveProfile(id: string, _prev: FormState, fd: FormData): Promise<FormState> {
   const name = str(fd, "name");
   if (!name) return { error: "O canal precisa de um nome." };
+  const durationMinSec=optInt(fd,"durationMinSec"),durationMaxSec=optInt(fd,"durationMaxSec");
+  if((durationMinSec===null)!==(durationMaxSec===null)|| (durationMinSec!==null&&durationMaxSec!==null&&(!Number.isInteger(durationMinSec)||!Number.isInteger(durationMaxSec)||durationMinSec<1||durationMaxSec<durationMinSec)))return {error:"Preencha mínimo e máximo válidos; máximo deve ser igual ou maior que mínimo."};
   const before = await prisma.myChannel.findUniqueOrThrow({ where: { id }, select: { url: true, analytics: true } });
   const url = optStr(fd, "url");
   const analytics = optStr(fd, "analytics");
@@ -55,6 +57,7 @@ export async function saveProfile(id: string, _prev: FormState, fd: FormData): P
       format: str(fd, "format") === "long" ? "long" : "short",
       platforms: optStr(fd, "platforms"),
       durationSec: optInt(fd, "durationSec"),
+      durationMinSec, durationMaxSec,
       concept: optStr(fd, "concept"),
       characters: optStr(fd, "characters"),
       storyFormats: optStr(fd, "storyFormats"),

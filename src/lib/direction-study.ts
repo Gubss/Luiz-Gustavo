@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 
-export const NO_DIRECTION = "sem estudo de direção: o roteiro sai sem plano de cenas";
+export const NO_DIRECTION = "Sem estudo de direção: escreva e aprove as falas; importe o estudo para preparar os diretores.";
 export const STUDY_MAX = 12000;
 export const REQUEST_DIR = "C:/Users/gubsB/Documents/GUBS OS/GUBS OS/.maestri/tmp/radar-pedidos-estudo";
 

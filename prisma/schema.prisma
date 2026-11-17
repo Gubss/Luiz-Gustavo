@@ -140,6 +140,8 @@ model ChannelSnapshot {
 
 /// Canal meu (metadado). Status: PRODUCTION | VALIDATING | RESEARCH
 model MyChannel {
+  durationMinSec Int?
+  durationMaxSec Int?
   id                String    @id @default(cuid())
   platform          String    @default("youtube")
   nicheId           String?
@@ -456,6 +458,7 @@ model NichePlaybook {
 /// (ex.: "desastre em cadeia", "construir resolvendo problemas"). Com menos de 3 vídeos fica como rascunho.
 /// `length` é Short ou vídeo longo (o antigo "formato" das cartilhas).
 model VideoFormat {
+  narrativeRules String?
   directionStudy String?
   id          String   @id @default(cuid())
   nicheId     String
@@ -838,6 +841,7 @@ model Job {
 
 /// Immutable snapshots; restoration appends a new version. Approval belongs to Idea.
 model ScriptVersion {
+ direction DirectionRun?
  id String @id @default(cuid())
  ideaId String
  number Int
@@ -856,4 +860,23 @@ model ScriptVersion {
  approvedFor Idea? @relation("ApprovedVersion")
  generations Generation[]
  @@unique([ideaId, number])
+}
+
+/// Direction metadata never changes the approved script snapshot.
+model DirectionRun {
+ id String @id @default(cuid())
+ versionId String @unique
+ version ScriptVersion @relation(fields: [versionId], references: [id], onDelete: Restrict)
+ sourceHash String
+ study String
+ reference String
+ scene String?
+ photography String?
+ sound String?
+ integration String?
+ runningStage String?
+ error String?
+ costUsd Float @default(0)
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
 }

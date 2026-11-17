@@ -1,0 +1,74 @@
+--- rolima/user
++++ gol/user
+@@ -1,7 +1,7 @@
+ # PERFIL DO MEU CANAL: Por que é assim?
+ Formato principal: Shorts
+ Plataformas: YouTube Shorts, TikTok, Instagram Reels
+-Duração alvo: 120s
++Duração alvo: até 90s (estudo de direção)
+ Identidade do canal: Desenho animado em 3D de uma família brasileira, feito em episódios soltos, como um desenho de TV (tipo Pica-Pau): os mesmos personagens em histórias independentes, sem uma trama contínua entre os vídeos.
+ O canal não tem um assunto só.
+ Cada episódio pode ser de um jeito: ensinar como algo funciona (ex.: montar um vulcão), contar uma história absurda que dá errado (ex.: o fiozinho que desmancha a blusa), contar um momento do dia a dia da casa (ex.: o pote de sorvete da avó) ou tirar uma dúvida.
+@@ -15,9 +15,12 @@
+ A cara dele é a piada.
+ Nunca se machuca de verdade.
+ - Mãe: a autoridade da casa.
+-Nunca aparece de corpo inteiro: só o braço (na porta ou na janela) e a voz.
+ Fala pouco e seco.
+-Quando está brigando, o braço segura o chinelo; fora disso, segura algo que combine com a cena.
++Regra fixa: nunca mostrar o rosto dela (nada de olho, boca ou rosto de frente).
++Em cena simples, aparece só o braço pela porta ou janela e a voz: brigando, o braço segura o chinelo; falando sem brigar, segura um objeto da cena (colher de pau, pano de prato, lata, celular).
++Em cena de ação (lavar a calçada, cozinhar, varrer), aparece o corpo inteiro de uma mulher mais alta que todos, com o enquadramento cortando no pescoço.
++Em cena que precisa da cabeça (falar ao telefone, pôr a lata no ouvido, cochichar), a câmera fica atrás ou ao lado dela, bem perto: cabelo, orelha e a mão encostando o objeto no ouvido, ou só a silhueta contra a luz; o rosto nunca entra no quadro.
++Quem assiste sabe que é ela pela voz, pela ação e pelo objeto na mão.
+ Aparece em casa, nunca na rua.
+ - Avó: calma, cheia de manias.
+ Nunca briga.
+@@ -127,9 +130,42 @@
+ O peso desce pelas vigas até os pilares e pelos pilares até o chão.
+ As paredes não seguram mais nada.
+ # IDEIA PARA ROTEIRIZAR
+-Título: Montei um carrinho de rolimã… e esqueci do freio
+-Tema: Montei um carrinho de rolimã… e esqueci do freio
+-Premissa invariável: O menino constrói um carrinho de rolimã pra descer a ladeira de casa e narra cada problema da montagem. Cada conserto é uma peça real do carrinho.
+-Gancho sugerido: Se você pregar quatro rodinhas numa tábua no alto da ladeira, você não tem um carrinho, tem uma passagem só de ida.
++Título: Fiz um gol na ladeira… e a bola foi embora
++Tema: Fiz um gol na ladeira… e a bola foi embora
++Premissa invariável: O menino quer jogar bola na rua em ladeira, mas tudo desce rua abaixo. Cada problema da partida, causado por alguém da família ou pelo Thor, é resolvido com uma peça de verdade de um gol e de um campo.
++Gancho sugerido: Se você joga futebol numa ladeira, você não tem uma partida, tem uma bola fugindo pro bairro vizinho.
+ Formato: Desmontando o Mundo
+-Duração estimada desejada: 120s
++Duração estimada desejada: 90s
++# Estudo de direção
++# Estudo de direção — Por Que É Assim? (padrão telefone)
++
++## A. Estrutura da história (vale para as falas)
++1. Gancho em até 3 s: primeira imagem e primeira frase abrem uma pergunta que só o fim responde.
++2. Prazo ou risco logo depois (alguém vai voltar, vai descobrir, vai brigar).
++3. Tentativas que quase dão certo: algo novo a cada 10–15 s, cada falha diferente e maior.
++4. Pista plantada no meio, dita de passagem, que vira a resposta.
++5. Resposta só no fim, usando a pista.
++6. Última fala ou imagem volta ao começo (o vídeo emenda em si mesmo).
++7. Proibido: pedir comentário, inscrição, "segue o canal" ou despedida, na fala ou na tela.
++8. Como funciona entra dentro da história, como passo de uma tentativa, nunca como aula.
++9. Duração-alvo até ~1min30; se couber em 50–60 s, melhor.
++10. Teste antes de mandar: as 2 primeiras frases dão vontade de saber o fim? A última chama a primeira?
++
++## B. Direção das cenas (plano por fala)
++1. Cada fala tem uma linha de direção: o que entra na tela, plano (geral/médio/close/detalhe), câmera (fixa ou movimento e para onde), ação, efeito sonoro e trilha (entra/pausa/volta).
++2. O objeto citado aparece na hora da palavra; se for pequeno, close ou brilho. Objeto que é a piada precisa ser reconhecível (rolo de barbante grande, chinelo grande).
++3. A câmera só aproxima do objeto ou da ação da fala; nunca de barriga, nuca ou cabeça sem motivo. Aproximar do objeto saindo do rosto é bom (ex.: aparelho da vó).
++4. Algo novo na tela a cada 1–2 s, sem precisar cortar.
++5. Mostrar o processo com as mãos quando a fala descreve como faz (furar, amarrar, passar o fio): plano médio da ação, sem pressa, seguindo o personagem quando ele leva o objeto a outro lugar.
++6. Fenômeno citado tem de ser visível: se a fala diz que vibra, o objeto treme; se diz que encosta, encosta de verdade e o efeito muda dali em diante.
++7. Geografia fixa no vídeo inteiro: quem fica de cada lado, de onde a mãe aparece, para onde o fio corre (regra dos 180°). Luz vinda de uma fonte visível, sem trocar de lado.
++8. Comédia: preparação → quebra → reação no mesmo enquadramento; não cortar antes do gag. Golpe (chinelada etc.) tem efeito sonoro de impacto no quadro do acerto.
++9. Uma pausa de trilha só, no momento de maior tensão; a música volta no tempo dela. Trilha audível desde o 1º segundo, abaixo da voz.
++10. Personagem que sai de cena larga ou devolve o que segura à vista; nada some nem entra na parede.
++11. Ordem em conflito: fatos do roteiro > legibilidade > continuidade > emoção > estilo.
++
++## C. Próprio do Por Que É Assim?
++- Família 3D do kit (menino, avó, Thor, mãe). A mãe nunca aparece inteira: só o braço, preso à borda do quadro ou a uma porta fixa; ela é voz e braço.
++- Chinelo só quando a mãe briga.
++- Peças novas do vídeo voltam ao kit.
++A seção A rege as FALAS: seus seis passos, proibições, loop e duração prevalecem sobre fechos, chamadas e durações antigos da receita. B e C regem o plano de cenas. Preserve voz do kit, tom e Referência do canal. Depois das falas, acrescente planoCenas: exatamente uma entrada por fala, em ordem, falaInicial = falaFinal = número da fala (desde 1). Cada entrada contém tela, plano (geral/médio/close/detalhe), camera (fixa ou movimento e destino), acao, efeito sonoro, trilha (entra/pausa/volta) e etiqueta (nenhuma se não houver). Nunca escreva câmera ou direção dentro da fala. Plano proposto, sujeito à aprovação humana.
