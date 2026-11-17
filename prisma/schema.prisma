@@ -186,6 +186,10 @@ model MyChannel {
   catalog     MyChannelVideo[]
   formatNotes ChannelFormat[]
   lessons     ChannelLesson[]
+
+  // v3: direção padrão do canal; formatos novos já nascem com ela.
+  defaultDirectionId String?
+  defaultDirection   Direction? @relation("ChannelDefaultDirection", fields: [defaultDirectionId], references: [id], onDelete: SetNull)
 }
 
 /// Todos os vídeos que o meu canal já publicou (lidos do YouTube): o gerador não repete esses temas,
@@ -483,7 +487,34 @@ model VideoFormat {
   channels    ChannelFormat[]
   lessons     ChannelLesson[]
 
+  // v3: direção escolhida (conjunto reutilizável) e diagnóstico do canal de onde o formato nasceu.
+  directionId String?
+  direction   Direction?       @relation(fields: [directionId], references: [id], onDelete: SetNull)
+  reportId    String?
+  report      MyChannelReport? @relation(fields: [reportId], references: [id], onDelete: SetNull)
+
   @@index([nicheId])
+}
+
+/// Conjunto de direção reutilizável (geral, cena, fotografia, som). Cada formato escolhe um (v3).
+model Direction {
+  id                   String   @id @default(cuid())
+  name                 String
+  description          String?
+  directionGeneral     String?
+  directionScene       String?
+  directionPhotography String?
+  directionSound       String?
+  /// Estudo de direção de origem (consulta), quando a direção nasceu de um estudo.
+  study                String?
+  /// "manual" | "copia" | "estudo" | "migracao"
+  origin               String   @default("manual")
+  copiedFromId         String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  formats         VideoFormat[]
+  defaultChannels MyChannel[]   @relation("ChannelDefaultDirection")
 }
 
 /// Sugestão automática de formato para um estudo (pela transcrição e pelo diagnóstico). Uma por vídeo e nicho.
@@ -789,7 +820,7 @@ model MyVideoDiagnosis {
 model MyChannelReport {
   id           String   @id @default(cuid())
   myChannelId  String
-  trigger      String // "auto" | "manual"
+  trigger      String // "auto" | "manual" | "editado" (v3: texto editado pelo Gubs em markdown)
   model        String
   inputs       String // JSON
   content      String // JSON
@@ -800,7 +831,8 @@ model MyChannelReport {
   costUsd      Float?
   createdAt    DateTime @default(now())
 
-  myChannel MyChannel @relation(fields: [myChannelId], references: [id], onDelete: Cascade)
+  myChannel MyChannel     @relation(fields: [myChannelId], references: [id], onDelete: Cascade)
+  formats   VideoFormat[]
 
   @@index([myChannelId, createdAt])
 }

@@ -12,6 +12,7 @@ import { FormatError, MAX_FORMAT_VIDEOS, generateRecipe, generateRule, setVideoF
 import type { FormState } from "@/app/video/actions";
 import { runCleanup } from "@/lib/cleanup";
 import { createManualFormat } from "@/lib/own-create";
+import { defaultDirectionId } from "@/lib/directions";
 import { NONE, applyChoices, classifyMany, findGaps, nicheStudiesForClassify, recipesAndGaps, sameName } from "@/lib/classify";
 
 const money = (usd: number) => `US$ ${usd.toFixed(usd < 0.1 ? 3 : 2).replace(".", ",")} (≈ R$ ${(usd * usdToBrl()).toFixed(2).replace(".", ",")})`;
@@ -51,7 +52,7 @@ export async function createFormatAction(nicheId: string, length: PlaybookFormat
   const name = String(fd.get("name") ?? "").trim();
   if (!name) return { error: "Dê um nome ao formato (ex.: desastre em cadeia)." };
   const f = await prisma.videoFormat.create({
-    data: { nicheId, length, name: name.slice(0, 80), description: String(fd.get("description") ?? "").trim() || null },
+    data: { nicheId, length, name: name.slice(0, 80), description: String(fd.get("description") ?? "").trim() || null, directionId: await defaultDirectionId({ nicheId }) },
   });
   refresh();
   redirect(`/formatos/${f.id}`);
@@ -324,6 +325,7 @@ export async function createManualFormatAction(_prev: FormState, fd: FormData): 
       rules: String(fd.get("regras") ?? ""),
       exampleTitle: String(fd.get("exemploTitulo") ?? ""),
       example: String(fd.get("exemplo") ?? ""),
+      reportId: String(fd.get("reportId") ?? "") || null,
     });
     id = vf.id;
     revalidatePath("/formatos");
@@ -332,4 +334,20 @@ export async function createManualFormatAction(_prev: FormState, fd: FormData): 
     return { error: errMsg(e) };
   }
   redirect(`/formatos/${id}`);
+}
+
+export type DraftState = { error?: string; nome?: string; regras?: string; custo?: string; reportId?: string; tipo?: "short" | "long" } | null;
+
+/** v3: a IA rascunha o formato a partir do diagnóstico escolhido; o Gubs revisa no formulário e salva. */
+export async function draftFormatFromDiagnosisAction(_prev: DraftState, fd: FormData): Promise<DraftState> {
+  const reportId = String(fd.get("reportId") ?? "");
+  const tipo = fd.get("tipo") === "long" ? "long" : "short";
+  if (!reportId) return { error: "Escolha um diagnóstico." };
+  try {
+    const { draftFormatFromReport } = await import("@/lib/format-from-diagnosis");
+    const r = await draftFormatFromReport(reportId, { hint: String(fd.get("orientacao") ?? ""), length: tipo });
+    return { nome: r.draft.nome, regras: r.rules, custo: `US$ ${r.costUsd.toFixed(3).replace(".", ",")} (≈ R$ ${(r.costUsd * usdToBrl()).toFixed(2).replace(".", ",")})`, reportId, tipo };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Erro inesperado." };
+  }
 }

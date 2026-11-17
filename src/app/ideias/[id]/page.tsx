@@ -49,9 +49,14 @@ import {
   regenerateWithFormatAction,
   setIdeaStatus,
   unlinkPublishedAction,
+  originalOpeningAction,
 } from "@/app/gerador/actions";
+import { openingCheck } from "@/lib/own-story";
+import { ActionButton } from "@/app/video/[id]/forms";
 import { publishedCandidates } from "@/lib/my-catalog";
 import { spokenLines } from "@/lib/script-lines";
+import { LineDiff } from "@/components/LineDiff";
+import { storyLines } from "@/lib/line-diff";
 import { VersionReview } from "./version-review";
 import { IdeaStatusSelect, ScriptTabs } from "./forms";
 import { runningJobsFor } from "@/lib/jobs";
@@ -264,6 +269,47 @@ function StoryPanel({ s }: { s: OwnStory }) {
       <Collapsible title="Ver o texto inteiro" className="rounded border border-line p-2">
         <pre className="max-h-96 overflow-auto whitespace-pre-wrap text-xs text-zinc-300">{s.text}</pre>
       </Collapsible>
+    </div>
+  );
+}
+
+/** Adendo B: abertura original × sugerida, com o motivo e "usar a original" (sem IA). */
+function OpeningPanel({ ideaId, versionId, story, c }: { ideaId: string; versionId: string | null; story: OwnStory; c: ScriptContent }) {
+  const chk = openingCheck(story, spokenLines(c).map((l) => ({ personagem: l.who, fala: l.text })));
+  if (!chk) return null;
+  if (chk.mantida)
+    return (
+      <p className="rounded-lg border border-emerald-800/60 bg-emerald-950/20 px-4 py-2 text-sm text-emerald-200 lg:col-span-2">
+        Abre com a sua abertura original{story.manterAbertura ? " (você pediu para manter)" : ""}.
+      </p>
+    );
+  const block = (title: string, ls: { who: string; text: string }[], cls: string) => (
+    <div className={`min-w-0 rounded-lg border p-3 ${cls}`}>
+      <div className="mb-1 text-xs font-medium text-zinc-400">{title}</div>
+      {ls.map((l, i) => (
+        <p key={i} className="text-sm text-zinc-100">
+          <strong>{l.who}:</strong> {l.text}
+        </p>
+      ))}
+    </div>
+  );
+  return (
+    <div className="space-y-3 rounded-lg border border-amber-700/60 bg-amber-950/10 p-4 lg:col-span-2" id="abertura">
+      <h3 className="text-sm font-semibold text-zinc-200">O gerador trocou a sua abertura</h3>
+      {c.mudancas?.abertura && <p className="text-sm text-amber-200">Motivo: {c.mudancas.abertura}</p>}
+      <div className="grid gap-3 md:grid-cols-2">
+        {block("Sua abertura (original)", chk.original, "border-emerald-800/60")}
+        {block("Abertura sugerida", chk.sugerida, "border-sky-800/60")}
+      </div>
+      {versionId && (
+        <ActionButton
+          action={originalOpeningAction.bind(null, ideaId, versionId)}
+          label="Usar a original"
+          busy="Trocando…"
+          hint="Sem IA · US$ 0 · troca só a abertura e grava como nova versão"
+          className="btn-secondary btn-sm"
+        />
+      )}
     </div>
   );
 }
@@ -604,6 +650,15 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
                   <h3 className="mb-2 text-sm font-semibold text-zinc-200">O que mudou da sua história</h3>
                   <StoryChangesPanel c={sd} />
                 </div>
+                {d?.historia && (
+                  <OpeningPanel ideaId={idea.id} versionId={idea.currentVersionId} story={d.historia} c={sd} />
+                )}
+                {d?.historia && (
+                  <div className="min-w-0 rounded-lg border border-line p-4 lg:col-span-2" id="comparacao-linhas">
+                    <h3 className="mb-2 text-sm font-semibold text-zinc-200">Sua história × roteiro, linha a linha</h3>
+                    <LineDiff original={storyLines(d.historia)} generated={spokenLines(sd).map((l) => ({ who: l.who, text: l.text }))} />
+                  </div>
+                )}
               </div>
             ) : (
               <ScriptView c={sd} formatName={sd.meta?.formatName ?? idea.videoFormat?.name} />

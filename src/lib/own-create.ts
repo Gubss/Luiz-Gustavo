@@ -5,7 +5,8 @@
 import { prisma } from "./db";
 import { ensureProjectCode } from "./script-versions";
 import { GeneratorError, type IdeaData } from "./generator";
-import { parseOwnIdeas, parseStory } from "./own-story";
+import { parseOwnIdeas, parseStory, type OwnIdea } from "./own-story";
+import { defaultDirectionId } from "./directions";
 
 async function channelAndFormat(myChannelId: string, formatId: string) {
   const channel = await prisma.myChannel.findUnique({ where: { id: myChannelId } });
@@ -37,11 +38,11 @@ export function storyPremise(md: string) {
 }
 
 /** (a) A história vira uma ideia (sem IA); o roteiro sai depois, pelo gerador, preservando o que ela pede. */
-export async function createStoryIdea(input: { myChannelId: string; formatId: string; markdown: string; manterFalas: boolean; title?: string }) {
+export async function createStoryIdea(input: { myChannelId: string; formatId: string; markdown: string; manterFalas: boolean; manterAbertura?: boolean; title?: string }) {
   const md = input.markdown.trim();
   if (md.length < 80) throw new GeneratorError("Cole a história inteira (o .md) ou suba o arquivo.");
   const { channel, vf } = await channelAndFormat(input.myChannelId, input.formatId);
-  const historia = parseStory(md, input.manterFalas);
+  const historia = parseStory(md, input.manterFalas, !!input.manterAbertura);
   const title = input.title?.trim() || historia.title;
   const data: IdeaData = { ...emptyIdea(title, storyPremise(md)), historia };
   const idea = await prisma.idea.create({
@@ -65,8 +66,8 @@ export async function createStoryIdea(input: { myChannelId: string; formatId: st
 }
 
 /** (b) Uma ideia por linha (ou por seção "## 1." do banco de ideias); a premissa é o texto dele, literal. */
-export async function createOwnIdeas(input: { myChannelId: string; formatId: string; text: string }) {
-  const items = parseOwnIdeas(input.text);
+export async function createOwnIdeas(input: { myChannelId: string; formatId: string; text?: string; items?: OwnIdea[] }) {
+  const items = input.items?.length ? input.items : parseOwnIdeas(input.text ?? "");
   if (!items.length) throw new GeneratorError("Escreva pelo menos uma ideia (uma por linha).");
   const { channel, vf } = await channelAndFormat(input.myChannelId, input.formatId);
   const created = [];
@@ -102,6 +103,8 @@ export async function createManualFormat(input: {
   rules: string;
   exampleTitle?: string;
   example?: string;
+  /** v3: diagnóstico do canal de onde o formato nasceu. */
+  reportId?: string | null;
 }) {
   const name = input.name.trim();
   const rules = input.rules.trim();
@@ -110,10 +113,11 @@ export async function createManualFormat(input: {
   const channel = await prisma.myChannel.findUnique({ where: { id: input.myChannelId } });
   if (!channel) throw new GeneratorError("Escolha um canal.");
   if (!channel.nicheId) throw new GeneratorError("Esse canal ainda não tem nicho. Escolha o nicho no perfil do canal.");
+  const directionId = await defaultDirectionId({ myChannelId: channel.id, nicheId: channel.nicheId });
   const firstLine = rules.split("\n").map((l) => l.replace(/^[-*#\s]+/, "").trim()).find(Boolean) ?? "";
   return prisma.$transaction(async (tx) => {
     const vf = await tx.videoFormat.create({
-      data: { nicheId: channel.nicheId!, name, length: input.length, description: firstLine.slice(0, 240), narrativeRules: rules },
+      data: { nicheId: channel.nicheId!, name, length: input.length, description: firstLine.slice(0, 240), narrativeRules: rules, directionId, reportId: input.reportId ?? null },
     });
     if (input.example?.trim())
       await tx.myChannelScript.create({

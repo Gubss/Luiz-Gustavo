@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { INSTRUCTION_MAX, hasDirectionInstructions } from "@/lib/direction-instructions";
 import { saveNarrativeRulesAction, saveDirectionInstructionsAction, requestDirectionAction } from "../actions";
+import { setFormatDirectionAction } from "@/app/direcoes/actions";
+import { DIRECTION_BOXES, effectiveInstructions } from "@/lib/directions";
 import { FormatGaps } from "@/components/FormatGaps";
 import { gapHint } from "@/lib/classify";
 import { notFound } from "next/navigation";
@@ -220,7 +222,8 @@ function RecipeView({ c, videoIds }: { c: RecipeContent; videoIds: string[] }) {
 export default async function FormatPage({ params, searchParams }: PageProps<"/formatos/[id]">) {
   const { id } = await params;
   const sp = await searchParams;
-  const f = await prisma.videoFormat.findUnique({ where: { id }, include: { niche: true, channels: true } });
+  const f = await prisma.videoFormat.findUnique({ where: { id }, include: { niche: true, channels: true, direction: true } });
+  const directions = await prisma.direction.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, defaultChannels: { select: { name: true } } } });
   if (!f) notFound();
   const length = f.length as PlaybookFormat;
 
@@ -310,25 +313,52 @@ export default async function FormatPage({ params, searchParams }: PageProps<"/f
         </StateForm>
       </section>
       <section className="card space-y-4 p-5" aria-labelledby="direction-title">
-        <h2 id="direction-title" className="text-lg font-semibold">Instruções de direção</h2>
-        <p className="text-sm text-zinc-400">Cada diretor recebe a Geral de gravação e somente a caixa da sua função. O roteirista não recebe estas instruções.</p>
-        {!hasDirectionInstructions(f)&&<p role="status" className="text-amber-300">Preencha a Geral e as três funções para preparar a direção após aprovar as falas.</p>}
-        <StateForm action={saveDirectionInstructionsAction.bind(null,f.id)} label="Salvar instruções de direção" hint="Até 30.000 caracteres por caixa. Sem IA. Direções já iniciadas preservam as instruções usadas.">
-          {([
-            ["directionGeneral","Geral de gravação"],
-            ["directionScene","Diretor de cena"],
-            ["directionPhotography","Diretor de fotografia"],
-            ["directionSound","Diretor de som e trilha"],
-          ] as const).map(([key,label])=><div key={key}>
-            <label className="label" htmlFor={key}>{label}</label>
-            <textarea id={key} name={key} className="input" rows={key==="directionGeneral"?6:8} maxLength={INSTRUCTION_MAX} defaultValue={f[key]??""}/>
-            <p className="mt-1 text-xs text-zinc-500">{(f[key]?.length??0).toLocaleString("pt-BR")} caracteres salvos · texto integral editável</p>
-          </div>)}
+        <h2 id="direction-title" className="text-lg font-semibold">Direção</h2>
+        <p className="text-sm text-zinc-400">O formato usa uma direção de <Link href="/direcoes" className="underline">Direções</Link>. Cada diretor recebe a Geral e somente a caixa da sua função. O roteirista não recebe estas instruções.</p>
+        <StateForm action={setFormatDirectionAction.bind(null, f.id)} label="Usar esta direção" className="btn-secondary" formClassName="flex flex-wrap items-end gap-2" hint="Sem IA. Direções de vídeo já começadas mantêm as instruções usadas.">
+          <div className="min-w-0 flex-1">
+            <label className="label" htmlFor="direcao">Direção do formato</label>
+            <select id="direcao" name="direcao" className="input" defaultValue={f.directionId ?? ""}>
+              <option value="">{hasDirectionInstructions(f) ? "Nenhuma (usa as caixas antigas deste formato)" : "Nenhuma"}</option>
+              {directions.map((d) => <option key={d.id} value={d.id}>{d.name}{d.defaultChannels.length ? ` · padrão de ${d.defaultChannels.map((c) => c.name).join(", ")}` : ""}</option>)}
+            </select>
+          </div>
         </StateForm>
+        {(() => {
+          const eff = effectiveInstructions(f);
+          if (!hasDirectionInstructions(eff)) return <p role="status" className="text-amber-300">{f.direction ? <>A direção “{f.direction.name}” ainda não tem as 4 caixas. <Link href={`/direcoes/${f.direction.id}`} className="underline">Completar a direção</Link>.</> : <>Escolha uma direção (ou <Link href="/direcoes#nova" className="underline">crie uma</Link>) para preparar a direção depois de aprovar as falas.</>}</p>;
+          return (
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center gap-2 text-sm">
+                <span className="text-zinc-300">{f.direction ? <>Usando <b>{f.direction.name}</b></> : "Usando as caixas antigas deste formato"}</span>
+                {f.direction && <Link href={`/direcoes/${f.direction.id}`} className="btn-ghost px-2 py-0.5 text-xs">Editar direção</Link>}
+              </div>
+              <div className="grid gap-2 md:grid-cols-2">
+                {DIRECTION_BOXES.map(([key, label]) => (
+                  <details key={key} className="rounded-lg border border-line p-3">
+                    <summary className="cursor-pointer text-sm text-zinc-300">{label} <span className="text-xs text-zinc-500">· {(eff?.[key]?.length ?? 0).toLocaleString("pt-BR")} caracteres</span></summary>
+                    <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap break-words text-xs text-zinc-400">{eff?.[key]}</pre>
+                  </details>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
+        {!f.direction && hasDirectionInstructions(f) && (
+          <details>
+            <summary className="cursor-pointer text-sm text-zinc-400">Editar as caixas antigas deste formato</summary>
+            <StateForm action={saveDirectionInstructionsAction.bind(null,f.id)} label="Salvar instruções de direção" hint="Até 30.000 caracteres por caixa. Sem IA. Melhor: copiar para uma direção nova em Direções.">
+              {DIRECTION_BOXES.map(([key,label])=><div key={key}>
+                <label className="label" htmlFor={key}>{label}</label>
+                <textarea id={key} name={key} className="input" rows={key==="directionGeneral"?6:8} maxLength={INSTRUCTION_MAX} defaultValue={f[key]??""}/>
+              </div>)}
+            </StateForm>
+          </details>
+        )}
         {f.directionStudy&&<details><summary className="text-sm text-zinc-400">Estudo anterior (somente consulta)</summary><pre className="mt-3 whitespace-pre-wrap break-words text-sm text-zinc-400">{f.directionStudy}</pre></details>}
         <details>
           <summary className="cursor-pointer text-sm">Pedir estudo de direção</summary>
-          <StateForm action={requestDirectionAction.bind(null, f.id)} label="Pedir estudo de direção" hint="O GEPETO faz o estudo fora do Radar, sem API.">
+          <StateForm action={requestDirectionAction.bind(null, f.id)} label="Pedir estudo de direção" hint="O GEPETO faz o estudo fora do Radar, sem API. O estudo volta como direção nova (Direções → a partir de um estudo).">
             <label className="label" htmlFor="direction-links">Até 5 links de vídeo do formato, um por linha</label>
             <textarea id="direction-links" name="links" className="input" rows={5} required maxLength={10000} />
           </StateForm>

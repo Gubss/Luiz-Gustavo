@@ -296,6 +296,9 @@ export default async function MyVideosPage({ searchParams }: { searchParams: Pro
             <h2 className="text-lg font-semibold">Diagnóstico do canal</h2>
             <p className="text-sm text-zinc-400">O que os seus vídeos que foram bem têm em comum, o que os que foram mal têm em comum e o que da cartilha funciona no seu canal.</p>
           </div>
+          <Link href={`/meus-canais/${c.id}/diagnostico`} className="btn-secondary shrink-0">
+            Histórico e edição →
+          </Link>
         </header>
         <div className="flex flex-wrap items-start gap-6">
           <div className="min-w-0 flex-1 basis-full sm:basis-72">

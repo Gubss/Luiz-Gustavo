@@ -47,6 +47,7 @@ const DIAG = {
 };
 const REPORT = {
   resumo: "Vídeos que abrem com ação vão melhor.",
+  ondeSaem: "Quase todos ficam até o fim.",
   padroesQueFuncionam: [{ padrao: "Ação no primeiro segundo", evidencia: "fiozinho 4x" }],
   padroesQueNaoFuncionam: [{ padrao: "Explicar antes de mostrar", evidencia: "vulcão 0,3x" }],
   cartilhaNoMeuCanal: [{ item: "Narração rápida", status: "contrariado", evidencia: "vulcão rápido e foi mal" }],

@@ -235,6 +235,7 @@ export const GENERATION_KIND_LABEL: Record<string, string> = {
   "profile-from-channel": "Perfil a partir do meu canal",
   "my-video-diagnosis": "Diagnóstico de vídeo meu",
   "my-channel-report": "Diagnóstico do meu canal",
+  "format-from-diagnosis": "Formato a partir do diagnóstico",
 };
 
 /** Gasto com o Claude: mês corrente por tipo e por modelo, gasto por dia (últimos 30 dias) e mês passado. */

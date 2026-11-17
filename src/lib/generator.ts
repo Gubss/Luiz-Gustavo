@@ -1,4 +1,5 @@
 import {hasDirectionInstructions} from "./direction-instructions";
+import {effectiveInstructions} from "./directions";
 /**
  * Gerador de temas, títulos e roteiros.
  *
@@ -34,7 +35,7 @@ import {
 import { findOverlaps, longSentences, sentenceStats, type Overlap, type SentenceStats } from "./speech";
 import { channelStopwords, findOwnRepeats, ownItems, type OwnMatch } from "./my-catalog";
 import { learningsBlock } from "./my-diagnosis";
-import { compareStory, ownIdeaBlock, storyBlock, STORY_TASK, StorySpokenExtra, type OwnStory } from "./own-story";
+import { compareStory, ownIdeaBlock, storyBlock, STORY_TASK, StorySpokenExtra, withOriginalOpening, type OwnStory } from "./own-story";
 
 function parse<T>(json: string | null | undefined): T | null {
   if (!json) return null;
@@ -194,7 +195,7 @@ export type GeneratorContext = {
   nicheId: string;
   nicheName: string;
   format: PlaybookFormat;
-  videoFormat: { id: string; name: string; description: string | null; videos: number; directionStudy?: string | null; directionReady?: boolean; narrativeRules?: string | null };
+  videoFormat: { id: string; name: string; description: string | null; videos: number; directionStudy?: string | null; directionReady?: boolean; directionName?: string | null; narrativeRules?: string | null };
   recipe: Awaited<ReturnType<typeof latestRecipe>>;
   recipeStats: RecipeStats | null;
   rule: Awaited<ReturnType<typeof latestRule>>;
@@ -219,7 +220,7 @@ export async function loadContext(opts: { myChannelId: string; formatId: string 
   });
   const vf = await prisma.videoFormat.findUnique({
     where: { id: opts.formatId },
-    include: { niche: true, _count: { select: { videos: true } }, channels: { where: { myChannelId: channel.id } } },
+    include: { niche: true, direction: true, _count: { select: { videos: true } }, channels: { where: { myChannelId: channel.id } } },
   });
   if (vf && channel.nicheId && vf.nicheId !== channel.nicheId) throw new GeneratorError("Formato de outro nicho.");
   if (!vf) throw new GeneratorError("Esse formato não existe mais. Escolha outro.");
@@ -299,7 +300,7 @@ export async function loadContext(opts: { myChannelId: string; formatId: string 
     nicheId: vf.nicheId,
     nicheName: vf.niche.name,
     format,
-    videoFormat: { id: vf.id, name: vf.name, description: vf.description, videos: vf._count.videos, directionStudy: vf.directionStudy, directionReady: hasDirectionInstructions(vf), narrativeRules: vf.narrativeRules },
+    videoFormat: { id: vf.id, name: vf.name, description: vf.description, videos: vf._count.videos, directionStudy: vf.directionStudy, directionReady: hasDirectionInstructions(effectiveInstructions(vf)), directionName: vf.direction?.name ?? null, narrativeRules: vf.narrativeRules },
     recipe,
     recipeStats,
     rule,
@@ -944,6 +945,24 @@ export async function correctScript(ideaId:string,versionId:string,lineNumber:nu
  const updated={...data,planoCenas:undefined,falado:[...original.slice(0,lineNumber-1),...replacement,...original.slice(endLineNumber)],cenas:data.cenas??[],pendencias:Array.from(new Set([...(data.pendencias??[]),...r.data.pendencias,...(data.planoCenas?.length?["Revisar plano de cenas após a correção das falas."]:[]),...(data.cenas?.length&&replacement.length!==endLineNumber-lineNumber+1?["A correção alterou a quantidade de falas; revisar vínculos e tempos da direção legada antes de produzir."]:[])]))};
  const ref=await referenceFor(ctx);
  return appendVersion({ideaId,expectedVersionId:versionId,content:JSON.stringify({...updated,channelReference:ref}),markdown:(code,n)=>exportScript(updated,ref,code,n,ctx.meta),request,category:categoryValue,origin:"correction",generationId:r.generationId,model:r.model,costUsd:r.costUsd});
+}
+/** Adendo B (Gubs 17/11): troca só a abertura do roteiro pela abertura original da história. Sem IA, US$ 0, nova versão. */
+export async function applyOriginalOpening(ideaId:string,versionId:string) {
+ const {idea,ctx}=await ideaContext(ideaId);
+ const story=parse<IdeaData>(idea.ideaData)?.historia;
+ if(!story) throw new GeneratorError("Esta ideia não veio de uma história sua.");
+ if(idea.currentVersionId!==versionId) throw new GeneratorError("O roteiro mudou. Reabra a versão atual.");
+ const saved=await prisma.scriptVersion.findFirst({where:{id:versionId,ideaId}});
+ if(!saved) throw new GeneratorError("Versão não pertence ao projeto.");
+ const data=JSON.parse(saved.content) as ScriptContent;
+ const lines=spokenLines(data).map(l=>({personagem:l.who,fala:l.text}));
+ const {falado,countChanged}=withOriginalOpening(story,lines);
+ const updated:ScriptContent={...data,planoCenas:undefined,falado,
+  mudancas:data.mudancas?{...data.mudancas,abertura:"Abertura original da sua história (você escolheu “usar a original”; troca feita sem IA)."}:data.mudancas,
+  comparacao:compareStory(story,falado),
+  pendencias:Array.from(new Set([...(data.pendencias??[]),...(data.planoCenas?.length||data.cenas?.length?["Abertura trocada pela original: revisar o plano de cenas antes de produzir."]:[]),...(countChanged?["A abertura original estava repetida mais adiante e a repetição saiu; confira a ligação com a fala seguinte."]:[])]))};
+ const ref=await referenceFor(ctx);
+ return appendVersion({ideaId,expectedVersionId:versionId,content:JSON.stringify({...updated,meta:(data as {meta?:unknown}).meta??ctx.meta,channelReference:ref}),markdown:(code,n)=>exportScript(updated,ref,code,n,ctx.meta),request:"Usar a abertura original da história",category:"história",origin:"opening-original",costUsd:0});
 }
 export const OptionalCritiqueSchema=z.object({observacoes:z.array(z.string()),hipoteses:z.array(z.string()),pendencias:z.array(z.string())});
 export async function requestCritique(ideaId:string,versionId:string) {

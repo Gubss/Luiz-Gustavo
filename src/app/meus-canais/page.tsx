@@ -44,6 +44,9 @@ export default async function MyChannelsPage() {
               <Link href={`/meus-videos?canal=${c.id}`} className="btn-secondary">
                 Meus vídeos
               </Link>
+              <Link href={`/meus-canais/${c.id}/diagnostico`} className="btn-secondary">
+                Diagnóstico do canal
+              </Link>
               <Link href={`/gerador?canal=${c.id}`} className="btn-primary">
                 Gerar ideias
               </Link>

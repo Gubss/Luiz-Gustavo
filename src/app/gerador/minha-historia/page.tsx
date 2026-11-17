@@ -81,6 +81,16 @@ export default async function OwnStoryPage({ searchParams }: PageProps<"/gerador
               </label>
             </div>
           </fieldset>
+          <label className="flex items-start gap-2 rounded-lg border border-line p-3 text-sm hover:border-zinc-500">
+            <input type="checkbox" name="abertura" value="manter" className="mt-1" />
+            <span>
+              <span className="font-medium text-zinc-100">Manter a abertura original</span>
+              <span className="block text-xs text-zinc-400">
+                O roteiro começa com a primeira fala da sua história, palavra por palavra. Desligado: o gerador pode trocar a abertura, e a tela mostra a sua e a
+                sugerida lado a lado, com um botão para voltar à sua sem custo.
+              </span>
+            </span>
+          </label>
         </StateForm>
       </section>
       <p className="text-xs text-zinc-500">
