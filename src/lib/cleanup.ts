@@ -3,6 +3,7 @@
  * Sempre faz a cópia de segurança do banco ANTES; se a cópia falhar, não apaga nada.
  * Nunca apaga estudos (vídeos, transcrições, diagnósticos) nem os roteiros aprovados do perfil (MyChannelScript).
  */
+import { deleteIdeasInTransaction } from "./delete-idea";
 import { prisma } from "./db";
 import { makeBackup, type BackupFile } from "./backup";
 
@@ -24,6 +25,8 @@ export async function cleanupPreview(nicheId: string) {
         chosenTitle: true,
         titles: true,
         status: true,
+        approvedVersionId: true,
+        approvedAt: true,
         format: true,
         script: true,
         scriptData: true,
@@ -60,10 +63,12 @@ export async function runCleanup(nicheId: string, opts: { playbooks: boolean; id
     throw new CleanupError(`Não consegui fazer a cópia de segurança, então não apaguei nada. (${e instanceof Error ? e.message : String(e)})`);
   }
   const ids = allowed.map((x) => x.id);
-  const [pb, ideas] = await prisma.$transaction([
-    prisma.nichePlaybook.deleteMany({ where: opts.playbooks ? { nicheId } : { id: "__nada__" } }),
-    prisma.idea.deleteMany({ where: { id: { in: ids } } }),
-  ]);
+  const [pb, ideas] = await prisma.$transaction(async tx => {
+    const pb = await tx.nichePlaybook.deleteMany({ where: opts.playbooks ? { nicheId } : { id: "__nada__" } });
+    const ideas = await deleteIdeasInTransaction(tx, { AND: [ideasOfNiche(nicheId), { formatId: null }, { id: { in: ids } }] });
+    return [pb, ideas] as const;
+  });
   const kept = (await prisma.idea.findMany({ where: { id: { in: KEEP_IDEA_IDS } }, select: { theme: true, chosenTitle: true } })).map((x) => x.chosenTitle || x.theme);
+  kept.push(...ideas.protectedIdeas.map(i => i.chosenTitle || i.theme));
   return { backup, playbooks: pb.count, ideas: ideas.count, kept };
 }

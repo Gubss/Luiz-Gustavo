@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { deleteIdeaSafely } from "@/lib/delete-idea";
 import { prisma } from "@/lib/db";
 import { usdToBrl } from "@/lib/claude";
 import { correctScript, requestCritique, generateIdeas, generateScript, IDEA_STATUS, NO_RECIPE_MSG, revisionDefaults, scriptMissingRecipe, type IdeasRequest, type ScriptMode } from "@/lib/generator";
@@ -98,8 +99,10 @@ export async function saveIdeaNotes(ideaId: string, _prev: FormState, fd: FormDa
 
 /** Apaga a ideia sem sair da lista. */
 export async function deleteIdeaInline(ideaId: string) {
-  await prisma.idea.delete({ where: { id: ideaId } });
+  const result = await deleteIdeaSafely(ideaId);
+  if (result.message) return result;
   refresh();
+  return result;
 }
 
 /** Liga a ideia ao vídeo do meu canal em que ela virou (escolhido na lista ou pelo link) e marca como publicada. */
@@ -128,7 +131,8 @@ export async function unlinkPublishedAction(ideaId: string) {
 }
 
 export async function deleteIdea(ideaId: string) {
-  await prisma.idea.delete({ where: { id: ideaId } });
+  const result = await deleteIdeaSafely(ideaId);
+  if (result.message) return result;
   refresh();
   redirect("/ideias");
 }

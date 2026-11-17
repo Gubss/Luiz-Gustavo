@@ -1,3 +1,4 @@
+import { IDEA_DELETE_BLOCKED, isIdeaDeleteProtected } from "@/lib/delete-idea";
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { fmtDateTime } from "@/lib/format";
@@ -55,7 +56,7 @@ export default async function CleanupPage({ searchParams }: PageProps<"/formatos
 
       <p className="rounded-lg border border-emerald-800 bg-emerald-950/30 p-3 text-sm text-emerald-200">
         Não se apagam: os estudos ({keep.studies} diagnósticos, com vídeos e transcrições), os roteiros aprovados do perfil ({keep.scripts}), os formatos e
-        as receitas. Ideias que já têm formato também ficam.
+        as receitas. Ideias com formato, aprovadas, produzidas ou publicadas também ficam.
       </p>
 
       <StateForm action={cleanupAction.bind(null, niche.id)} label="Fazer a cópia de segurança e apagar" busy="Copiando e apagando…" className="btn-primary bg-red-700 hover:bg-red-600" formClassName="space-y-5">
@@ -83,7 +84,8 @@ export default async function CleanupPage({ searchParams }: PageProps<"/formatos
           ) : (
             <ul className="divide-y divide-line rounded-lg border border-line">
               {ideas.map((i) => {
-                const kept = KEEP_IDEA_IDS.includes(i.id);
+                const protectedIdea = isIdeaDeleteProtected(i);
+                const kept = KEEP_IDEA_IDS.includes(i.id) || protectedIdea;
                 const title = i.chosenTitle || firstTitle(i.titles) || i.theme;
                 return (
                   <li key={i.id} className={`flex items-start gap-3 px-3 py-2 text-sm ${kept ? "bg-emerald-950/20" : ""}`}>
@@ -95,7 +97,7 @@ export default async function CleanupPage({ searchParams }: PageProps<"/formatos
                       <div className="text-xs text-zinc-500">
                         {IDEA_STATUS[i.status] ?? i.status} · {i.script || i.scriptData ? "com roteiro" : "sem roteiro"} · {i.myChannel?.name ?? "sem canal"} ·{" "}
                         {fmtDateTime(i.createdAt)}
-                        {kept && <span className="text-emerald-300"> · fica (a ideia dos balões)</span>}
+                        {kept && <span className="text-emerald-300"> · {protectedIdea ? IDEA_DELETE_BLOCKED : "fica (a ideia dos balões)"}</span>}
                         {!kept && (i.publishedVideoId || i._count.myVideos > 0) && (
                           <span className="text-amber-300"> · ligada a vídeo do canal: o vídeo fica, só perde o vínculo com a ideia</span>
                         )}
