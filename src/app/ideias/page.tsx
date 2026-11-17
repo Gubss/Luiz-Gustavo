@@ -49,9 +49,14 @@ export default async function IdeasPage({ searchParams }: PageProps<"/ideias">) 
         title="Banco de ideias"
         subtitle="3–5 · Abra uma ideia para escrever ou revisar o roteiro."
         actions={
-          <Link href={canal ? `/gerador?canal=${canal}` : "/gerador"} className="btn-primary">
-            Gerar ideias
-          </Link>
+          <>
+            <Link href={canal ? `/ideias/nova?canal=${canal}` : "/ideias/nova"} className="btn-secondary">
+              Minha ideia
+            </Link>
+            <Link href={canal ? `/gerador?canal=${canal}` : "/gerador"} className="btn-primary">
+              Gerar ideias
+            </Link>
+          </>
         }
       />
 

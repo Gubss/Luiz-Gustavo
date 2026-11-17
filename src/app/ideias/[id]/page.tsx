@@ -11,6 +11,7 @@ import { modelLabel, usdToBrl, type CostEstimate } from "@/lib/claude";
 import { findSimilarTitles } from "@/lib/catalog";
 import { estimateScript, scriptPending, type FormatMeta, type IdeaData, type ScriptContent, type ScriptMetrics, type ScriptReview, type VoiceCheck } from "@/lib/generator";
 import type { PlaybookStats } from "@/lib/playbook";
+import type { OwnStory } from "@/lib/own-story";
 import { formatsOfNiche, isDraft } from "@/lib/formats";
 import type { PlaybookFormat } from "@/lib/playbook";
 
@@ -241,6 +242,114 @@ function ScriptView({c}: {c:ScriptContent;formatName?:string|null}) {
  return <ScriptTabs spoken={<div className="space-y-3">{spokenLines(c).map(l=><p key={l.n}><strong>{l.who}:</strong> {l.text}</p>)}</div>} animation={<div>{(c.planoCenas?.length||c.cenas.length)>0&&<p className="mb-3 text-amber-300">Direção legada para consulta. Prepare e confira as etapas vinculadas à versão aprovada abaixo antes de produzir.</p>}{c.planoCenas?.length ? c.planoCenas.map((scene,i)=><p key={i}>{sceneLine(scene,i)}</p>) : c.cenas.length?c.cenas.map((s,i)=><p key={i}>{s.inicio}–{s.fim}s (estimado): {s.acao}</p>):<p>Veja abaixo “Direção da versão atual” para preparar ou consultar cena, fotografia, som e integração.</p>}</div>}/>;
 }
 
+/** (a) A história do Gubs que deu origem à ideia: o que fica preservado e o texto inteiro. */
+function StoryPanel({ s }: { s: OwnStory }) {
+  return (
+    <div className="space-y-2 rounded-lg border border-sky-900/60 bg-sky-950/10 p-3 text-sm">
+      <div className="text-xs text-sky-300">
+        Sua história · {s.manterFalas ? "falas mantidas (só corta e reordena)" : "falas podem ser reescritas, menos as do Preservar"}
+      </div>
+      {s.preservar.length > 0 && (
+        <div>
+          <div className="text-xs text-zinc-500">Preservar</div>
+          <ul className="mt-1 flex flex-wrap gap-1.5">
+            {s.preservar.map((p) => (
+              <li key={p} className="badge bg-zinc-800 text-zinc-200">
+                {p}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <Collapsible title="Ver o texto inteiro" className="rounded border border-line p-2">
+        <pre className="max-h-96 overflow-auto whitespace-pre-wrap text-xs text-zinc-300">{s.text}</pre>
+      </Collapsible>
+    </div>
+  );
+}
+
+/** (a) Lado direito: o que mudou da história, em linguagem leiga, com a conferência em código das falas. */
+function StoryChangesPanel({ c }: { c: ScriptContent }) {
+  const m = c.mudancas!;
+  const cmp = c.comparacao;
+  const item = (title: string, body: React.ReactNode) => (
+    <div>
+      <div className="text-xs font-medium text-zinc-400">{title}</div>
+      <div className="mt-0.5 text-zinc-200">{body}</div>
+    </div>
+  );
+  const list = (xs: string[], empty: string) => (xs.length ? <ul className="list-disc space-y-0.5 pl-4">{xs.map((x, i) => <li key={i}>{x}</li>)}</ul> : <span className="text-zinc-500">{empty}</span>);
+  return (
+    <div className="space-y-3 text-sm">
+      {item("Abertura", m.abertura)}
+      {item(
+        "Ganchos (onde planta → onde paga)",
+        m.ganchos.length ? (
+          <ol className="list-decimal space-y-1 pl-4">
+            {m.ganchos.map((g, i) => (
+              <li key={i}>
+                {g.pergunta} <span className="text-zinc-500">· {g.plantadoEm} → {g.pagoEm}</span>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <span className="text-amber-300">Nenhum gancho aberto listado.</span>
+        ),
+      )}
+      {item("O que saiu", list(m.cortes, "Nada foi cortado."))}
+      {item("O que mudou de lugar", list(m.reordenado, "A ordem é a da história."))}
+      {m.falasReescritas.length > 0 &&
+        item(
+          "Falas reescritas",
+          <ul className="space-y-1">
+            {m.falasReescritas.map((f, i) => (
+              <li key={i}>
+                <span className="text-zinc-500 line-through">{f.antes}</span> → {f.depois}
+              </li>
+            ))}
+          </ul>,
+        )}
+      {item("Falas novas", list(m.falasNovas, "Nenhuma."))}
+      {item("Final", m.final)}
+      {cmp && (
+        <div className="space-y-1 rounded border border-line p-2">
+          <div className="text-xs font-medium text-zinc-400">Conferido sem IA</div>
+          <p>
+            {cmp.iguais} de {cmp.total} falas da sua história ficaram iguais.
+          </p>
+          {cmp.marcadas.map((f) => (
+            <p key={f.fala} className={f.ok ? "text-emerald-300" : "text-red-300"}>
+              {f.ok ? "✓" : "✗ faltou:"} “{f.fala}”
+            </p>
+          ))}
+          {cmp.fora.length > 0 && (
+            <Collapsible title={`Falas da história que não estão iguais (${cmp.fora.length})`}>
+              <ul className="space-y-0.5 text-xs text-zinc-400">
+                {cmp.fora.map((f, i) => (
+                  <li key={i}>
+                    {f.who}: {f.text}
+                  </li>
+                ))}
+              </ul>
+            </Collapsible>
+          )}
+        </div>
+      )}
+      {c.preservados && c.preservados.length > 0 && (
+        <Collapsible title="Onde entrou cada item do Preservar">
+          <ul className="space-y-0.5 text-xs">
+            {c.preservados.map((p, i) => (
+              <li key={i} className={p.onde ? "text-zinc-300" : "text-red-300"}>
+                {p.item}: {p.onde || "não entrou"}
+              </li>
+            ))}
+          </ul>
+        </Collapsible>
+      )}
+    </div>
+  );
+}
+
 export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
   const { id } = await params;
   const idea = await prisma.idea.findUnique({
@@ -400,9 +509,13 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
             <ClampText lines={3} className="text-[15px] leading-relaxed text-zinc-200">
               {d.premissa}
             </ClampText>
-            <blockquote className="border-l-2 border-red-500/70 pl-2 text-zinc-300 italic">
-              {d.gancho} <span className="block text-xs text-zinc-500 not-italic">Gancho: {d.ganchoPadrao}</span>
-            </blockquote>
+            {d.gancho && (
+              <blockquote className="border-l-2 border-red-500/70 pl-2 text-zinc-300 italic">
+                {d.gancho} <span className="block text-xs text-zinc-500 not-italic">Gancho: {d.ganchoPadrao}</span>
+              </blockquote>
+            )}
+            {d.doGubs && <p className="text-xs text-sky-300">Ideia sua: o texto vai como premissa obrigatória, com as regras gerais (abertura, ganchos, final em loop).</p>}
+            {d.historia && <StoryPanel s={d.historia} />}
             <Collapsible title="De onde veio, por que pode funcionar e riscos" className="rounded-lg border border-line p-4" bodyClassName="mt-3 space-y-3">
             <div className="text-xs text-zinc-500">{idea.formatId ? "Como segue o motor do formato" : "Formato de história"}: {d.formatoDeHistoria}</div>
             <div className="grid gap-3 md:grid-cols-2">
@@ -481,7 +594,20 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
             </div>
             {sd.review && <Collapsible title="Leitura de espectador (lógica e graça)"><ReviewPanel r={sd.review} /></Collapsible>}
             {sd.voice && <Collapsible title="Conferência das falas"><VoicePanel v={sd.voice} /></Collapsible>}
-            <ScriptView c={sd} formatName={sd.meta?.formatName ?? idea.videoFormat?.name} />
+            {sd.mudancas ? (
+              <div className="grid gap-4 lg:grid-cols-2">
+                <div className="min-w-0 rounded-lg border border-line p-4">
+                  <h3 className="mb-2 text-sm font-semibold text-zinc-200">O que o gerador escreveu</h3>
+                  <ScriptView c={sd} formatName={sd.meta?.formatName ?? idea.videoFormat?.name} />
+                </div>
+                <div className="min-w-0 rounded-lg border border-sky-900/60 bg-sky-950/10 p-4">
+                  <h3 className="mb-2 text-sm font-semibold text-zinc-200">O que mudou da sua história</h3>
+                  <StoryChangesPanel c={sd} />
+                </div>
+              </div>
+            ) : (
+              <ScriptView c={sd} formatName={sd.meta?.formatName ?? idea.videoFormat?.name} />
+            )}
              <VersionReview idea={idea} />
             {sd.metrics && (
               <Collapsible title={`Medidas do roteiro × ${recipe ? "receita do formato" : "cartilha"}`} className="rounded-lg border border-line p-4">

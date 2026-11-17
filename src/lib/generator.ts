@@ -34,6 +34,7 @@ import {
 import { findOverlaps, longSentences, sentenceStats, type Overlap, type SentenceStats } from "./speech";
 import { channelStopwords, findOwnRepeats, ownItems, type OwnMatch } from "./my-catalog";
 import { learningsBlock } from "./my-diagnosis";
+import { compareStory, ownIdeaBlock, storyBlock, STORY_TASK, StorySpokenExtra, type OwnStory } from "./own-story";
 
 function parse<T>(json: string | null | undefined): T | null {
   if (!json) return null;
@@ -259,7 +260,9 @@ export async function loadContext(opts: { myChannelId: string; formatId: string 
     fallbackStudies = Math.min(5, studies.length);
     parts.push("## Ainda sem receita: os estudos dos vídeos do formato", ...studies.slice(0, fallbackStudies).map((s, i) => studyBlock(s, i)));
   } else {
-    parts.push("(Este formato ainda não tem vídeos estudados nem receita. Siga a descrição e o que o meu canal escreveu sobre ele.)");
+    parts.push(vf.narrativeRules?.trim()
+      ? "(Formato criado à mão, sem vídeo de referência: siga as regras narrativas que eu escrevi, que vêm no fim do pedido. A primeira peça é teste.)"
+      : "(Este formato ainda não tem vídeos estudados nem receita. Siga a descrição e o que o meu canal escreveu sobre ele.)");
   }
 
 
@@ -367,6 +370,10 @@ export type IdeaData = IdeasContent["ideias"][number] & {
   jaFeito?: OwnMatch[];
   /** Ideia de antes dos formatos que ganhou formato depois: o tema fica, o jeito de contar segue este formato. */
   recontar?: { formatId: string; formatName: string; at: string };
+  /** (a) Roteiro a partir da história do Gubs: o .md dele, a lista Preservar e o modo das falas. */
+  historia?: OwnStory;
+  /** (b) Ideia escrita pelo Gubs (sem IA): a premissa é o texto dele, literal. */
+  doGubs?: boolean;
 };
 
 /** A ideia foi pensada antes do formato (ou para outro) e vai ser recontada no formato escolhido? */
@@ -388,6 +395,7 @@ function ideasPrompt(ctx: GeneratorContext, n: number, ponto: string, taken: str
     `Formato: "${ctx.videoFormat.name}" (${formatLabel(ctx.format, true)}). Quantas ideias: ${n}.`,
     ponto.trim() ? `Ponto de partida que eu dei (tema, ideia ou pedido): ${ponto.trim()}` : "Sem ponto de partida: escolha temas que caibam no formato e no perfil.",
     ctx.reference ? "Use o vídeo do formato escolhido para adaptar como inspiração principal (tema ou história), traduzido para o meu canal." : "",
+    !ctx.recipe && ctx.videoFormat.narrativeRules?.trim() ? `\n# COMO É O FORMATO (escrito por mim)\n${ctx.videoFormat.narrativeRules.trim()}` : "",
     taken.length
       ? `\n# O QUE O MEU CANAL JÁ FEZ (vídeos publicados, roteiros e ideias guardadas) — não repita esses temas\n${taken.map((t) => `- ${t}`).join("\n")}`
       : "\n(O canal ainda não tem a lista de vídeos publicados no app.)",
@@ -538,7 +546,7 @@ export const ScriptSchema = z.object({
     .array(z.string())
     .describe("Dicas para animar e gravar a voz (expressões, pausas, efeitos). Só efeitos e regras de tela que estão no estilo visual do perfil."),
 });
-export type ScriptContent = z.infer<typeof ScriptSchema> & { falado?: { personagem: string; fala: string }[]; pendencias?: string[]; planoCenas?: ScenePlan };
+export type ScriptContent = z.infer<typeof ScriptSchema> & { falado?: { personagem: string; fala: string }[]; pendencias?: string[]; planoCenas?: ScenePlan } & Partial<ReturnType<typeof storyResult>>;
 
 const SCRIPT_TASK = `TAREFA: escrever o roteiro FALADO de UMA ideia: narrador e diálogos, na ordem.
 Entregue uma única versão. Preserve a premissa e a regra do mundo; não as substitua por conveniência.
@@ -548,7 +556,11 @@ Duração é estimada. Liste dúvidas reais e incoerências de narrador em pende
 
 function scriptPrompt(ctx: GeneratorContext, idea: { theme: string; chosenTitle: string | null; ideaData: string | null }, title: string, extra: string) {
  const d=parse<IdeaData>(idea.ideaData);
- return [ctx.block, "# IDEIA PARA ROTEIRIZAR", "Título: "+title, "Tema: "+idea.theme, isRetell(d,ctx.videoFormat.id)?"RECONTAR NO FORMATO preservando a premissa; gancho antigo não se aplica":"", "Premissa invariável: "+(d?.premissa??idea.theme), "Gancho sugerido: "+(isRetell(d,ctx.videoFormat.id)?"a definir neste formato":d?.gancho??""), "Formato: "+ctx.videoFormat.name, ctx.channel.durationMinSec && ctx.channel.durationMaxSec ? "Duração permitida: "+ctx.channel.durationMinSec+" a "+ctx.channel.durationMaxSec+"s; a história decide." : ctx.channel.durationSec?"Duração estimada desejada: "+ctx.channel.durationSec+"s":"", extra?"Pedido: "+extra:""].filter(Boolean).join("\n");
+ return [ctx.block, "# IDEIA PARA ROTEIRIZAR", "Título: "+title, "Tema: "+idea.theme, isRetell(d,ctx.videoFormat.id)?"RECONTAR NO FORMATO preservando a premissa; gancho antigo não se aplica":"", "Premissa invariável: "+(d?.premissa??idea.theme), "Gancho sugerido: "+(isRetell(d,ctx.videoFormat.id)?"a definir neste formato":d?.gancho??""), "Formato: "+ctx.videoFormat.name, ctx.channel.durationMinSec && ctx.channel.durationMaxSec ? "Duração permitida: "+ctx.channel.durationMinSec+" a "+ctx.channel.durationMaxSec+"s; a história decide." : ctx.channel.durationSec?"Duração estimada desejada: "+ctx.channel.durationSec+"s":"", extra?"Pedido: "+extra:""].filter(Boolean).join("\n")+ownBlock(d);
+}
+/** História (a) ou ideia (b) do Gubs: a lista Preservar e as regras gerais vão em todo pedido sobre o roteiro, inclusive correções. */
+function ownBlock(d:IdeaData|null) {
+ return d?.historia ? "\n"+storyBlock(d.historia) : d?.doGubs ? "\n"+ownIdeaBlock() : "";
 }
 
 /** Limite de saída do roteiro: raciocínio adaptativo + roteiro inteiro (a chamada é em streaming). */
@@ -625,7 +637,7 @@ export function buildScriptRequest(
   const { canRevise, defaultMode, pendingReturn } = revisionDefaults(idea);
   const want = mode ?? defaultMode;
   const previous = canRevise ? previousScriptJson(idea.scriptData) : null;
-  if (want !== "corrigir" || !previous) return { system: `${BASE_RULES}\n\n${SCRIPT_TASK}`, user: base, mode: "nova" };
+  if (want !== "corrigir" || !previous) return { system: `${BASE_RULES}\n\n${SCRIPT_TASK}` + (parse<IdeaData>(idea.ideaData)?.historia ? `\n${STORY_TASK}` : ""), user: base, mode: "nova" };
   if (!pendingReturn && !extra.trim())
     throw new GeneratorError("Para corrigir o roteiro, diga no pedido extra o que mudar (ou registre a devolução do Estúdio). Para recomeçar, escolha “história nova”.");
   return { system: `${BASE_RULES}\n\n${SCRIPT_TASK}\n\n${REVISE_TASK}`, user: base + "\n" + revisionBlock(previous, pendingReturn), mode: "corrigir" };
@@ -891,6 +903,8 @@ export const NO_RECIPE_MSG =
   "Este formato ainda não tem receita: o roteiro sai só da descrição e dos estudos, e costuma sair pior. Marque a confirmação para escrever assim mesmo.";
 
 export const SpokenSchema = z.object({titulo:z.string(),duracaoSeg:z.number(),falado:z.array(z.object({personagem:z.string(),fala:z.string()})).min(1),pendencias:z.array(z.string())});
+/** Roteiro da história do Gubs: o mesmo falado + o que mudou da história dele + onde cada item do Preservar entrou. */
+export const StorySpokenSchema = SpokenSchema.extend(StorySpokenExtra);
 function storedSpoken(d:z.infer<typeof SpokenSchema>):ScriptContent {
  return { ...d,historinha:"",formatoCombina:{combina:true,motivo:"",sugestao:""},titulosAlternativos:[],resumo:"",cenas:[],capa:"",descricao:"",hashtags:[],checklist:[],adaptacao:"",conferirFatos:[],dicasDeProducao:[] };
 }
@@ -901,10 +915,12 @@ async function referenceFor(ctx:GeneratorContext) {
 export async function generateScript(ideaId:string,opts:{title?:string;extra?:string;mode?:ScriptMode;noRecipeOk?:boolean}={}) {
  if(opts.mode==="corrigir") throw new GeneratorError("Selecione a fala e use Corrigir trecho; o restante fica preservado.");
  const s=await getSettings(); const {idea,ctx}=await ideaContext(ideaId);
- if(!ctx.recipe&&!opts.noRecipeOk) throw new GeneratorError(NO_RECIPE_MSG);
+ const story=parse<IdeaData>(idea.ideaData)?.historia;
+ if(!ctx.recipe&&!opts.noRecipeOk&&!story) throw new GeneratorError(NO_RECIPE_MSG);
  const req=buildScriptRequest(ctx,idea,opts.title||idea.chosenTitle||idea.theme,opts.extra??"","nova");
- const r=await callStructured({kind:"script",model:s.modelDeep,effort:"medium",system:req.system,user:req.user,schema:SpokenSchema,maxTokens:SCRIPT_MAX_TOKENS});
- const data=storedSpoken({...r.data,pendencias:Array.from(new Set([...r.data.pendencias,...narrationWarnings(r.data.falado)]))}); const ref=await referenceFor(ctx);
+ const r=await callStructured({kind:"script",model:s.modelDeep,effort:"medium",system:req.system,user:req.user,schema:story?StorySpokenSchema:SpokenSchema,maxTokens:SCRIPT_MAX_TOKENS});
+ const spoken={...r.data,pendencias:Array.from(new Set([...r.data.pendencias,...narrationWarnings(r.data.falado)]))};
+ const data:ScriptContent=story?{...storedSpoken(spoken),...storyResult(story,r.data as z.infer<typeof StorySpokenSchema>)}:storedSpoken(spoken); const ref=await referenceFor(ctx);
  const version=await appendVersion({ideaId,expectedVersionId:idea.currentVersionId,content:JSON.stringify({...data,meta:ctx.meta,channelReference:ref}),markdown:(code,n)=>exportScript(data,ref,code,n,ctx.meta),category:"história",origin:"generation",generationId:r.generationId,model:r.model,costUsd:r.costUsd,title:data.titulo});
  return {...r,data,idea:await prisma.idea.findUniqueOrThrow({where:{id:ideaId}}),version,mode:"nova"};
 }
@@ -944,8 +960,13 @@ export async function requestCritique(ideaId:string,versionId:string) {
 
 /** O formato da ideia ainda não tem receita (a tela pede confirmação antes de escrever). */
 export async function scriptMissingRecipe(ideaId: string) {
-  const { ctx } = await ideaContext(ideaId);
-  return !ctx.recipe;
+  const { idea, ctx } = await ideaContext(ideaId);
+  return !ctx.recipe && !parse<IdeaData>(idea.ideaData)?.historia;
+}
+
+/** O que guardar junto do roteiro da história: o que a IA disse que mudou + a conferência em código. */
+export function storyResult(story: OwnStory, d: z.infer<typeof StorySpokenSchema>) {
+  return { mudancas: d.mudancas, preservados: d.preservados, comparacao: compareStory(story, d.falado) };
 }
 
 // ---------- Medidas do roteiro (em código) ----------

@@ -8,6 +8,7 @@ import { usdToBrl } from "@/lib/claude";
 import { correctScript, requestCritique, generateIdeas, generateScript, IDEA_STATUS, NO_RECIPE_MSG, revisionDefaults, scriptMissingRecipe, type IdeasRequest, type ScriptMode } from "@/lib/generator";
 import { captureLegacyVersion, approveVersion, restoreVersion } from "@/lib/script-versions";
 import { startJob } from "@/lib/jobs";
+import { createOwnIdeas, createStoryIdea } from "@/lib/own-create";
 import { returnPoints } from "@/lib/speech";
 import type { FormState } from "@/app/video/actions";
 
@@ -239,3 +240,49 @@ export async function restoreAction(ideaId:string,_prev:FormState,fd:FormData):P
 }
 
 export async function captureLegacyAction(ideaId:string,_prev:FormState):Promise<FormState>{void _prev;try{await captureLegacyVersion(ideaId);refresh(ideaId);return {ok:"Roteiro preservado como versão legada, ainda sem aprovação."}}catch(e){return {error:errMsg(e)}}}
+
+// ---------- O que o Gubs traz pronto: história (a) e ideias (b). Criar é sem IA. ----------
+
+async function pastedOrFile(fd: FormData, field: string, fileField: string) {
+  const file = fd.get(fileField);
+  if (file instanceof File && file.size > 0) {
+    if (file.size > 200_000) throw new Error("Arquivo grande demais (máx. 200 KB).");
+    return await file.text();
+  }
+  return String(fd.get(field) ?? "");
+}
+
+/** (a) Cria a ideia com a história dele e já começa o roteiro em segundo plano; abre a tela da ideia. */
+export async function createStoryAction(_prev: FormState, fd: FormData): Promise<FormState> {
+  let ideaId = "";
+  try {
+    const markdown = await pastedOrFile(fd, "historia", "arquivo");
+    const idea = await createStoryIdea({
+      myChannelId: String(fd.get("canal") ?? ""),
+      formatId: String(fd.get("formato") ?? ""),
+      markdown,
+      manterFalas: fd.get("falas") !== "reescrever",
+      title: String(fd.get("titulo") ?? ""),
+    });
+    ideaId = idea.id;
+    await startScriptJob(idea.id, idea.theme, idea.theme, "", "nova", true);
+    refresh(idea.id);
+  } catch (e) {
+    return { error: errMsg(e) };
+  }
+  redirect(`/ideias/${ideaId}#roteiro`);
+}
+
+/** (b) Uma ideia por linha (ou o banco de ideias inteiro); nenhuma chamada de IA. */
+export async function createOwnIdeasAction(_prev: FormState, fd: FormData): Promise<FormState> {
+  let canal = "";
+  try {
+    canal = String(fd.get("canal") ?? "");
+    const text = await pastedOrFile(fd, "ideias", "arquivo");
+    await createOwnIdeas({ myChannelId: canal, formatId: String(fd.get("formato") ?? ""), text });
+    refresh();
+  } catch (e) {
+    return { error: errMsg(e) };
+  }
+  redirect(`/ideias?canal=${canal}`);
+}

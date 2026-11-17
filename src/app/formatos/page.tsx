@@ -164,6 +164,9 @@ export default async function FormatsPage({ searchParams }: PageProps<"/formatos
         }
         actions={
           <>
+          <Link href="/formatos/novo" className="btn-primary">
+            Criar formato à mão
+          </Link>
           <Link href={`/formatos/classificar?niche=${niche.id}`} className="btn-secondary">
             Classificar estudos automaticamente
           </Link>
@@ -221,9 +224,13 @@ export default async function FormatsPage({ searchParams }: PageProps<"/formatos
                   <Link key={f.id} href={`/formatos/${f.id}`} className="card flex flex-col gap-2 p-4 hover:border-zinc-600">
                     <div className="flex items-start justify-between gap-2">
                       <span className="text-[15px] font-semibold">{f.name}</span>
-                      <span className={`badge shrink-0 ${draft ? "bg-amber-600/30 text-amber-200" : "bg-emerald-600/30 text-emerald-200"}`}>
-                        {draft ? "rascunho" : "pronto"}
-                      </span>
+                      {f._count.videos === 0 && f.narrativeRules ? (
+                        <span className="badge shrink-0 bg-sky-600/30 text-sky-200">sem referência</span>
+                      ) : (
+                        <span className={`badge shrink-0 ${draft ? "bg-amber-600/30 text-amber-200" : "bg-emerald-600/30 text-emerald-200"}`}>
+                          {draft ? "rascunho" : "pronto"}
+                        </span>
+                      )}
                     </div>
                     {f.description && <p className="line-clamp-2 text-sm text-zinc-400">{f.description}</p>}
                     <div className="mt-auto text-xs text-zinc-500">

@@ -91,6 +91,16 @@ export default async function GeneratorPage({ searchParams }: PageProps<"/gerado
       <PageHeader
         title="Gerador de ideias"
         subtitle="3 · Escolha o canal e o formato para gerar ideias."
+        actions={
+          <>
+            <Link href={`/gerador/minha-historia?canal=${channel.id}${formatId ? `&formato=${formatId}` : ""}`} className="btn-primary">
+              Roteiro a partir da minha história
+            </Link>
+            <Link href={`/ideias/nova?canal=${channel.id}${formatId ? `&formato=${formatId}` : ""}`} className="btn-secondary">
+              Minha ideia
+            </Link>
+          </>
+        }
         help={
           <p>
             Escolha um <b>formato</b> (uma receita tirada de 3 a 8 vídeos parecidos). O roteiro segue só essa receita, aplica a <b>regra geral do
@@ -135,7 +145,7 @@ export default async function GeneratorPage({ searchParams }: PageProps<"/gerado
           {formats.map((f) => (
             <Chip key={f.id} href={href({ formato: f.id, ref: undefined })} active={f.id === formatId}>
               {f.name}
-              {isDraft(f._count.videos) && <span className="text-xs text-amber-300"> rascunho</span>}
+              {f._count.videos === 0 && f.narrativeRules ? <span className="text-xs text-sky-300"> sem referência</span> : isDraft(f._count.videos) && <span className="text-xs text-amber-300"> rascunho</span>}
             </Chip>
           ))}
           {formats.length === 0 && (
