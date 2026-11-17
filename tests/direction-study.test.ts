@@ -22,8 +22,8 @@ test("com estudo exige direção, sem estudo mantém pedido original", () => {
   assert.equal(directionPrompt("  "), "");
   assert.match(directionPrompt("regra visual"), /regra visual/);
   assert.match(directionPrompt("regra visual"), /preserve tom, tamanho e falas/);
-  const scene = { falaInicial: 1, falaFinal: 2, tela: "Peça cai", camera: "Aproxima na roda", efeito: "Impacto", etiqueta: "Roda" };
-  validateScenePlan([scene], 2);
+  const scene = { falaInicial: 1, falaFinal: 1, plano: "close", acao: "cai", trilha: "entra", tela: "Peça cai", camera: "Aproxima na roda", efeito: "Impacto", etiqueta: "Roda" };
+  validateScenePlan([scene], 1);
   assert.throws(() => validateScenePlan([scene], 3));
   assert.throws(() => validateScenePlan([scene, scene], 2));
   assert.match(sceneLine(scene, 0), /Tela:.*Câmera:.*Efeito:.*Etiqueta:/);

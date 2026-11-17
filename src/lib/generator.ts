@@ -547,7 +547,10 @@ Duração é estimada. Liste dúvidas reais e incoerências de narrador em pende
 
 function scriptPrompt(ctx: GeneratorContext, idea: { theme: string; chosenTitle: string | null; ideaData: string | null }, title: string, extra: string) {
  const d=parse<IdeaData>(idea.ideaData);
- return [ctx.block, "# IDEIA PARA ROTEIRIZAR", "Título: "+title, "Tema: "+idea.theme, isRetell(d,ctx.videoFormat.id)?"RECONTAR NO FORMATO preservando a premissa; gancho antigo não se aplica":"", "Premissa invariável: "+(d?.premissa??idea.theme), "Gancho sugerido: "+(isRetell(d,ctx.videoFormat.id)?"a definir neste formato":d?.gancho??""), "Formato: "+ctx.videoFormat.name, ctx.channel.durationSec?"Duração estimada desejada: "+ctx.channel.durationSec+"s":"", extra?"Pedido: "+extra:""].filter(Boolean).join("\n");
+ const storyStudy = /^## A\. /m.test(ctx.videoFormat.directionStudy ?? "");
+ const duration = storyStudy ? Math.min(ctx.channel.durationSec || 90, 90) : ctx.channel.durationSec;
+ const block = storyStudy ? ctx.block.replace(/^Duração alvo: .*$/gm, "Duração alvo: até " + duration + "s (estudo de direção)") : ctx.block;
+ return [block, "# IDEIA PARA ROTEIRIZAR", "Título: "+title, "Tema: "+idea.theme, isRetell(d,ctx.videoFormat.id)?"RECONTAR NO FORMATO preservando a premissa; gancho antigo não se aplica":"", "Premissa invariável: "+(d?.premissa??idea.theme), "Gancho sugerido: "+(isRetell(d,ctx.videoFormat.id)?"a definir neste formato":d?.gancho??""), "Formato: "+ctx.videoFormat.name, duration?"Duração estimada desejada: "+duration+"s":"", extra?"Pedido: "+extra:""].filter(Boolean).join("\n");
 }
 
 /** Limite de saída do roteiro: raciocínio adaptativo + roteiro inteiro (a chamada é em streaming). */

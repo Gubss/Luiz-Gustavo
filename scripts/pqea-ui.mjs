@@ -1,0 +1,113 @@
+import { createRequire } from 'node:module';
+import { spawn } from 'node:child_process';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import assert from 'node:assert/strict';
+const require = createRequire('C:/Users/gubsB/Documents/adega-sistema/package.json');
+const { chromium } = require('playwright');
+const evidence = 'C:/Users/gubsB/Documents/GUBS OS/GUBS OS/.maestri/tmp/radar-missao/pqea-evidencias';
+const requests = 'C:/Users/gubsB/Documents/GUBS OS/GUBS OS/.maestri/tmp/radar-pedidos-estudo';
+const run = JSON.parse(await fs.readFile(path.join(evidence, 'run.json'), 'utf8'));
+const base = 'http://127.0.0.1:3017';
+const { PrismaClient: FixtureClient } = createRequire(path.join(process.cwd(), 'package.json'))('@prisma/client');
+const fixtureDb = new FixtureClient({datasources:{db:{url:'file:./test-pqea-ui.db'}}});
+try { await fixtureDb.videoFormat.update({where:{id:run.emptyId},data:{directionStudy:null}}); } finally { await fixtureDb.$disconnect(); }
+const server = spawn(process.execPath, ['node_modules/next/dist/bin/next', 'start', '-p', '3017'], { windowsHide: true, env: { ...process.env, DATABASE_URL: 'file:./test-pqea-ui.db', RADAR_NO_TRACKER: '1' }, stdio: ['ignore', 'pipe', 'pipe'] });
+let serverLog = '';
+server.stdout.on('data', data => { serverLog += data; });
+server.stderr.on('data', data => { serverLog += data; });
+let browser;
+try {
+  for (let attempt = 0; attempt < 60; attempt++) {
+    if (server.exitCode !== null) throw new Error(serverLog);
+    try { const response = await fetch(base); if (response.ok) break; } catch {}
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  }
+  browser = await chromium.launch({ executablePath: 'C:/Program Files/Google/Chrome/Application/chrome.exe', headless: true });
+  const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  const warning = 'sem estudo de direção: o roteiro sai sem plano de cenas';
+  await page.goto(`${base}/formatos/${run.emptyId}`);
+  await page.getByText(warning, { exact: true }).waitFor();
+  await page.goto(`${base}/gerador?canal=${run.channelId}&formato=${run.emptyId}`);
+  await page.getByText(warning, { exact: false }).waitFor();
+  await page.goto(`${base}/formatos/${run.emptyId}`);
+  await page.getByLabel('Cole o estudo de direção').fill('# Direção de teste\n1. A câmera acompanha a peça.');
+  await page.getByRole('button', { name: 'Importar estudo pronto', exact: true }).click();
+  await page.getByText('Estudo de direção importado. Os próximos roteiros terão plano de cenas.', { exact: true }).waitFor();
+  await page.reload();
+  assert.match(await page.getByLabel('Cole o estudo de direção').inputValue(), /câmera acompanha/);
+  assert.equal(await page.getByText(warning, { exact: true }).count(), 0);
+  await page.getByLabel('Ou envie o estudo em .md', { exact: false }).setInputFiles({ name: 'estudo.md', mimeType: 'text/markdown', buffer: Buffer.from('# Estudo importado de arquivo\n1. Entrada com física e som.') });
+  await page.getByRole('button', { name: 'Importar estudo pronto', exact: true }).click();
+  await page.getByText('Estudo de direção importado. Os próximos roteiros terão plano de cenas.', { exact: true }).waitFor();
+  await page.reload();
+  assert.match(await page.getByLabel('Cole o estudo de direção').inputValue(), /Entrada com física/);
+  await page.locator('summary').filter({ hasText: /^Pedir estudo de direção$/ }).click();
+  await fs.mkdir(requests, { recursive: true });
+  const before = new Set(await fs.readdir(requests));
+  await page.getByLabel('Até 5 links de vídeo do formato, um por linha').fill('https://www.youtube.com/watch?v=910WubkL-vw\nhttps://www.youtube.com/watch?v=PtHNEI5rIXA');
+  await page.getByRole('button', { name: 'Pedir estudo de direção', exact: true }).click();
+  await page.getByText('Pedido salvo para o GEPETO estudar fora do Radar. Nenhuma API foi chamada.', { exact: true }).waitFor();
+  const added = (await fs.readdir(requests)).filter(file => !before.has(file) && file.includes('Teste-de-direcao-sem-estudo'));
+  assert.equal(added.length, 1);
+  const content = await fs.readFile(path.join(requests, added[0]), 'utf8');
+  assert.match(content, /910WubkL-vw/);
+  assert.match(content, /PtHNEI5rIXA/);
+  // Retira apenas o pedido criado pelo teste da fila do GEPETO, preservando-o na evidência.
+  assert.equal(path.dirname(path.resolve(requests, added[0])), path.resolve(requests));
+  await fs.rename(path.join(requests, added[0]), path.join(evidence, added[0]));
+  await page.goto(`${base}/gerador?canal=${run.channelId}&formato=${run.emptyId}`);
+  assert.equal(await page.getByText(warning, { exact: false }).count(), 0);
+  await page.goto(`${base}/formatos/${run.formatId}`);
+  assert.equal((await page.getByLabel('Cole o estudo de direção').inputValue()).split('\n').filter(line => /^\d+\./.test(line)).length, 21);
+  await page.screenshot({ path: path.join(evidence, 'formato-desktop.png'), fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+  await page.screenshot({ path: path.join(evidence, 'formato-mobile.png'), fullPage: true });
+  await page.goto(`${base}/ideias/${run.ideaId}`);
+  await page.getByRole('tab', { name: 'Animação e direção', exact: true }).click();
+  assert.match(await page.getByRole('tabpanel').innerText(), /Cena 1.*Tela:.*Câmera:.*Efeito:.*Etiqueta:/);
+  await page.getByRole('tabpanel').screenshot({ path: path.join(evidence, 'plano-cenas.png') });
+  const exported = await page.request.get(`${base}/api/ideias/${run.ideaId}/roteiro`);
+  assert.equal(exported.status(), 200);
+  assert.match(await exported.text(), /Cena 1.*Tela:.*Câmera:.*Efeito:.*Etiqueta:/);
+
+  const { PrismaClient } = createRequire(path.join(process.cwd(), 'package.json'))('@prisma/client');
+  const testDb = new PrismaClient({ datasources: { db: { url: 'file:./test-pqea-ui.db' } } });
+  try {
+    const idea = await testDb.idea.findUniqueOrThrow({ where: { id: run.ideaId } });
+    const version = await testDb.scriptVersion.findUniqueOrThrow({ where: { id: idea.currentVersionId } });
+    const original = version.content;
+    const data = JSON.parse(original);
+    assert.equal(data.planoCenas.length, data.falado.length);
+    for (const [i, scene] of data.planoCenas.entries()) {
+      assert.equal(scene.falaInicial, i+1); assert.equal(scene.falaFinal, i+1);
+      for (const key of ['tela','plano','camera','acao','efeito','trilha']) assert.ok(scene[key].trim());
+    }
+    try {
+      data.falado.at(-1).fala = 'Comenta e se inscreve. Tchau!';
+      data.duracaoSeg = 101;
+      await testDb.scriptVersion.update({ where: { id: version.id }, data: { content: JSON.stringify(data) } });
+      await page.reload();
+      await page.getByRole('alert').filter({ hasText: 'Conferência automática' }).waitFor();
+      assert.match(await page.getByRole('alert').filter({ hasText: 'Conferência automática' }).innerText(), /Fim proibido/);
+      assert.match(await page.getByRole('alert').filter({ hasText: 'Conferência automática' }).innerText(), /1min40/);
+      await page.screenshot({ path: path.join(evidence, 'avisos-mobile.png'), fullPage: true });
+      data.falado.at(-1).fala = 'Quem puxou esse fio?';
+      data.duracaoSeg = 90;
+      await testDb.scriptVersion.update({ where: { id: version.id }, data: { content: JSON.stringify(data) } });
+      await page.reload();
+      assert.equal(await page.getByRole('alert').filter({ hasText: 'Conferência automática' }).count(),0);
+    } finally { await testDb.scriptVersion.update({ where: { id: version.id }, data: { content: original } }); }
+  } finally { await testDb.$disconnect(); }
+
+  assert.deepEqual(errors, []);
+  await fs.writeFile(path.join(evidence, 'ui-result.json'), JSON.stringify({ ok: true, importText: true, importFile: true, requestFile: true, warnings: true, scenePlan: true, endingAndDurationWarnings: true, mobile: true, errors }, null, 2));
+  console.log('UI_OK: import texto/arquivo, avisos, pedido .md, plano e exportação, mobile.');
+} finally {
+  await browser?.close();
+  server.kill();
+  await fs.writeFile(path.join(evidence, 'server-test.log'), serverLog);
+}

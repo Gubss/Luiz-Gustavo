@@ -27,6 +27,9 @@ export const ScenePlanSchema = z.array(z.object({
   falaFinal: z.number().int().min(1),
   tela: z.string().min(1),
   camera: z.string().min(1),
+  plano: z.string().trim().min(1),
+  acao: z.string().trim().min(1),
+  trilha: z.string().trim().min(1),
   efeito: z.string().min(1),
   etiqueta: z.string().min(1),
 })).min(1);
@@ -35,18 +38,35 @@ export type ScenePlan = z.infer<typeof ScenePlanSchema>;
 export function validateScenePlan(plan: ScenePlan, lines: number) {
   let next = 1;
   for (const scene of plan) {
-    if (scene.falaInicial !== next || scene.falaFinal < next || scene.falaFinal > lines) throw new Error("Plano de cenas não cobre as falas em ordem.");
+    if (scene.falaInicial !== next || scene.falaFinal !== next || scene.falaFinal > lines) throw new Error("Plano de cenas deve ter uma entrada por fala, em ordem.");
     next = scene.falaFinal + 1;
   }
   if (next !== lines + 1) throw new Error("Plano de cenas incompleto.");
 }
 
-export function directionPrompt(study?: string | null) {
-  return study?.trim() ? `\n# Estudo de direção\n${study.trim()}\nDepois de escrever as falas, acrescente planoCenas cobrindo todas elas, em ordem, sem lacunas nem sobreposição (índices a partir de 1). Em cada cena: o que entra na tela, onde a câmera vai, efeito e etiqueta (diga nenhum quando não se aplicar). Aplique o estudo apenas à direção: preserve tom, tamanho e falas do canal, inclusive diante de métricas de voz do estudo. A adaptação Para o Por Que É Assim? vale somente para esse canal. Não altere a Referência do canal. Plano proposto, sujeito à aprovação humana.\n` : "";
+/** Extração literal: somente as três seções aprovadas. */
+export function extractPqeaStudy(note: string) {
+  const chunks = note.replace(/\r\n/g, "\n").split(/(?=^## )/m);
+  const sections = ["A", "B", "C"].map(letter => {
+    const section = chunks.find(chunk => chunk.startsWith("## " + letter + ". "));
+    if (!section?.trim()) throw new Error("Seção " + letter + " do estudo ausente.");
+    return section.trim();
+  });
+  return normalizeStudy(["# Estudo de direção — Por Que É Assim? (padrão telefone)", ...sections].join("\n\n"));
 }
 
-export function sceneLine(scene: ScenePlan[number], index: number) {
-  return `Cena ${index + 1} · falas ${scene.falaInicial}–${scene.falaFinal}: Tela: ${scene.tela} | Câmera: ${scene.camera} | Efeito: ${scene.efeito} | Etiqueta: ${scene.etiqueta}`;
+export function directionPrompt(study?: string | null) {
+  if (!study?.trim()) return "";
+  const structured = /^## A\. /m.test(study);
+  const rules = structured ? extractPqeaStudy(study) : study.trim();
+  return "\n# Estudo de direção\n" + rules + "\n" +
+    (structured ? "A seção A rege as FALAS: seus seis passos, proibições, loop e duração prevalecem sobre fechos, chamadas e durações antigos da receita. B e C regem o plano de cenas. Preserve voz do kit, tom e Referência do canal. " : "Aplique o estudo à direção; preserve tom, tamanho e falas do canal. ") +
+    "Depois das falas, acrescente planoCenas: exatamente uma entrada por fala, em ordem, falaInicial = falaFinal = número da fala (desde 1). Cada entrada contém tela, plano (geral/médio/close/detalhe), camera (fixa ou movimento e destino), acao, efeito sonoro, trilha (entra/pausa/volta) e etiqueta (nenhuma se não houver). Nunca escreva câmera ou direção dentro da fala. Plano proposto, sujeito à aprovação humana.\n";
+}
+
+// Compatibilidade de leitura com planos anteriores.
+export function sceneLine(scene: Omit<ScenePlan[number], "plano" | "acao" | "trilha"> & Partial<Pick<ScenePlan[number], "plano" | "acao" | "trilha">>, index: number) {
+  return `Cena ${index + 1} · falas ${scene.falaInicial}–${scene.falaFinal}: Tela: ${scene.tela}${scene.plano ? " | Plano: " + scene.plano : ""} | Câmera: ${scene.camera}${scene.acao ? " | Ação: " + scene.acao : ""} | Efeito: ${scene.efeito}${scene.trilha ? " | Trilha: " + scene.trilha : ""} | Etiqueta: ${scene.etiqueta}`;
 }
 
 export async function writeStudyRequest(format: { id: string; name: string }, raw: string, directory = REQUEST_DIR) {
