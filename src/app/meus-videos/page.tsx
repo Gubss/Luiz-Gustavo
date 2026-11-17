@@ -11,6 +11,9 @@ import { googleConfigured } from "@/lib/google";
 import { ageHours, checkpointLabel, checkpointTolerance, fmtAge, peerStats } from "@/lib/my-videos";
 import { estimateChannelReport, type ChannelReportContent, type MyDiagnosisContent } from "@/lib/my-diagnosis";
 import { runningJobsFor } from "@/lib/jobs";
+import { channelLeaders } from "@/lib/my-insights";
+import { InsightsGuide } from "@/components/InsightsGuide";
+import { AutoRefresh } from "@/components/AutoRefresh";
 import { getSettings } from "@/lib/settings";
 import { RunningNote } from "@/components/RunningNote";
 import { StateForm } from "@/components/StateForm";
@@ -191,6 +194,7 @@ export default async function MyVideosPage({ searchParams }: { searchParams: Pro
   const recent = videos.filter((v) => (ageHours(v.publishedAt, now) ?? 0) <= 30 * 24);
   const older = videos.filter((v) => (ageHours(v.publishedAt, now) ?? 0) > 30 * 24);
   const showAll = one(sp.todos) === "1";
+  const leaders = channelLeaders(videos);
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -206,6 +210,9 @@ export default async function MyVideosPage({ searchParams }: { searchParams: Pro
       />
 
       <GoogleBanner status={one(sp.google)} msg={one(sp.msg)} />
+
+      <InsightsGuide />
+      <AutoRefresh everySec={120} />
 
       {channels.length > 1 && (
         <div className="flex flex-wrap gap-2">
@@ -411,6 +418,30 @@ export default async function MyVideosPage({ searchParams }: { searchParams: Pro
           </div>
         )}
       </WorkSection>
+
+      {leaders.length > 0 && (
+        <section className="card space-y-3 p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold">Quem foi melhor</h2>
+              <p className="text-sm text-zinc-400">O recordista do canal em cada número{videos.some((v) => v.isShort) ? " (entre os Shorts)" : ""}. Clique para ver os insights do vídeo.</p>
+            </div>
+            <Link href={`/meus-videos/tabela?canal=${c.id}`} className="btn-secondary shrink-0">
+              Tabela completa →
+            </Link>
+          </div>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5">
+            {leaders.map((l) => (
+              <Link key={l.key} href={`/meus-videos/${l.videoId}/insights`} className="rounded-lg border border-line bg-ink/60 p-3 hover:border-red-800">
+                <div className="text-xs text-zinc-500">{l.label}</div>
+                <div className="text-lg font-semibold tabular-nums text-emerald-300">{l.value}</div>
+                <div className="line-clamp-2 text-xs text-zinc-300">{l.title}</div>
+                {l.runnerUp && <div className="mt-0.5 text-[11px] text-zinc-600">{l.runnerUp}</div>}
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="card space-y-3 p-5">
         <h2 className="text-lg font-semibold">Últimos 30 dias ({recent.length})</h2>
