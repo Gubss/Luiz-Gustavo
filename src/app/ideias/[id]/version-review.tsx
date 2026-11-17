@@ -1,3 +1,4 @@
+import { directionWarnings } from "@/lib/script-direction-check";
 import type { Idea } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { spokenLines } from "@/lib/script-lines";
@@ -11,8 +12,10 @@ export async function VersionReview({idea}:{idea:Idea}) {
  if(!current)return <StateForm action={captureLegacyAction.bind(null,idea.id)} label="Revisar roteiro existente" hint="Preserva o texto atual; não chama IA."/>;
  const data=JSON.parse(current.content) as ScriptContent;
  const lines=spokenLines(data);
+ const warnings=directionWarnings(lines,data.duracaoSeg);
  const critiques=await prisma.generation.findMany({where:{scriptVersionId:current.id,kind:"script-critic-optional"},orderBy:{createdAt:"desc"}});
  return <div className="space-y-4 border-t border-line pt-4">
+ {warnings.length>0&&<div role="alert" className="rounded border border-amber-600 p-3 text-amber-300"><strong>Conferência automática</strong><ul>{warnings.map(w=><li key={w}>{w}</li>)}</ul></div>}
  <p>{idea.projectCode} · versão {current.number} · {idea.approvedVersionId===current.id?"Falas aprovadas":"Aguardando aprovação desta versão"}</p>
  {(data.pendencias??[]).length>0&&<details><summary>Pendências das falas</summary><ul>{data.pendencias?.map((x,i)=><li key={i}>{x}</li>)}</ul></details>}
  <StateForm action={correctScriptAction.bind(null,idea.id)} label="Corrigir trecho" busy="Iniciando correção…" hint="Uma chamada de IA. As outras falas ficam iguais.">

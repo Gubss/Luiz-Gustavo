@@ -456,6 +456,7 @@ model NichePlaybook {
 /// (ex.: "desastre em cadeia", "construir resolvendo problemas"). Com menos de 3 vídeos fica como rascunho.
 /// `length` é Short ou vídeo longo (o antigo "formato" das cartilhas).
 model VideoFormat {
+  directionStudy String?
   id          String   @id @default(cuid())
   nicheId     String
   name        String

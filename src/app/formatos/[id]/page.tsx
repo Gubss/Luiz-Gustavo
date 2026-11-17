@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { NO_DIRECTION, STUDY_MAX } from "@/lib/direction-study";
+import { importDirectionAction, requestDirectionAction } from "../actions";
 import { FormatGaps } from "@/components/FormatGaps";
 import { gapHint } from "@/lib/classify";
 import { notFound } from "next/navigation";
@@ -299,6 +301,24 @@ export default async function FormatPage({ params, searchParams }: PageProps<"/f
       </section>
 
       {/* Vídeos */}
+      <section className="card space-y-4 p-5" aria-labelledby="direction-title">
+        <h2 id="direction-title" className="text-lg font-semibold">Estudo de direção</h2>
+        {!f.directionStudy?.trim() ? <p role="status" className="text-amber-300">{NO_DIRECTION}</p> : <p className="text-emerald-300">Estudo importado: os próximos roteiros terão direção por cena.</p>}
+        <StateForm action={importDirectionAction.bind(null, f.id)} label="Importar estudo pronto">
+          <label className="label" htmlFor="direction-study">Cole o estudo de direção</label>
+          <textarea id="direction-study" name="directionStudy" className="input" rows={7} maxLength={STUDY_MAX} defaultValue={f.directionStudy ?? ""} />
+          <label className="label" htmlFor="direction-file">Ou envie o estudo em .md (substitui o texto colado)</label>
+          <input id="direction-file" type="file" name="studyFile" accept=".md,text/markdown" className="input" />
+        </StateForm>
+        <details>
+          <summary className="cursor-pointer text-sm">Pedir estudo de direção</summary>
+          <StateForm action={requestDirectionAction.bind(null, f.id)} label="Pedir estudo de direção" hint="O GEPETO faz o estudo fora do Radar, sem API.">
+            <label className="label" htmlFor="direction-links">Até 5 links de vídeo do formato, um por linha</label>
+            <textarea id="direction-links" name="links" className="input" rows={5} required maxLength={10000} />
+          </StateForm>
+        </details>
+      </section>
+
       <WorkSection id="fmt-videos" title={`1 · Vídeos do formato (${studies.length})`} open={studies.length < MIN_FORMAT_VIDEOS}>
         <p className="-mt-2 text-xs text-zinc-500">
           De {MIN_FORMAT_VIDEOS} a {MAX_FORMAT_VIDEOS} vídeos. Cada vídeo fica em um formato só por nicho.
