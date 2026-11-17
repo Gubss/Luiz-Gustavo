@@ -257,6 +257,9 @@ export default async function MyVideoPage({ params }: { params: Promise<{ id: st
               !diagJob && <ActionButton action={refreshVideoAction.bind(null, v.id)} label="Só atualizar números" busy="Começando…" hint="grátis" className="btn-secondary" />
             )}
           </div>
+          <Link href={`/meus-videos/${v.id}/insights`} className="btn-secondary inline-flex">
+            Insights detalhados →
+          </Link>
           <div className="flex flex-wrap gap-3 text-xs">
             <a href={v.url} target="_blank" rel="noreferrer" className="text-red-400 hover:underline">
               Abrir no YouTube ↗

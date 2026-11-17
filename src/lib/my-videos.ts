@@ -440,22 +440,37 @@ async function doTrack(opts: { onDiagnose?: (myVideoId: string, milestone: numbe
   return sum;
 }
 
-/** Quais vídeos estão num marco sem diagnóstico (24h, 3 dias, 7 dias). Não volta em marcos muito antigos. */
+/**
+ * Janela (em horas de vida) em que cada marco ainda vale. 24h: até 48h (depois disso a leitura de 3 dias vem logo).
+ * 3 dias: de 72h até 168h, emendando com o de 7 dias, para não perder o pré-diagnóstico quando o app fica fechado
+ * alguns dias (antes parava em 144h e sobrava um buraco de 144h a 168h). 7 dias: até 14 dias.
+ */
+export const AUTO_MILESTONE_WINDOW: Record<(typeof AUTO_MILESTONES)[number], [number, number]> = { 24: [24, 48], 72: [72, 168], 168: [168, 336] };
+
+/** Marco pendente de um vídeo nesta idade (ou null), dado o que já foi diagnosticado. */
+export function milestoneDue(age: number, diagnoses: { milestone: number | null; ageHours: number }[]) {
+  const m = [...AUTO_MILESTONES].reverse().find((h) => age >= AUTO_MILESTONE_WINDOW[h][0] && age < AUTO_MILESTONE_WINDOW[h][1]);
+  if (m == null) return null;
+  // um diagnóstico (automático ou manual) feito depois de o vídeo chegar ao marco já cobre o marco
+  return diagnoses.some((d) => d.milestone === m || d.ageHours >= m) ? null : m;
+}
+
+/**
+ * Quais vídeos estão num marco sem diagnóstico (24h, 3 dias, 7 dias). Não volta em marcos muito antigos.
+ * Ordem: quem está mais perto de perder a janela vem primeiro (o teto diário pode não dar para todos).
+ */
 export async function pendingMilestones(myChannelId: string, now = new Date()) {
   const videos = await prisma.myVideo.findMany({
     where: { myChannelId, publishedAt: { gte: new Date(now.getTime() - 14 * DAY) } },
     include: { diagnoses: { select: { milestone: true, ageHours: true } } },
   });
-  const out: { myVideoId: string; milestone: number }[] = [];
+  const out: { myVideoId: string; milestone: number; hoursLeft: number }[] = [];
   for (const v of videos) {
     const age = ageHours(v.publishedAt, now) ?? 0;
-    // o marco mais recente já alcançado (e ainda "fresco": até 2x a idade do marco)
-    const m = [...AUTO_MILESTONES].reverse().find((h) => age >= h && age < h * 2);
-    // um diagnóstico (automático ou manual) feito depois de o vídeo chegar ao marco já cobre o marco
-    const covered = m != null && v.diagnoses.some((d) => d.milestone === m || d.ageHours >= m);
-    if (m && !covered) out.push({ myVideoId: v.id, milestone: m });
+    const m = milestoneDue(age, v.diagnoses);
+    if (m != null) out.push({ myVideoId: v.id, milestone: m, hoursLeft: AUTO_MILESTONE_WINDOW[m as (typeof AUTO_MILESTONES)[number]][1] - age });
   }
-  return out;
+  return out.sort((a, b) => a.hoursLeft - b.hoursLeft).map(({ myVideoId, milestone }) => ({ myVideoId, milestone }));
 }
 
 async function autoDiagnose(myChannelId: string, run: (myVideoId: string, milestone: number) => Promise<boolean>, dailyMax: number) {
