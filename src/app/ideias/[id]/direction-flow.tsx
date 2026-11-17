@@ -2,6 +2,7 @@ import type {Idea} from "@prisma/client";
 import {prisma} from "@/lib/db";
 import {STAGES,STAGE_LABELS,nextStage,estimateDirectionPipeline,isDirectionRunning} from "@/lib/directors";
 import {hasDirectionInstructions} from "@/lib/direction-instructions";
+import {effectiveInstructions} from "@/lib/directions";
 import {runningJobsFor} from "@/lib/jobs";
 import {StateForm} from "@/components/StateForm";
 import {prepareDirectionAction,approveDirectionAction} from "@/app/gerador/director-actions";
@@ -19,11 +20,11 @@ export async function DirectionFlow({idea}:{idea:Idea}){
  const [run,version,format,jobs]=await Promise.all([
   prisma.directionRun.findUnique({where:{versionId:idea.currentVersionId}}),
   prisma.scriptVersion.findUniqueOrThrow({where:{id:idea.currentVersionId}}),
-  idea.formatId?prisma.videoFormat.findUnique({where:{id:idea.formatId}}):null,
+  idea.formatId?prisma.videoFormat.findUnique({where:{id:idea.formatId},include:{direction:true}}):null,
   runningJobsFor([idea.id])
  ]);
  const approved=idea.approvedVersionId===idea.currentVersionId;
- const ready=Boolean(run?.study.startsWith('{"version":1,')||hasDirectionInstructions(format));
+ const ready=Boolean(run?.study.startsWith('{"version":1,')||hasDirectionInstructions(effectiveInstructions(format)));
  const next=nextStage(run);
  const job=jobs.find(j=>j.kind==="direction");
  const running=isDirectionRunning(run)||Boolean(job);
@@ -37,7 +38,7 @@ export async function DirectionFlow({idea}:{idea:Idea}){
   <div className="flex flex-wrap justify-between gap-2"><h2 id="directors-title" className="text-lg font-semibold">4.2 Direção</h2><span className={run?.approvedAt&&approved?"text-emerald-300":"text-zinc-400"}>{run?.approvedAt&&approved?"Direção aprovada · v"+version.number:!approved?"Esperando o roteiro":running?"Rodando":run?.integration?"Aguardando sua aprovação":error?"Erro":"Pronta para preparar"}</span></div>
   <p className="mt-2 text-sm text-zinc-400">Cena → fotografia → som e trilha → integração. Um botão executa a sequência; você confere e aprova o resultado junto.</p>
   {!approved&&<p role="status" className="mt-3 text-amber-300">Aprove o roteiro v{version.number} no botão acima para liberar os diretores. A aprovação anterior não vale para esta versão.</p>}
-  {!ready&&<p role="status" className="mt-3 text-amber-300">Faltam instruções por função. <a className="underline" href={"/formatos/"+idea.formatId}>Preencher no formato</a>.</p>}
+  {!ready&&<p role="status" className="mt-3 text-amber-300">Faltam instruções por função. <a className="underline" href={"/formatos/"+idea.formatId+"#direction-title"}>Escolher ou completar a direção do formato</a>.</p>}
   {error&&<p role="alert" className="mt-3 text-red-300">{error} As etapas feitas estão preservadas.</p>}
   {approved&&ready&&next&&!running&&!problem&&<div className="mt-4"><StateForm action={prepareDirectionAction.bind(null,idea.id)} label={error?"Tentar de novo desta etapa":run?.scene?"Continuar direção":"Preparar direção"} busy="Iniciando…" hint={hint}><input type="hidden" name="versionId" value={idea.currentVersionId}/></StateForm></div>}
   {running&&<p role="status" className="mt-3 text-amber-300">{job?.step??(run?.runningStage?STAGE_LABELS[run.runningStage as keyof typeof STAGE_LABELS]:"Preparando direção")} · acompanhe as etapas abaixo.</p>}

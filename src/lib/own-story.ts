@@ -25,6 +25,8 @@ export type OwnStory = {
   falas: StoryLine[];
   /** true = só cortar e reordenar falas; false = pode reescrever, menos o Preservar. */
   manterFalas: boolean;
+  /** v3 (adendo B): true = o roteiro abre com a abertura original da história, palavra por palavra. */
+  manterAbertura?: boolean;
 };
 
 export const STORY_MAX = 20000;
@@ -37,7 +39,7 @@ export function storyTitle(md: string): string {
 }
 
 /** Lê o .md de "referência criativa" do Gubs. Aceita texto sem nenhuma marcação: aí só o texto inteiro vai para o prompt. */
-export function parseStory(md: string, manterFalas: boolean): OwnStory {
+export function parseStory(md: string, manterFalas: boolean, manterAbertura = false): OwnStory {
   const text = md.replace(/\r\n/g, "\n").trim();
   const preservarLine = text.match(/^\s*[-*]\s*\*\*Preservar:?\*\*:?\s*(.+)$/im)?.[1] ?? "";
   const preservar = preservarLine
@@ -63,8 +65,55 @@ export function parseStory(md: string, manterFalas: boolean): OwnStory {
     }
     if (line.startsWith("#")) who = "";
   }
-  return { title: storyTitle(text), text: text.slice(0, STORY_MAX), preservar, falasMarcadas, falas, manterFalas };
+  return { title: storyTitle(text), text: text.slice(0, STORY_MAX), preservar, falasMarcadas, falas, manterFalas, ...(manterAbertura ? { manterAbertura: true } : {}) };
 }
+
+/**
+ * Abertura original da história: a 1ª fala de referência (o gancho do Gubs); se ela for curta (até 7 palavras),
+ * junta a 2ª. História sem falas marcadas não tem abertura reconhecível (lista vazia).
+ */
+export function storyOpening(s: Pick<OwnStory, "falas">): StoryLine[] {
+  const [a, b] = s.falas ?? [];
+  if (!a) return [];
+  return a.text.split(/\s+/).length <= 7 && b ? [a, b] : [a];
+}
+
+export type OpeningCheck = { original: StoryLine[]; sugerida: StoryLine[]; mantida: boolean };
+
+/** Sem IA: o roteiro começa com a abertura original? Compara as primeiras falas do roteiro com as da história. */
+export function openingCheck(s: Pick<OwnStory, "falas">, falado: { personagem?: string; fala: string }[]): OpeningCheck | null {
+  const original = storyOpening(s);
+  if (!original.length || !falado.length) return null;
+  const sugerida = falado.slice(0, original.length).map((f) => ({ who: f.personagem?.trim() || "—", text: f.fala }));
+  const mantida = original.every((o, i) => !!sugerida[i] && norm(sugerida[i].text).includes(norm(o.text)));
+  return { original, sugerida, mantida };
+}
+
+/**
+ * "Usar a original" sem IA: troca só as primeiras falas do roteiro pela abertura da história e tira, mais adiante,
+ * a repetição literal dessas falas (quando a IA só tinha mudado a abertura de lugar).
+ */
+export function withOriginalOpening(s: Pick<OwnStory, "falas">, falado: { personagem: string; fala: string }[]) {
+  const original = storyOpening(s);
+  if (!original.length) throw new Error("Esta história não tem falas marcadas, então não dá para achar a abertura original.");
+  const head = original.map((o) => ({ personagem: o.who, fala: o.text }));
+  const keys = new Set(original.map((o) => norm(o.text)));
+  const rest = falado.slice(original.length).filter((f) => !keys.has(norm(f.fala)));
+  const removed = falado.length - original.length - rest.length;
+  return { falado: [...head, ...rest], countChanged: removed !== 0 };
+}
+
+const openingBlock = (s: OwnStory) => {
+  const o = storyOpening(s);
+  if (!s.manterAbertura || !o.length) return [];
+  return [
+    "",
+    "# ABERTURA ORIGINAL (obrigatória; o Gubs pediu para manter)",
+    "O roteiro começa com estas falas, palavra por palavra, nesta ordem, como as primeiras falas do falado:",
+    ...o.map((l) => `- ${l.who}: “${l.text}”`),
+    "Esta abertura vale no lugar da regra de abertura das regras gerais. Os ganchos você planta logo depois dela.",
+  ];
+};
 
 const MODE_KEEP =
   "MODO MANTER AS FALAS: as falas de referência ficam como estão, palavra por palavra. Você só pode CORTAR e REORDENAR falas. Se a abertura ou um gancho precisar de ligação, no máximo 2 falas curtas novas, e cada uma vai em mudancas.falasNovas.";
@@ -86,6 +135,7 @@ export function storyBlock(s: OwnStory): string {
     "A história, a ordem dos acontecimentos que importam, os personagens e o desfecho são do Gubs. Você ajusta só o necessário para as regras gerais abaixo: abertura, ganchos e final.",
     s.manterFalas ? MODE_KEEP : MODE_REWRITE,
     "As notas de produção do texto (tom, limites, o que não fazer) valem como regra.",
+    ...openingBlock(s),
     "",
     generalRulesBlock(),
   ].join("\n");
@@ -97,7 +147,7 @@ Preencha "mudancas" em português simples, para o Gubs ver o que mudou da histó
 Preencha "preservados" com cada item do Preservar e cada fala marcada, dizendo em que fala do roteiro ele aparece.`;
 
 export const StoryChangesSchema = z.object({
-  abertura: z.string().describe("Como o vídeo abre agora e por quê, em 1-2 frases simples."),
+  abertura: z.string().describe("Como o vídeo abre agora e por quê, em 1-2 frases simples. Se trocou a abertura da história, comece pelo motivo em 1 linha."),
   ganchos: z.array(z.object({ pergunta: z.string(), plantadoEm: z.string(), pagoEm: z.string() })).describe("2 a 3 ganchos abertos."),
   cortes: z.array(z.string()).describe("O que da história saiu do roteiro. Vazio se nada."),
   reordenado: z.array(z.string()).describe("O que mudou de lugar. Vazio se nada."),
@@ -167,6 +217,23 @@ export function parseOwnIdeas(text: string): OwnIdea[] {
     .filter((l) => l.length >= 3)
     .slice(0, IDEAS_MAX)
     .map((l) => ({ tema: l.length > 90 ? l.slice(0, 87).trimEnd() + "…" : l, premissa: l }));
+}
+
+/**
+ * v3 (Gubs 17/11): cada ideia em dois campos, Título + Resumo. O título vira o tema; o resumo, a premissa literal
+ * (sem resumo, o próprio título). Par vazio é ignorado; resumo sem título ganha o começo do resumo como título.
+ */
+export function ideasFromPairs(titles: string[], summaries: string[]): OwnIdea[] {
+  const out: OwnIdea[] = [];
+  const n = Math.max(titles.length, summaries.length);
+  for (let i = 0; i < n && out.length < IDEAS_MAX; i++) {
+    const titulo = clean(titles[i] ?? "");
+    const resumo = (summaries[i] ?? "").replace(/\r\n/g, "\n").trim().slice(0, 6000);
+    if (!titulo && !resumo) continue;
+    const tema = titulo || (resumo.length > 90 ? clean(resumo.slice(0, 87)) + "…" : clean(resumo));
+    out.push({ tema: tema.slice(0, 120), premissa: resumo || titulo });
+  }
+  return out;
 }
 
 /** Vai no pedido do roteiro quando a ideia foi escrita pelo Gubs. */

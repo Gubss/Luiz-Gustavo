@@ -1,4 +1,5 @@
 import { instructionSnapshot, instructionsFor } from "./direction-instructions";
+import { effectiveInstructions } from "./directions";
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import type { DirectionRun, Prisma } from "@prisma/client";
@@ -66,11 +67,11 @@ export async function estimateDirection(ideaId:string,versionId:string){
  const req=directionRequest(stage,version.content,context);
  return estimateCost(modelDeep,req.system+req.user,6000,16000);
 }
-async function initialContext(ideaId:string,content:string){
- const idea=await prisma.idea.findUniqueOrThrow({where:{id:ideaId},include:{videoFormat:true,myChannel:true}});
+export async function initialContext(ideaId:string,content:string){
+ const idea=await prisma.idea.findUniqueOrThrow({where:{id:ideaId},include:{videoFormat:{include:{direction:true}},myChannel:true}});
  if(!idea.videoFormat)throw new Error("Formato não encontrado.");
  const data=JSON.parse(content);
- return {study:instructionSnapshot(idea.videoFormat),reference:JSON.stringify(data.channelReference??{name:idea.myChannel?.name,characters:idea.myChannel?.characters,visualStyle:idea.myChannel?.visualStyle,rules:idea.myChannel?.rules,tone:idea.myChannel?.tone}),scene:null,photography:null};
+ return {study:instructionSnapshot(effectiveInstructions(idea.videoFormat)!),reference:JSON.stringify(data.channelReference??{name:idea.myChannel?.name,characters:idea.myChannel?.characters,visualStyle:idea.myChannel?.visualStyle,rules:idea.myChannel?.rules,tone:idea.myChannel?.tone}),scene:null,photography:null};
 }
 export function integrate(content:string,scenes:Scenes,photos:Photos,sounds:Sounds){
  const data=JSON.parse(content) as ScriptContent;const lines=spokenLines(data);

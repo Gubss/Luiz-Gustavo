@@ -29,7 +29,7 @@ export function ChannelFormatPicker({ choices, path, formato, withFormat = true 
       <div className="flex flex-wrap items-center gap-2">
         <span className="w-20 text-sm text-zinc-500">Canal</span>
         {channels.map((c) => (
-          <FilterChip key={c.id} href={`${path}?canal=${c.id}`} active={c.id === channel.id}>
+          <FilterChip key={c.id} href={`${path}${path.includes("?") ? "&" : "?"}canal=${c.id}`} active={c.id === channel.id}>
             {c.name}
           </FilterChip>
         ))}

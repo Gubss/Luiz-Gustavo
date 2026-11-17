@@ -167,6 +167,9 @@ export default async function FormatsPage({ searchParams }: PageProps<"/formatos
           <Link href="/formatos/novo" className="btn-primary">
             Criar formato à mão
           </Link>
+          <Link href="/formatos/novo?modo=diagnostico" className="btn-secondary">
+            Formato a partir do diagnóstico do canal
+          </Link>
           <Link href={`/formatos/classificar?niche=${niche.id}`} className="btn-secondary">
             Classificar estudos automaticamente
           </Link>

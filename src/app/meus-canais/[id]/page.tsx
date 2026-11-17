@@ -119,7 +119,10 @@ export default async function MyChannelProfilePage({ params }: PageProps<"/meus-
             Resultados primeiro; perfil e referências logo abaixo.
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <Link href={`/meus-canais/${c.id}/diagnostico`} className="btn-secondary">
+            Diagnóstico do canal
+          </Link>
           <Link href={`/ideias?canal=${c.id}`} className="btn-secondary">
             Ideias ({c._count.ideas})
           </Link>

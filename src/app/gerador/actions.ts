@@ -5,10 +5,11 @@ import { redirect } from "next/navigation";
 import { deleteIdeaSafely } from "@/lib/delete-idea";
 import { prisma } from "@/lib/db";
 import { usdToBrl } from "@/lib/claude";
-import { correctScript, requestCritique, generateIdeas, generateScript, IDEA_STATUS, NO_RECIPE_MSG, revisionDefaults, scriptMissingRecipe, type IdeasRequest, type ScriptMode } from "@/lib/generator";
+import { applyOriginalOpening, correctScript, requestCritique, generateIdeas, generateScript, IDEA_STATUS, NO_RECIPE_MSG, revisionDefaults, scriptMissingRecipe, type IdeasRequest, type ScriptMode } from "@/lib/generator";
 import { captureLegacyVersion, approveVersion, restoreVersion } from "@/lib/script-versions";
 import { startJob } from "@/lib/jobs";
 import { createOwnIdeas, createStoryIdea } from "@/lib/own-create";
+import { IDEAS_MAX, ideasFromPairs, parseOwnIdeas } from "@/lib/own-story";
 import { returnPoints } from "@/lib/speech";
 import type { FormState } from "@/app/video/actions";
 
@@ -239,6 +240,9 @@ export async function restoreAction(ideaId:string,_prev:FormState,fd:FormData):P
  try{await restoreVersion(ideaId,String(fd.get("versionId")??""),String(fd.get("currentVersionId")??"")||null);refresh(ideaId);return {ok:"Restaurada como nova versão; histórico preservado."}}catch(e){return {error:errMsg(e)}}
 }
 
+/** Adendo B: "usar a original" troca só a abertura do roteiro pela da história. Sem IA. */
+export async function originalOpeningAction(ideaId:string,versionId:string):Promise<FormState>{try{await applyOriginalOpening(ideaId,versionId);refresh(ideaId);return {ok:"Abertura original de volta, como nova versão (sem custo)."}}catch(e){return {error:errMsg(e)}}}
+
 export async function captureLegacyAction(ideaId:string,_prev:FormState):Promise<FormState>{void _prev;try{await captureLegacyVersion(ideaId);refresh(ideaId);return {ok:"Roteiro preservado como versão legada, ainda sem aprovação."}}catch(e){return {error:errMsg(e)}}}
 
 // ---------- O que o Gubs traz pronto: história (a) e ideias (b). Criar é sem IA. ----------
@@ -262,6 +266,7 @@ export async function createStoryAction(_prev: FormState, fd: FormData): Promise
       formatId: String(fd.get("formato") ?? ""),
       markdown,
       manterFalas: fd.get("falas") !== "reescrever",
+      manterAbertura: fd.get("abertura") === "manter",
       title: String(fd.get("titulo") ?? ""),
     });
     ideaId = idea.id;
@@ -278,8 +283,12 @@ export async function createOwnIdeasAction(_prev: FormState, fd: FormData): Prom
   let canal = "";
   try {
     canal = String(fd.get("canal") ?? "");
+    // v3: pares Título + Resumo; o banco colado/arquivo (opção recolhida) continua valendo e soma.
+    const items = ideasFromPairs(fd.getAll("titulo").map(String), fd.getAll("resumo").map(String));
     const text = await pastedOrFile(fd, "ideias", "arquivo");
-    await createOwnIdeas({ myChannelId: canal, formatId: String(fd.get("formato") ?? ""), text });
+    const all = [...items, ...parseOwnIdeas(text)].slice(0, IDEAS_MAX);
+    if (!all.length) throw new Error("Escreva pelo menos uma ideia: um título e, se quiser, o resumo.");
+    await createOwnIdeas({ myChannelId: canal, formatId: String(fd.get("formato") ?? ""), items: all });
     refresh();
   } catch (e) {
     return { error: errMsg(e) };
