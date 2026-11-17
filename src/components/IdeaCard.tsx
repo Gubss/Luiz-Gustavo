@@ -35,7 +35,7 @@ export function StatusBadge({ status }: { status: string }) {
 /** Etiqueta com o formato (receita) que a ideia/roteiro segue. */
 export function FormatTag({ name }: { name: string | null }) {
   return name ? (
-    <span className="badge bg-violet-700/30 text-violet-200" title="Formato (receita) que este roteiro segue">
+    <span className="badge max-w-full whitespace-normal break-words bg-violet-700/30 text-violet-200" title="Formato (receita) que este roteiro segue">
       Formato: {name}
     </span>
   ) : (
@@ -103,7 +103,7 @@ export function IdeaCard({
   // Ideias importadas/legadas podem ter ideaData parcial (sem titulos/adaptacao).
   const otherTitles = d?.titulos ? d.titulos.filter((t) => t.titulo !== title) : titles.filter((t) => t !== title).map((t) => ({ titulo: t, formula: "" }));
   return (
-    <article className="card flex flex-col gap-3 p-4">
+    <article className="card flex min-w-0 flex-col gap-3 p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <Link href={`/ideias/${idea.id}`} className="text-[15px] leading-snug font-semibold hover:text-red-300">
