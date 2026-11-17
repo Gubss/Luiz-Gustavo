@@ -1,5 +1,5 @@
 "use client";
-import { useId, useState, type ReactNode } from "react";
+import { useActionState, useId, useState, type ReactNode } from "react";
 
 import { IDEA_STATUS } from "@/lib/idea-status";
 
@@ -23,18 +23,20 @@ export function DeleteIdeaButton({
   label = "Apagar",
   className = "btn-ghost px-2 py-1 text-xs text-zinc-500 hover:text-red-400",
 }: {
-  action: () => Promise<void>;
+  action: () => Promise<{ message?: string }>;
   label?: string;
   className?: string;
 }) {
+  const [state, submit, pending] = useActionState(action, {});
   return (
     <form
-      action={action}
+      action={submit}
       onSubmit={(e) => {
         if (!confirm("Apagar esta ideia (e o roteiro dela, se tiver)?")) e.preventDefault();
       }}
     >
-      <button className={className}>{label}</button>
+      <button className={className} disabled={pending}>{pending ? "Apagando…" : label}</button>
+      {state.message && <p role="status" className="mt-2 text-sm text-amber-300">{state.message}</p>}
     </form>
   );
 }

@@ -37,7 +37,7 @@ async function formatChoicesFor(nicheId: string, length: PlaybookFormat) {
 import { StateForm } from "@/components/StateForm";
 import { FormatTag, PublishedNote, RepeatWarning, StatusBadge } from "@/components/IdeaCard";
 import { repeatsForIdeas } from "@/lib/my-catalog";
-import { ConfirmDelete } from "@/app/nichos/[id]/forms";
+import { DeleteIdeaButton } from "./forms";
 import {
   deleteIdea,
   deleteLessonAction,
@@ -654,7 +654,7 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
       </WorkSection>
 
       <div className="flex justify-end">
-        <ConfirmDelete action={deleteIdea.bind(null, idea.id)} label="Apagar ideia" message="Apagar esta ideia e o roteiro dela?" />
+        <DeleteIdeaButton action={deleteIdea.bind(null, idea.id)} label="Apagar ideia" className="btn-danger" />
       </div>
     </div>
   );
