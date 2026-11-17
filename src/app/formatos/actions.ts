@@ -11,6 +11,7 @@ import { formatLabel, type PlaybookFormat } from "@/lib/playbook";
 import { FormatError, MAX_FORMAT_VIDEOS, generateRecipe, generateRule, setVideoFormat } from "@/lib/formats";
 import type { FormState } from "@/app/video/actions";
 import { runCleanup } from "@/lib/cleanup";
+import { createManualFormat } from "@/lib/own-create";
 import { NONE, applyChoices, classifyMany, findGaps, nicheStudiesForClassify, recipesAndGaps, sameName } from "@/lib/classify";
 
 const money = (usd: number) => `US$ ${usd.toFixed(usd < 0.1 ? 3 : 2).replace(".", ",")} (≈ R$ ${(usd * usdToBrl()).toFixed(2).replace(".", ",")})`;
@@ -310,4 +311,25 @@ export async function saveDirectionInstructionsAction(formatId:string,_prev:Form
   await prisma.videoFormat.update({where:{id:formatId},data});refresh(formatId);
   return {ok:"Instruções salvas. Cada diretor recebe a Geral e somente a sua função. Direções iniciadas mantêm suas instruções."};
  }catch(e){return {error:errMsg(e)}}
+}
+
+/** (c) Formato escrito à mão, sem vídeo de referência (sem IA). */
+export async function createManualFormatAction(_prev: FormState, fd: FormData): Promise<FormState> {
+  let id = "";
+  try {
+    const vf = await createManualFormat({
+      myChannelId: String(fd.get("canal") ?? ""),
+      name: String(fd.get("nome") ?? ""),
+      length: fd.get("tipo") === "long" ? "long" : "short",
+      rules: String(fd.get("regras") ?? ""),
+      exampleTitle: String(fd.get("exemploTitulo") ?? ""),
+      example: String(fd.get("exemplo") ?? ""),
+    });
+    id = vf.id;
+    revalidatePath("/formatos");
+    revalidatePath("/gerador");
+  } catch (e) {
+    return { error: errMsg(e) };
+  }
+  redirect(`/formatos/${id}`);
 }
