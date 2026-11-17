@@ -911,6 +911,10 @@ model DirectionRun {
  photography String?
  sound String?
  integration String?
+ /// JSON [{stage,target}] — stages that depend on a corrected direction and still need a redo ("all" or a scene id).
+ stale String @default("[]")
+ /// JSON [{stage,target,request,at,value}] — previous results replaced by direction corrections.
+ history String @default("[]")
  runningStage String?
  error String?
  costUsd Float @default(0)

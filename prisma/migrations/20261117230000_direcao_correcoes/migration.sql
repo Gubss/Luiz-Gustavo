@@ -1,0 +1,2 @@
+ALTER TABLE "DirectionRun" ADD COLUMN "stale" TEXT NOT NULL DEFAULT '[]';
+ALTER TABLE "DirectionRun" ADD COLUMN "history" TEXT NOT NULL DEFAULT '[]';
