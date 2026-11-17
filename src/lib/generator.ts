@@ -1,3 +1,4 @@
+import {hasDirectionInstructions} from "./direction-instructions";
 /**
  * Gerador de temas, títulos e roteiros.
  *
@@ -192,7 +193,7 @@ export type GeneratorContext = {
   nicheId: string;
   nicheName: string;
   format: PlaybookFormat;
-  videoFormat: { id: string; name: string; description: string | null; videos: number; directionStudy?: string | null; narrativeRules?: string | null };
+  videoFormat: { id: string; name: string; description: string | null; videos: number; directionStudy?: string | null; directionReady?: boolean; narrativeRules?: string | null };
   recipe: Awaited<ReturnType<typeof latestRecipe>>;
   recipeStats: RecipeStats | null;
   rule: Awaited<ReturnType<typeof latestRule>>;
@@ -295,7 +296,7 @@ export async function loadContext(opts: { myChannelId: string; formatId: string 
     nicheId: vf.nicheId,
     nicheName: vf.niche.name,
     format,
-    videoFormat: { id: vf.id, name: vf.name, description: vf.description, videos: vf._count.videos, directionStudy: vf.directionStudy, narrativeRules: vf.narrativeRules },
+    videoFormat: { id: vf.id, name: vf.name, description: vf.description, videos: vf._count.videos, directionStudy: vf.directionStudy, directionReady: hasDirectionInstructions(vf), narrativeRules: vf.narrativeRules },
     recipe,
     recipeStats,
     rule,

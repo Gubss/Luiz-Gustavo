@@ -1,8 +1,9 @@
+import { instructionSnapshot, instructionsFor } from "./direction-instructions";
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import type { DirectionRun, Prisma } from "@prisma/client";
 import { prisma } from "./db";
-import { callStructured, estimateCost } from "./claude";
+import { callStructured, estimateCost, costUsd } from "./claude";
 import { getSettings } from "./settings";
 import { spokenLines } from "./script-lines";
 import type { ScriptContent } from "./generator";
@@ -39,7 +40,7 @@ const TASKS:Record<Exclude<Stage,"integration">,string>={
 };
 export function directionRequest(stage:Exclude<Stage,"integration">,content:string,run:Pick<DirectionRun,"study"|"reference"|"scene"|"photography">){
  const data=JSON.parse(content) as ScriptContent;
- return {system:SYSTEM+"\n"+TASKS[stage],user:JSON.stringify({roteiro:spokenLines(data),acontecimentosAprovados:(data.cenas??[]).map(s=>({acao:s.acao})),duracaoEstimada:data.duracaoSeg,referencia:JSON.parse(run.reference),estudo:run.study,...(stage!=="scene"?{encenacao:JSON.parse(run.scene!)}:{}),...(stage==="sound"?{fotografia:JSON.parse(run.photography!)}:{})})};
+ return {system:SYSTEM+"\n"+TASKS[stage],user:JSON.stringify({roteiro:spokenLines(data),acontecimentosAprovados:(data.cenas??[]).map(s=>({acao:s.acao})),duracaoEstimada:data.duracaoSeg,referencia:JSON.parse(run.reference),instrucoesDoUsuario:instructionsFor(stage,run.study),...(stage!=="scene"?{encenacao:JSON.parse(run.scene!)}:{}),...(stage==="sound"?{fotografia:JSON.parse(run.photography!)}:{})})};
 }
 export const isDirectionRunning=(run:DirectionRun|null)=>Boolean(run?.runningStage && Date.now()-run.updatedAt.getTime()<15*60_000);
 export function nextStage(run:DirectionRun|null):Stage|null{for(const stage of STAGES)if(!run?.[stage])return stage;return null;}
@@ -61,15 +62,15 @@ export async function estimateDirection(ideaId:string,versionId:string){
  if(!stage||stage==="integration")return null;
  const {modelDeep}=await getSettings();
  // Account for the full context before the first snapshot exists.
- const context=run??await initialContext(ideaId,version.content);
+ const context=run?.study.startsWith('{"version":1,')?run:await initialContext(ideaId,version.content);
  const req=directionRequest(stage,version.content,context);
  return estimateCost(modelDeep,req.system+req.user,6000,16000);
 }
 async function initialContext(ideaId:string,content:string){
  const idea=await prisma.idea.findUniqueOrThrow({where:{id:ideaId},include:{videoFormat:true,myChannel:true}});
- if(!idea.videoFormat?.directionStudy?.trim())throw new Error("Sem estudo de direção. Importe o estudo no formato antes de preparar os diretores.");
+ if(!idea.videoFormat)throw new Error("Formato não encontrado.");
  const data=JSON.parse(content);
- return {study:technicalStudy(idea.videoFormat.directionStudy),reference:JSON.stringify(data.channelReference??{name:idea.myChannel?.name,characters:idea.myChannel?.characters,visualStyle:idea.myChannel?.visualStyle,rules:idea.myChannel?.rules,tone:idea.myChannel?.tone}),scene:null,photography:null};
+ return {study:instructionSnapshot(idea.videoFormat),reference:JSON.stringify(data.channelReference??{name:idea.myChannel?.name,characters:idea.myChannel?.characters,visualStyle:idea.myChannel?.visualStyle,rules:idea.myChannel?.rules,tone:idea.myChannel?.tone}),scene:null,photography:null};
 }
 export function integrate(content:string,scenes:Scenes,photos:Photos,sounds:Sounds){
  const data=JSON.parse(content) as ScriptContent;const lines=spokenLines(data);
@@ -83,13 +84,18 @@ export async function runDirector(ideaId:string,versionId:string,stage:Stage){
  const {version}=await directionState(ideaId,versionId);
  let run=await prisma.directionRun.findUnique({where:{versionId}});
  if(!run){const context=await initialContext(ideaId,version.content);run=await prisma.directionRun.upsert({where:{versionId},create:{versionId,sourceHash:hashScript(version.content),...context},update:{}});}
+ // Runs created before role-specific instructions retain results, but receive a new scoped snapshot.
+ if(!run.study.startsWith('{"version":1,')){
+  const context=await initialContext(ideaId,version.content);
+  await prisma.directionRun.updateMany({where:{id:run.id,runningStage:null,study:run.study},data:{study:context.study,approvedAt:null}});
+ }
  const claimed=await prisma.$transaction(async tx=>{
   await approved(tx,ideaId,versionId);
   const current=await tx.directionRun.findUniqueOrThrow({where:{versionId}});
   if(nextStage(current)!==stage)throw new Error("Execute apenas a próxima etapa. As anteriores já estão preservadas.");
   // An interrupted stage may be retried after the same 15 minute window as jobs.
   const stale=new Date(Date.now()-15*60_000);
-  const lock=await tx.directionRun.updateMany({where:{id:current.id,OR:[{runningStage:null},{updatedAt:{lt:stale}}]},data:{runningStage:stage,error:null}});
+  const lock=await tx.directionRun.updateMany({where:{id:current.id,OR:[{runningStage:null},{updatedAt:{lt:stale}}]},data:{runningStage:stage,error:null,approvedAt:null}});
   if(lock.count!==1)throw new Error("Já existe um diretor trabalhando nesta versão.");
   return tx.directionRun.findUniqueOrThrow({where:{id:current.id}});
  });
@@ -122,5 +128,42 @@ export async function directionExport(ideaId:string,versionId:string,content:str
  if(!run)return "\n\n## Direção após aprovação\nAinda não preparada para esta versão.";
  if(idea.currentVersionId!==versionId||idea.approvedVersionId!==versionId||hashScript(content)!==run.sourceHash)return "\n\n## Direção indisponível\nA versão atual precisa de aprovação; não produzir usando direções antigas.";
  if(!run.integration)return "\n\n## Direção em andamento\nPróxima etapa: "+STAGE_LABELS[nextStage(run)!]+(run.error?"\nPendência: "+run.error:"");
+ if(!run.approvedAt)return "\n\n## Direção integrada aguardando aprovação\nConfira a direção desta versão no Radar e aprove antes de levar ao Estúdio.";
  return "\n\n## Direção integrada da versão aprovada\nMetadados separados; falas e acontecimentos permanecem no roteiro acima. Tempos estimados, não medidos.\n\n```json\n"+JSON.stringify(JSON.parse(run.integration),null,2)+"\n```";
+}
+
+/** Whole remaining pipeline; future outputs are budgeted as inputs, not treated as empty context. */
+export async function estimateDirectionPipeline(ideaId:string, versionId:string) {
+ const {version,run}=await directionState(ideaId,versionId);
+ const remaining=STAGES.filter(stage=>stage!=="integration"&&!run?.[stage]) as Exclude<Stage,"integration">[];
+ const {modelDeep}=await getSettings();
+ if(!remaining.length)return {model:modelDeep,usd:0,usdMax:0,calls:0};
+ const context=run?.study.startsWith('{"version":1,')?run:await initialContext(ideaId,version.content);
+ let usd=0,usdMax=0;
+ for(const stage of remaining){
+  const request=directionRequest(stage,version.content,{...context,scene:context.scene??"null",photography:context.photography??"null"});
+  const futureInputs=(stage!=="scene"&&!context.scene?1:0)+(stage==="sound"&&!context.photography?1:0);
+  const cost=estimateCost(modelDeep,request.system+request.user,6000,16000);
+  usd+=cost.usd+costUsd(modelDeep,futureInputs*6000,0);
+  usdMax+=cost.usdMax+costUsd(modelDeep,futureInputs*16000,0);
+ }
+ return {model:modelDeep,usd,usdMax,calls:remaining.length};
+}
+export async function runDirectionPipeline(ideaId:string,versionId:string,report:(progress:number,step:string)=>Promise<void>=async()=>{}){
+ for(;;){
+  const {run}=await directionState(ideaId,versionId);
+  const stage=nextStage(run);
+  if(!stage)break;
+  await report(STAGES.indexOf(stage)*25,STAGE_LABELS[stage]);
+  await runDirector(ideaId,versionId,stage);
+  await report((STAGES.indexOf(stage)+1)*25,STAGE_LABELS[stage]+": feito");
+ }
+}
+export async function approveDirection(ideaId:string,versionId:string){
+ return prisma.$transaction(async tx=>{
+  const {version}=await approved(tx,ideaId,versionId);
+  const run=await tx.directionRun.findUniqueOrThrow({where:{versionId}});
+  if(run.sourceHash!==hashScript(version.content)||!run.integration||run.runningStage||run.error)throw new Error("Conclua e confira a direção da versão atual antes de aprovar.");
+  return tx.directionRun.update({where:{id:run.id},data:{approvedAt:new Date()}});
+ });
 }

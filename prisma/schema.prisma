@@ -458,6 +458,10 @@ model NichePlaybook {
 /// (ex.: "desastre em cadeia", "construir resolvendo problemas"). Com menos de 3 vídeos fica como rascunho.
 /// `length` é Short ou vídeo longo (o antigo "formato" das cartilhas).
 model VideoFormat {
+  directionGeneral String?
+  directionScene String?
+  directionPhotography String?
+  directionSound String?
   narrativeRules String?
   directionStudy String?
   id          String   @id @default(cuid())
@@ -864,6 +868,7 @@ model ScriptVersion {
 
 /// Direction metadata never changes the approved script snapshot.
 model DirectionRun {
+ approvedAt DateTime?
  id String @id @default(cuid())
  versionId String @unique
  version ScriptVersion @relation(fields: [versionId], references: [id], onDelete: Restrict)

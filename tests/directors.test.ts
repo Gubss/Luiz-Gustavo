@@ -20,7 +20,7 @@ before(()=>{globalThis.fetch=withSse(async(url,init)=>{
 }) as typeof fetch;});
 async function fixture(study=true){
  const {prisma}=await import("../src/lib/db");const {appendVersion}=await import("../src/lib/script-versions");
- const n=await prisma.niche.create({data:{name:"Teste"}});const f=await prisma.videoFormat.create({data:{name:"Formato",nicheId:n.id,directionStudy:study?"## A. História\nNARRATIVA_NAO_ENTRA\n## B. Direção\nLuz motivada\n## C. Canal\nManter kit":null}});
+ const n=await prisma.niche.create({data:{name:"Teste"}});const f=await prisma.videoFormat.create({data:{name:"Formato",nicheId:n.id,directionGeneral:study?"GENERAL_ONLY":null,directionScene:study?"SCENE_ONLY":null,directionPhotography:study?"PHOTO_ONLY":null,directionSound:study?"SOUND_ONLY":null,directionStudy:study?"## A. História\nNARRATIVA_NAO_ENTRA\n## B. Direção\nLuz motivada\n## C. Canal\nManter kit":null}});
  const ch=await prisma.myChannel.create({data:{name:"Canal",nicheId:n.id,characters:"Menino"}});
  const idea=await prisma.idea.create({data:{theme:"Fio",titles:"[]",format:"short",formatId:f.id,myChannelId:ch.id}});
  const content=JSON.stringify({titulo:"Fio",duracaoSeg:70,falado:[{personagem:"Menino",fala:"Eu puxei o fio."},{personagem:"Avó",fala:"Era meu casaco!"}],cenas:[],channelReference:{name:"Canal",characters:"Menino e Avó",rules:"Não mudar vozes"}});
@@ -41,12 +41,14 @@ test("aprovação, dependências, falha parcial, cobertura, imutabilidade e expo
  const paid=called;await runDirector(idea.id,version.id,"integration");assert.equal(called,paid);
  assert.equal((await prisma.scriptVersion.findUniqueOrThrow({where:{id:version.id}})).content,content);
  assert.equal((await prisma.scriptVersion.findUniqueOrThrow({where:{id:version.id}})).markdown,"FALAS ORIGINAIS");
+ assert.match((await ideaExport(idea.id))!,/aguardando aprovação/);
+ await (await D()).approveDirection(idea.id,version.id);
  const exported=(await ideaExport(idea.id))!;assert.match(exported,/Direção integrada/);assert.match(exported,/estimados/);assert.match(exported,/C01/);
  await assert.rejects(runDirector(idea.id,version.id,"scene"),/próxima etapa/);assert.equal(called,paid);
 });
 test("sem estudo, correção, versão antiga e alteração durante chamada",async()=>{
  const {runDirector}=await D();const {approveVersion,appendVersion}=await import("../src/lib/script-versions");
- const empty=await fixture(false);await approveVersion(empty.idea.id,empty.version.id);const before=called;await assert.rejects(runDirector(empty.idea.id,empty.version.id,"scene"),/Sem estudo/);assert.equal(called,before);
+ const empty=await fixture(false);await approveVersion(empty.idea.id,empty.version.id);const before=called;await assert.rejects(runDirector(empty.idea.id,empty.version.id,"scene"),/Preencha/);assert.equal(called,before);
  const {prisma,idea,version,content}=await fixture();await approveVersion(idea.id,version.id);
  during=async()=>{await appendVersion({ideaId:idea.id,expectedVersionId:version.id,content:content.replace('fio.','fio azul.'),markdown:()=>"Nova",category:"história",origin:"correction"});};
  await assert.rejects(runDirector(idea.id,version.id,"scene"),/aprovada/);
@@ -63,4 +65,30 @@ test("schemas rejeitam texto falado novo; cenas agrupam falas; vínculos não po
  assert.throws(()=>validateSound({...sounds,falas:[sounds.falas[0]]},scenes,2));
  const integrated=integrate(JSON.stringify({duracaoSeg:70,falado:[{personagem:"M",fala:"Um"},{personagem:"M",fala:"Dois"}]}),scenes,photos,sounds);
  assert.equal(integrated.cenas.length,1);assert.equal(integrated.cenas[0].fimEstimado,70);
+});
+
+test("separação literal por função e execução sequencial com retomada sem refazer",async()=>{
+ const {runDirectionPipeline,estimateDirectionPipeline,approveDirection}=await D();
+ const {approveVersion}=await import("../src/lib/script-versions");
+ const {prisma,idea,version}=await fixture();
+ await approveVersion(idea.id,version.id);
+ const before=called;const estimate=await estimateDirectionPipeline(idea.id,version.id);
+ assert.equal(estimate.calls,3);assert.ok(estimate.usdMax>estimate.usd);assert.equal(called,before);
+ await assert.rejects(approveDirection(idea.id,version.id),/No.*found|Conclua|not found/i);
+ mode="bad-photo";
+ await assert.rejects(runDirectionPipeline(idea.id,version.id),/vínculos/);
+ const partial=await prisma.directionRun.findUniqueOrThrow({where:{versionId:version.id}});
+ assert.ok(partial.scene);assert.equal(partial.sound,null);assert.equal(partial.approvedAt,null);
+ const resumedEstimate=await estimateDirectionPipeline(idea.id,version.id);assert.equal(resumedEstimate.calls,2);
+ mode="ok";const restart=called;await runDirectionPipeline(idea.id,version.id);
+ assert.equal(called-restart,2);
+ const final=await prisma.directionRun.findUniqueOrThrow({where:{versionId:version.id}});
+ assert.equal(final.scene,partial.scene);assert.ok(final.integration);assert.equal(final.approvedAt,null);
+ for(const r of requests.slice(before)){
+  assert.match(r.user,/GENERAL_ONLY/);assert.doesNotMatch(r.user,/NARRATIVA_NAO_ENTRA/);
+  const stage=r.system.includes("Defina encenação")?"SCENE_ONLY":r.system.includes("Receba a encenação")?"PHOTO_ONLY":"SOUND_ONLY";
+  assert.match(r.user,new RegExp(stage));for(const other of ["SCENE_ONLY","PHOTO_ONLY","SOUND_ONLY"].filter(x=>x!==stage))assert.doesNotMatch(r.user,new RegExp(other));
+ }
+ await approveDirection(idea.id,version.id);
+ assert.ok((await prisma.directionRun.findUniqueOrThrow({where:{versionId:version.id}})).approvedAt);
 });
