@@ -1,16 +1,18 @@
 /**
  * Comparação linha a linha entre a história do Gubs e o roteiro gerado (v3, Gubs 17/11). Sem IA:
- * alinha as falas por semelhança de texto (palavras) e marca cada linha:
- * igual (verde) · alterada (amarelo, com a original) · nova (azul) · saiu (vermelho, riscada).
+ * casa as falas por semelhança de texto (palavras) em todo o texto e marca cada linha:
+ * igual (verde) · alterada (amarelo, com a original) · nova (azul) · saiu (vermelho, riscada);
+ * igual/alterada em outra posição levam a etiqueta "mudou de lugar".
  */
 export type DiffLine = { who?: string | null; text: string };
 export type DiffKind = "igual" | "alterada" | "nova" | "saiu";
-export type DiffRow = { kind: DiffKind; who?: string | null; text: string; original?: string; originalWho?: string | null; similarity?: number };
+/** moved: a fala existe no original, mas em outra posição (verde/amarelo com etiqueta "mudou de lugar"). originalIndex: 0-based. */
+export type DiffRow = { kind: DiffKind; who?: string | null; text: string; original?: string; originalWho?: string | null; similarity?: number; moved?: boolean; originalIndex?: number };
 
 /** A partir daqui a linha conta como a mesma fala alterada; abaixo disso, é linha nova + linha que saiu. */
 export const ALTERED_MIN = 0.45;
-/** Pequenas diferenças (pontuação, maiúscula, acento) contam como igual. */
-export const SAME_MIN = 0.97;
+/** Igual = mesmo texto depois de tirar pontuação, maiúscula e acento (normLine). Qualquer palavra diferente é "alterada". */
+export const SAME_MIN = 1;
 
 export function normLine(s: string) {
   return s
@@ -50,44 +52,59 @@ export function lineSimilarity(a: string, b: string) {
 }
 
 /**
- * Alinhamento global (programação dinâmica): maximiza a soma das semelhanças dos pares casados, mantendo a ordem.
- * Par só casa com semelhança >= ALTERED_MIN; o que sobra do original "saiu" e o que sobra do roteiro é "nova".
+ * Alinhamento por correspondência (Gubs, revisão do PR #24): uma fala que existe no original e no roteiro nunca vira
+ * saiu + nova só porque mudou de lugar.
+ * 1. Casa as falas pela semelhança no texto todo (o par mais parecido primeiro; empate → posição mais próxima), 1 para 1.
+ * 2. Dos pares, a maior sequência em ordem (soma das semelhanças) fica "no lugar"; os demais são "mudou de lugar".
+ * 3. Só o que sobrou: do original "saiu", do roteiro "nova".
+ * Linhas na ordem do roteiro; as que saíram aparecem perto de onde estavam no original.
  */
 export function diffLines(original: DiffLine[], generated: DiffLine[]): DiffRow[] {
   const n = original.length, m = generated.length;
-  const sim: number[][] = original.map((o) => generated.map((g) => lineSimilarity(o.text, g.text)));
-  const best: number[][] = Array.from({ length: n + 1 }, () => new Array<number>(m + 1).fill(0));
-  for (let i = n - 1; i >= 0; i--)
-    for (let j = m - 1; j >= 0; j--) {
-      let v = Math.max(best[i + 1][j], best[i][j + 1]);
-      if (sim[i][j] >= ALTERED_MIN) v = Math.max(v, sim[i][j] + best[i + 1][j + 1]);
-      best[i][j] = v;
+  const cands: { i: number; j: number; s: number; d: number }[] = [];
+  for (let i = 0; i < n; i++)
+    for (let j = 0; j < m; j++) {
+      const s = lineSimilarity(original[i].text, generated[j].text);
+      if (s >= ALTERED_MIN) cands.push({ i, j, s, d: Math.abs(i / Math.max(n, 1) - j / Math.max(m, 1)) });
     }
-  const rows: DiffRow[] = [];
-  let i = 0, j = 0;
-  const eps = 1e-9;
-  while (i < n || j < m) {
-    if (i < n && j < m && sim[i][j] >= ALTERED_MIN && Math.abs(best[i][j] - (sim[i][j] + best[i + 1][j + 1])) < eps) {
-      const s = sim[i][j];
-      const o = original[i], g = generated[j];
-      rows.push(s >= SAME_MIN
-        ? { kind: "igual", who: g.who, text: g.text, similarity: s }
-        : { kind: "alterada", who: g.who, text: g.text, original: o.text, originalWho: o.who, similarity: s });
-      i++; j++;
-    } else if (i < n && (j >= m || Math.abs(best[i][j] - best[i + 1][j]) < eps)) {
-      rows.push({ kind: "saiu", who: original[i].who, text: original[i].text });
-      i++;
-    } else {
-      rows.push({ kind: "nova", who: generated[j].who, text: generated[j].text });
-      j++;
-    }
+  cands.sort((a, b) => b.s - a.s || a.d - b.d || a.j - b.j);
+  const origOf = new Array<number>(m).fill(-1), simOf = new Array<number>(m).fill(0), usedOrig = new Array<boolean>(n).fill(false);
+  for (const c of cands) {
+    if (usedOrig[c.i] || origOf[c.j] >= 0) continue;
+    usedOrig[c.i] = true; origOf[c.j] = c.i; simOf[c.j] = c.s;
   }
+  // Maior sequência crescente (pelo índice do original, na ordem do roteiro), ponderada pela semelhança.
+  const pairs = Array.from({ length: m }, (_, j) => j).filter((j) => origOf[j] >= 0);
+  const score = pairs.map((j) => simOf[j]), prev = pairs.map(() => -1);
+  for (let a = 0; a < pairs.length; a++)
+    for (let b = 0; b < a; b++)
+      if (origOf[pairs[b]] < origOf[pairs[a]] && score[b] + simOf[pairs[a]] > score[a]) { score[a] = score[b] + simOf[pairs[a]]; prev[a] = b; }
+  const inPlace = new Set<number>();
+  let k = score.length ? score.indexOf(Math.max(...score)) : -1;
+  while (k >= 0) { inPlace.add(pairs[k]); k = prev[k]; }
+
+  const rows: DiffRow[] = [];
+  let nextOrig = 0;
+  const flushRemoved = (upTo: number) => {
+    for (; nextOrig < upTo; nextOrig++) if (!usedOrig[nextOrig]) rows.push({ kind: "saiu", who: original[nextOrig].who, text: original[nextOrig].text, originalIndex: nextOrig });
+  };
+  for (let j = 0; j < m; j++) {
+    const g = generated[j], i = origOf[j];
+    if (i < 0) { rows.push({ kind: "nova", who: g.who, text: g.text }); continue; }
+    const moved = !inPlace.has(j);
+    if (!moved) flushRemoved(i);
+    const o = original[i], s = simOf[j];
+    rows.push(s >= SAME_MIN
+      ? { kind: "igual", who: g.who, text: g.text, similarity: s, moved, originalIndex: i }
+      : { kind: "alterada", who: g.who, text: g.text, original: o.text, originalWho: o.who, similarity: s, moved, originalIndex: i });
+  }
+  flushRemoved(n);
   return rows;
 }
 
 export function diffCounts(rows: DiffRow[]) {
-  const c: Record<DiffKind, number> = { igual: 0, alterada: 0, nova: 0, saiu: 0 };
-  for (const r of rows) c[r.kind]++;
+  const c: Record<DiffKind | "movida", number> = { igual: 0, alterada: 0, nova: 0, saiu: 0, movida: 0 };
+  for (const r of rows) { c[r.kind]++; if (r.moved) c.movida++; }
   return c;
 }
 
