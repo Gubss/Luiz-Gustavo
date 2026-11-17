@@ -14,9 +14,16 @@ export type Stage = typeof STAGES[number];
 export const STAGE_LABELS: Record<Stage,string> = {scene:"Diretor de cena",photography:"Diretor de fotografia",sound:"Diretor de som e trilha",integration:"Integração"};
 const text = z.string().trim().min(1);
 const scene = z.object({id:text,falaInicial:z.number().int().min(1),falaFinal:z.number().int().min(1),intencao:text,atuacao:text,posicoes:text,movimento:text,continuidade:text,ritmo:text}).strict();
+const photoScene = z.object({cenaId:text,plano:text,camera:text,luz:text,cor:text,composicao:text,transicao:text}).strict();
+const soundLine = z.object({falaId:z.number().int().min(1),intencao:text,entrega:text,pausas:text}).strict();
+const soundScene = z.object({cenaId:text,ambiencia:text,foley:text,efeitos:text,musica:text,mixagem:text}).strict();
 export const SceneSchema = z.object({cenas:z.array(scene).min(1),pendencias:z.array(text)}).strict();
-export const PhotoSchema = z.object({cenas:z.array(z.object({cenaId:text,plano:text,camera:text,luz:text,cor:text,composicao:text,transicao:text}).strict()).min(1),pendencias:z.array(text)}).strict();
-export const SoundSchema = z.object({falas:z.array(z.object({falaId:z.number().int().min(1),intencao:text,entrega:text,pausas:text}).strict()).min(1),cenas:z.array(z.object({cenaId:text,ambiencia:text,foley:text,efeitos:text,musica:text,mixagem:text}).strict()).min(1),pendencias:z.array(text)}).strict();
+export const PhotoSchema = z.object({cenas:z.array(photoScene).min(1),pendencias:z.array(text)}).strict();
+export const SoundSchema = z.object({falas:z.array(soundLine).min(1),cenas:z.array(soundScene).min(1),pendencias:z.array(text)}).strict();
+/** One-scene answers used by direction corrections (adendo B). */
+export const SceneOneSchema = z.object({cena:scene,pendencias:z.array(text)}).strict();
+export const PhotoOneSchema = z.object({cena:photoScene,pendencias:z.array(text)}).strict();
+export const SoundOneSchema = z.object({falas:z.array(soundLine).min(1),cena:soundScene,pendencias:z.array(text)}).strict();
 export type Scenes = z.infer<typeof SceneSchema>;
 export type Photos = z.infer<typeof PhotoSchema>;
 export type Sounds = z.infer<typeof SoundSchema>;
@@ -37,11 +44,40 @@ const SYSTEM = `MODO_DIRECAO. O roteiro aprovado é imutável. Não altere, acre
 const TASKS:Record<Exclude<Stage,"integration">,string>={
  scene:"Defina encenação: intenção dramática, atuação, gestos, expressões, posições iniciais/finais, movimentos, continuidade de objetos, antecipação e reação, ritmo. Agrupe intervalos contíguos de falas em cenas por acontecimento; cubra todas as falas. IDs de cena estáveis (C01...). Não defina fotografia ou trilha.",
  photography:"Receba a encenação concluída. Preserve IDs, ordem e acontecimentos. Defina plano, posição/movimento e foco da câmera, luz com fonte motivada e direção consistente, cor canônica, composição legível em 9:16 e transições. Câmera serve ao objeto/ação; não esconda mãos ou pistas. Não mude atuação ou texto.",
- sound:"Receba roteiro, encenação e fotografia. Para cada fala, use apenas falaId e descreva intenção, entrega vocal e pausas. Preserve voz canônica: não crie voice_id nem troque identidade, timbre ou narrador. Para cada cena, defina ambiência, Foley, efeitos, entrada/saída/pausa/retorno da música e mixagem com prioridade da voz. Sincronize pelo ID da fala e palavra ou ação já existente, sem inventar duração medida. Não altere fatos nem falas."
+ sound:"Receba roteiro, encenação e fotografia. Para cada fala, use apenas falaId e descreva intenção, entrega vocal e pausas. Preserve voz canônica: não crie voice_id nem troque identidade, timbre ou narrador. Para cada cena, defina ambiência, Foley, efeitos, entrada/saída/pausa/retorno da música e mixagem com prioridade da voz. Sincronize pelo ID da fala e palavra ou ação já existente, sem inventar duração medida. Não altere fatos nem falas. Seja enxuto: cada campo em uma frase curta (até ~20 palavras); não cite nem repita o texto das falas, refira-se a elas só pelo falaId."
 };
-export function directionRequest(stage:Exclude<Stage,"integration">,content:string,run:Pick<DirectionRun,"study"|"reference"|"scene"|"photography">){
+/** Output ceiling (thinking + JSON). Sound writes one entry per line, so it grows with the script. Streaming makes high ceilings safe; only used tokens are billed. */
+export const DIRECTION_MIN_MAX_TOKENS=32000;
+export function directionMaxTokens(stage:Exclude<Stage,"integration">,lineCount:number){
+ if(stage!=="sound")return DIRECTION_MIN_MAX_TOKENS;
+ return Math.min(64000,Math.max(DIRECTION_MIN_MAX_TOKENS,20000+lineCount*1000));
+}
+const lineCount=(content:string)=>spokenLines(JSON.parse(content)).length;
+const INTENTIONS=`INTENÇÕES DO GUBS: intencoesDoGubs traz os pedidos de correção que geraram a versão aprovada do roteiro, do mais antigo ao mais recente. Eles prevalecem sobre regras genéricas, estudos, exemplos e instruções do usuário: a direção precisa MOSTRAR cada um na tela (objeto, posição, ação, reação, som). Quando o pedido descreve uma imagem (ex.: alguém segurando um objeto, algo no céu, a imagem contando a piada), essa imagem é obrigatória na cena da fala correspondente. Pedido mais recente prevalece sobre o anterior.`;
+/**
+ * Adendo A: the correction requests that produced this version, oldest first.
+ * Follows baseVersionId back to the generation; a restore jumps to the restored version's own history.
+ */
+export async function scriptIntentions(versionId:string){
+ const out:string[]=[];const seen=new Set<string>();let id:string|null=versionId;
+ while(id&&!seen.has(id)){
+  seen.add(id);
+  const v:{ideaId:string;baseVersionId:string|null;request:string|null;origin:string}|null=await prisma.scriptVersion.findUnique({where:{id},select:{ideaId:true,baseVersionId:true,request:true,origin:true}});
+  if(!v)break;
+  if(v.origin==="restore"){
+   const n:number=Number(v.request?.match(/(\d+)/)?.[1]);
+   const restored:{id:string}|null=n?await prisma.scriptVersion.findFirst({where:{ideaId:v.ideaId,number:n},select:{id:true}}):null;
+   id=restored?.id??null;continue;
+  }
+  if(v.request?.trim()&&!out.includes(v.request.trim()))out.unshift(v.request.trim());
+  if(v.origin==="generation"||v.origin==="legacy")break;
+  id=v.baseVersionId;
+ }
+ return out;
+}
+export function directionRequest(stage:Exclude<Stage,"integration">,content:string,run:Pick<DirectionRun,"study"|"reference"|"scene"|"photography">,intentions:string[]=[]){
  const data=JSON.parse(content) as ScriptContent;
- return {system:SYSTEM+"\n"+TASKS[stage],user:JSON.stringify({roteiro:spokenLines(data),acontecimentosAprovados:(data.cenas??[]).map(s=>({acao:s.acao})),duracaoEstimada:data.duracaoSeg,referencia:JSON.parse(run.reference),instrucoesDoUsuario:instructionsFor(stage,run.study),...(stage!=="scene"?{encenacao:JSON.parse(run.scene!)}:{}),...(stage==="sound"?{fotografia:JSON.parse(run.photography!)}:{})})};
+ return {system:SYSTEM+(intentions.length?"\n"+INTENTIONS:"")+"\n"+TASKS[stage],user:JSON.stringify({...(intentions.length?{intencoesDoGubs:intentions}:{}),roteiro:spokenLines(data),acontecimentosAprovados:(data.cenas??[]).map(s=>({acao:s.acao})),duracaoEstimada:data.duracaoSeg,referencia:JSON.parse(run.reference),instrucoesDoUsuario:instructionsFor(stage,run.study),...(stage!=="scene"?{encenacao:JSON.parse(run.scene!)}:{}),...(stage==="sound"?{fotografia:JSON.parse(run.photography!)}:{})})};
 }
 export const isDirectionRunning=(run:DirectionRun|null)=>Boolean(run?.runningStage && Date.now()-run.updatedAt.getTime()<15*60_000);
 export function nextStage(run:DirectionRun|null):Stage|null{for(const stage of STAGES)if(!run?.[stage])return stage;return null;}
@@ -64,8 +100,8 @@ export async function estimateDirection(ideaId:string,versionId:string){
  const {modelDeep}=await getSettings();
  // Account for the full context before the first snapshot exists.
  const context=run?.study.startsWith('{"version":1,')?run:await initialContext(ideaId,version.content);
- const req=directionRequest(stage,version.content,context);
- return estimateCost(modelDeep,req.system+req.user,6000,16000);
+ const req=directionRequest(stage,version.content,context,await scriptIntentions(versionId));
+ return estimateCost(modelDeep,req.system+req.user,6000,directionMaxTokens(stage,lineCount(version.content)));
 }
 export async function initialContext(ideaId:string,content:string){
  const idea=await prisma.idea.findUniqueOrThrow({where:{id:ideaId},include:{videoFormat:{include:{direction:true}},myChannel:true}});
@@ -104,8 +140,8 @@ export async function runDirector(ideaId:string,versionId:string,stage:Stage){
   const lines=spokenLines(JSON.parse(version.content));let result:unknown;let generationId:string|undefined;let cost=0;
   if(stage==="integration")result=integrate(version.content,SceneSchema.parse(JSON.parse(claimed.scene!)),PhotoSchema.parse(JSON.parse(claimed.photography!)),SoundSchema.parse(JSON.parse(claimed.sound!)));
   else{
-   const {modelDeep}=await getSettings();const req=directionRequest(stage,version.content,claimed);
-   const options={kind:"direction-"+stage,model:modelDeep,effort:"medium" as const,...req,maxTokens:16000};
+   const {modelDeep}=await getSettings();const req=directionRequest(stage,version.content,claimed,await scriptIntentions(versionId));
+   const options={kind:"direction-"+stage,model:modelDeep,effort:"medium" as const,...req,maxTokens:directionMaxTokens(stage,lines.length)};
    const response=stage==="scene"?await callStructured({...options,schema:SceneSchema}):stage==="photography"?await callStructured({...options,schema:PhotoSchema}):await callStructured({...options,schema:SoundSchema});
    result=response.data;generationId=response.generationId;cost=response.costUsd;
    await prisma.generation.update({where:{id:generationId},data:{scriptVersionId:versionId}});
@@ -140,13 +176,14 @@ export async function estimateDirectionPipeline(ideaId:string, versionId:string)
  const {modelDeep}=await getSettings();
  if(!remaining.length)return {model:modelDeep,usd:0,usdMax:0,calls:0};
  const context=run?.study.startsWith('{"version":1,')?run:await initialContext(ideaId,version.content);
- let usd=0,usdMax=0;
+ let usd=0,usdMax=0;const count=lineCount(version.content);const intentions=await scriptIntentions(versionId);
  for(const stage of remaining){
-  const request=directionRequest(stage,version.content,{...context,scene:context.scene??"null",photography:context.photography??"null"});
+  const request=directionRequest(stage,version.content,{...context,scene:context.scene??"null",photography:context.photography??"null"},intentions);
   const futureInputs=(stage!=="scene"&&!context.scene?1:0)+(stage==="sound"&&!context.photography?1:0);
-  const cost=estimateCost(modelDeep,request.system+request.user,6000,16000);
+  const cost=estimateCost(modelDeep,request.system+request.user,6000,directionMaxTokens(stage,count));
   usd+=cost.usd+costUsd(modelDeep,futureInputs*6000,0);
-  usdMax+=cost.usdMax+costUsd(modelDeep,futureInputs*16000,0);
+  // An earlier stage's JSON cannot exceed that stage's ceiling (scene and photography share it).
+  usdMax+=cost.usdMax+costUsd(modelDeep,futureInputs*DIRECTION_MIN_MAX_TOKENS,0);
  }
  return {model:modelDeep,usd,usdMax,calls:remaining.length};
 }
@@ -165,6 +202,133 @@ export async function approveDirection(ideaId:string,versionId:string){
   const {version}=await approved(tx,ideaId,versionId);
   const run=await tx.directionRun.findUniqueOrThrow({where:{versionId}});
   if(run.sourceHash!==hashScript(version.content)||!run.integration||run.runningStage||run.error)throw new Error("Conclua e confira a direção da versão atual antes de aprovar.");
+  if(parseStale(run).length)throw new Error("Há etapas desatualizadas por uma correção. Refaça-as antes de aprovar.");
   return tx.directionRun.update({where:{id:run.id},data:{approvedAt:new Date()}});
  });
+}
+
+/* ---------- Adendo B: corrigir só a direção ---------- */
+export type DirectorStage=Exclude<Stage,"integration">;
+export const WHOLE_STAGE="all";
+export type StaleMark={stage:DirectorStage;target:string};
+export type DirectionHistory={stage:DirectorStage;target:string;request:string;at:string;value:string};
+const DEPENDENTS:Record<DirectorStage,DirectorStage[]>={scene:["photography","sound"],photography:["sound"],sound:[]};
+export const parseStale=(run:Pick<DirectionRun,"stale">|null)=>(run?JSON.parse(run.stale||"[]"):[]) as StaleMark[];
+export const parseHistory=(run:Pick<DirectionRun,"history">|null)=>(run?JSON.parse(run.history||"[]"):[]) as DirectionHistory[];
+export function addStale(list:StaleMark[],stage:DirectorStage,target:string):StaleMark[]{
+ if(list.some(s=>s.stage===stage&&(s.target===WHOLE_STAGE||s.target===target)))return list;
+ return [...(target===WHOLE_STAGE?list.filter(s=>s.stage!==stage):list),{stage,target}];
+}
+export function clearStale(list:StaleMark[],stage:DirectorStage,target:string){
+ return target===WHOLE_STAGE?list.filter(s=>s.stage!==stage):list.filter(s=>!(s.stage===stage&&s.target===target));
+}
+const uniq=(xs:string[])=>Array.from(new Set(xs));
+const REDO="A etapa anterior foi corrigida; atualize para ficar coerente com ela, sem outras mudanças.";
+
+export function correctionRequest(stage:DirectorStage,target:string,request:string,content:string,run:Pick<DirectionRun,"study"|"reference"|"scene"|"photography"|"sound">,intentions:string[]=[]){
+ const base=directionRequest(stage,content,run,intentions);
+ const scenes=run.scene?SceneSchema.parse(JSON.parse(run.scene)):null;
+ const sc=scenes?.cenas.find(c=>c.id===target);
+ const scope=target===WHOLE_STAGE
+  ?"refaça toda a etapa partindo de resultadoAtual. Mude só o que pedidoDeCorrecao exige e mantenha o resto igual."
+  :"refaça somente a cena "+target+". Devolva só essa cena"+(stage==="sound"&&sc?" (campo cena) e a interpretação das falas "+sc.falaInicial+" a "+sc.falaFinal+", em ordem (campo falas)":" (campo cena)")+", com o mesmo ID"+(stage==="scene"?" e o mesmo intervalo de falas":"")+". Não mude nenhuma outra cena.";
+ return {
+  system:base.system+"\nCORREÇÃO DA DIREÇÃO: "+scope+" O pedidoDeCorrecao do Gubs prevalece sobre resultadoAtual. Pendências: só dúvidas reais desta correção.",
+  user:JSON.stringify({...JSON.parse(base.user),resultadoAtual:JSON.parse(run[stage]!),alvo:target===WHOLE_STAGE?"toda a etapa":target,pedidoDeCorrecao:request.trim()||REDO}),
+ };
+}
+const correctionMaxTokens=(stage:DirectorStage,target:string,count:number)=>target===WHOLE_STAGE?directionMaxTokens(stage,count):DIRECTION_MIN_MAX_TOKENS;
+
+async function correctionContext(ideaId:string,versionId:string,stage:DirectorStage,target:string){
+ if(!(["scene","photography","sound"] as string[]).includes(stage))throw new Error("Etapa inválida.");
+ const {version,run}=await directionState(ideaId,versionId);
+ if(!run?.[stage])throw new Error("Esta etapa ainda não foi feita; prepare a direção primeiro.");
+ if(target!==WHOLE_STAGE&&!SceneSchema.parse(JSON.parse(run.scene!)).cenas.some(c=>c.id===target))throw new Error("Cena não encontrada nesta direção.");
+ return {version,run};
+}
+export async function estimateDirectionCorrection(ideaId:string,versionId:string,stage:DirectorStage,target:string=WHOLE_STAGE){
+ const {version,run}=await correctionContext(ideaId,versionId,stage,target);
+ const {modelDeep}=await getSettings();
+ const req=correctionRequest(stage,target,"",version.content,run,await scriptIntentions(versionId));
+ return estimateCost(modelDeep,req.system+req.user,4000,correctionMaxTokens(stage,target,lineCount(version.content)));
+}
+
+/** Pure merge of a correction answer into the stage result; throws when IDs, ranges or coverage break. */
+export function mergeCorrection(stage:DirectorStage,target:string,answer:unknown,run:Pick<DirectionRun,"scene"|"photography"|"sound">,count:number):{value:string;idsChanged:boolean}{
+ const scenes=SceneSchema.parse(JSON.parse(run.scene!));
+ if(target===WHOLE_STAGE){
+  if(stage==="scene"){const v=SceneSchema.parse(answer);validateCoverage(v.cenas,count);const before=scenes.cenas.map(c=>c.id).join("|");return {value:JSON.stringify(v),idsChanged:v.cenas.map(c=>c.id).join("|")!==before};}
+  if(stage==="photography"){const v=PhotoSchema.parse(answer);validatePhoto(v,scenes);return {value:JSON.stringify(v),idsChanged:false};}
+  const v=SoundSchema.parse(answer);validateSound(v,scenes,count);return {value:JSON.stringify(v),idsChanged:false};
+ }
+ const sc=scenes.cenas.find(c=>c.id===target);if(!sc)throw new Error("Cena não encontrada nesta direção.");
+ if(stage==="scene"){
+  const a=SceneOneSchema.parse(answer);
+  if(a.cena.id!==target||a.cena.falaInicial!==sc.falaInicial||a.cena.falaFinal!==sc.falaFinal)throw new Error("A correção precisa manter o ID e o intervalo de falas da cena "+target+".");
+  const v={cenas:scenes.cenas.map(c=>c.id===target?a.cena:c),pendencias:uniq([...scenes.pendencias,...a.pendencias])};validateCoverage(v.cenas,count);
+  return {value:JSON.stringify(v),idsChanged:false};
+ }
+ if(stage==="photography"){
+  const a=PhotoOneSchema.parse(answer);const cur=PhotoSchema.parse(JSON.parse(run.photography!));
+  if(a.cena.cenaId!==target)throw new Error("A correção precisa manter o ID da cena "+target+".");
+  const v={cenas:cur.cenas.map(c=>c.cenaId===target?a.cena:c),pendencias:uniq([...cur.pendencias,...a.pendencias])};validatePhoto(v,scenes);
+  return {value:JSON.stringify(v),idsChanged:false};
+ }
+ const a=SoundOneSchema.parse(answer);const cur=SoundSchema.parse(JSON.parse(run.sound!));
+ if(a.cena.cenaId!==target)throw new Error("A correção precisa manter o ID da cena "+target+".");
+ const expected=Array.from({length:sc.falaFinal-sc.falaInicial+1},(_,i)=>sc.falaInicial+i);
+ if(a.falas.length!==expected.length||a.falas.some((f,i)=>f.falaId!==expected[i]))throw new Error("A correção do som precisa trazer as falas "+sc.falaInicial+" a "+sc.falaFinal+", em ordem.");
+ const v={falas:cur.falas.map(f=>f.falaId>=sc.falaInicial&&f.falaId<=sc.falaFinal?a.falas[f.falaId-sc.falaInicial]:f),cenas:cur.cenas.map(c=>c.cenaId===target?a.cena:c),pendencias:uniq([...cur.pendencias,...a.pendencias])};
+ validateSound(v,scenes,count);
+ return {value:JSON.stringify(v),idsChanged:false};
+}
+
+/**
+ * Redoes one scene or a whole stage with one AI call. The previous result goes to history; later stages
+ * that depend on it are marked stale (or cleared when scene IDs changed, so the normal pipeline redoes them).
+ * An empty request means "redo after an upstream correction".
+ */
+export async function correctDirection(ideaId:string,versionId:string,stage:DirectorStage,target:string,request:string){
+ if(request.length>4000)throw new Error("Descreva a correção em até 4.000 caracteres.");
+ const {version}=await correctionContext(ideaId,versionId,stage,target);
+ const stale=new Date(Date.now()-15*60_000);
+ const claimed=await prisma.$transaction(async tx=>{
+  await approved(tx,ideaId,versionId);
+  const current=await tx.directionRun.findUniqueOrThrow({where:{versionId}});
+  if(!current[stage])throw new Error("Esta etapa ainda não foi feita; prepare a direção primeiro.");
+  const lock=await tx.directionRun.updateMany({where:{id:current.id,OR:[{runningStage:null},{updatedAt:{lt:stale}}]},data:{runningStage:stage,error:null}});
+  if(lock.count!==1)throw new Error("Já existe um diretor trabalhando nesta versão.");
+  return tx.directionRun.findUniqueOrThrow({where:{id:current.id}});
+ });
+ try{
+  const count=lineCount(version.content);
+  const {modelDeep}=await getSettings();
+  const req=correctionRequest(stage,target,request,version.content,claimed,await scriptIntentions(versionId));
+  const options={kind:"direction-fix-"+stage,model:modelDeep,effort:"medium" as const,...req,maxTokens:correctionMaxTokens(stage,target,count)};
+  const whole=target===WHOLE_STAGE;
+  const response=stage==="scene"?await callStructured({...options,schema:whole?SceneSchema:SceneOneSchema})
+   :stage==="photography"?await callStructured({...options,schema:whole?PhotoSchema:PhotoOneSchema})
+   :await callStructured({...options,schema:whole?SoundSchema:SoundOneSchema});
+  await prisma.generation.update({where:{id:response.generationId},data:{scriptVersionId:versionId}});
+  const merged=mergeCorrection(stage,target,response.data,claimed,count);
+  const at=new Date().toISOString();
+  const history=[...parseHistory(claimed),{stage,target,request:request.trim()||REDO,at,value:claimed[stage]!}];
+  let marks=clearStale(parseStale(claimed),stage,target);
+  const data:Record<string,unknown>={[stage]:merged.value};
+  for(const dep of DEPENDENTS[stage]){
+   if(!claimed[dep])continue;
+   if(merged.idsChanged){history.push({stage:dep,target:WHOLE_STAGE,request:"Cenas reagrupadas pela correção da encenação; etapa refeita do zero.",at,value:claimed[dep]!});data[dep]=null;marks=clearStale(marks,dep,WHOLE_STAGE);}
+   else marks=addStale(marks,dep,target);
+  }
+  const next={...claimed,...data} as DirectionRun;
+  data.integration=next.scene&&next.photography&&next.sound&&claimed.integration?JSON.stringify(integrate(version.content,SceneSchema.parse(JSON.parse(next.scene)),PhotoSchema.parse(JSON.parse(next.photography)),SoundSchema.parse(JSON.parse(next.sound)))):null;
+  return await prisma.$transaction(async tx=>{
+   const fresh=await approved(tx,ideaId,versionId);
+   if(hashScript(fresh.version.content)!==claimed.sourceHash)throw new Error("Versão alterada durante a direção; resultado descartado.");
+   const active=await tx.directionRun.findUniqueOrThrow({where:{id:claimed.id}});
+   if(active.runningStage!==stage||active.updatedAt.getTime()!==claimed.updatedAt.getTime())throw new Error("A execução foi substituída; resultado descartado.");
+   return tx.directionRun.update({where:{id:claimed.id},data:{...data,stale:JSON.stringify(marks),history:JSON.stringify(history),runningStage:null,error:null,approvedAt:null,costUsd:{increment:response.costUsd}}});
+  });
+ // A failed correction keeps the previous result valid: release the lock without blocking approval; the job shows the error.
+ }catch(error){await prisma.directionRun.updateMany({where:{id:claimed.id,runningStage:stage,updatedAt:claimed.updatedAt},data:{runningStage:null}});throw error;}
 }
