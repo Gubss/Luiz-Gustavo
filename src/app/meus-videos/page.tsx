@@ -421,9 +421,14 @@ export default async function MyVideosPage({ searchParams }: { searchParams: Pro
 
       {leaders.length > 0 && (
         <section className="card space-y-3 p-5">
-          <div>
-            <h2 className="text-lg font-semibold">Quem foi melhor</h2>
-            <p className="text-sm text-zinc-400">O recordista do canal em cada número{videos.some((v) => v.isShort) ? " (entre os Shorts)" : ""}. Clique para ver os insights do vídeo.</p>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold">Quem foi melhor</h2>
+              <p className="text-sm text-zinc-400">O recordista do canal em cada número{videos.some((v) => v.isShort) ? " (entre os Shorts)" : ""}. Clique para ver os insights do vídeo.</p>
+            </div>
+            <Link href={`/meus-videos/tabela?canal=${c.id}`} className="btn-secondary shrink-0">
+              Tabela completa →
+            </Link>
           </div>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5">
             {leaders.map((l) => (

@@ -209,12 +209,7 @@ export function videoInsights(v: InsightVideo, peers: InsightVideo[]): Insight[]
     });
   }
 
-  // Engajamento: (likes + comentários + compartilhamentos) ÷ views.
-  const eng = (p: InsightVideo) => {
-    if (!p.viewCount) return null;
-    const sh = validAnalytics(p.analytics)?.shares ?? 0;
-    return ((p.likeCount ?? 0) + (p.commentCount ?? 0) + sh) / p.viewCount;
-  };
+  const eng = engagementRate;
   const e = eng(v);
   const es = others.map(eng).filter((x): x is number => x != null);
   const eMed = median(es);
@@ -226,6 +221,13 @@ export function videoInsights(v: InsightVideo, peers: InsightVideo[]): Insight[]
     why: e == null ? "sem views ainda" : `(likes + comentários${a ? " + compartilhamentos" : ""}) ÷ views; ${because(eMed ? e / eMed : null, eMed ? `${fmt(eMed * 100, 1)}%` : null, es.length)}`,
   });
   return out;
+}
+
+/** Engajamento: (likes + comentários + compartilhamentos) ÷ views. Null sem views. */
+export function engagementRate(p: Pick<InsightVideo, "viewCount" | "likeCount" | "commentCount" | "analytics">) {
+  if (!p.viewCount) return null;
+  const sh = validAnalytics(p.analytics)?.shares ?? 0;
+  return ((p.likeCount ?? 0) + (p.commentCount ?? 0) + sh) / p.viewCount;
 }
 
 /** Posição do vídeo no canal em cada marco: "2º de 5". Só conta vídeos do mesmo formato com número no marco. */
