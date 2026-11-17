@@ -2,6 +2,7 @@ import type { NextConfig } from "next";
 
 // App local lendo SQLite: renderização dinâmica em todas as rotas (sem Cache Components).
 const nextConfig: NextConfig = {
+  distDir: process.env.RADAR_BUILD_DIR || ".next",
   // Transcrições coladas à mão podem passar de 1 MB em vídeos longos.
   experimental: {
     serverActions: { bodySizeLimit: "5mb" },

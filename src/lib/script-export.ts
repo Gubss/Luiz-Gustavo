@@ -1,3 +1,4 @@
+import { directionExport } from "./directors";
 import { sceneLine } from "./direction-study";
 import { prisma } from "./db";
 import { channelIdentity, scopedRules } from "./script-context";
@@ -13,7 +14,9 @@ export function exportScript(c:ScriptContent,ref:ChannelReference,code:string,nu
 export async function ideaExport(ideaId:string) {
  const idea=await prisma.idea.findUnique({where:{id:ideaId},include:{myChannel:true,videoFormat:true}});
  if(!idea?.script)return null;
- if(idea.currentVersionId){const v=await prisma.scriptVersion.findFirst({where:{id:idea.currentVersionId,ideaId}});if(!v)throw new Error("Versão inválida");return v.markdown+await critiqueExport(v.id);}
+ if(idea.currentVersionId){const v=await prisma.scriptVersion.findFirst({where:{id:idea.currentVersionId,ideaId}});if(!v)throw new Error("Versão inválida");const direction=await directionExport(ideaId,v.id,v.content);
+ const base=v.markdown.replace(/## Animação e direção[\s\S]*?(?=# Referência do canal:)/,"## Animação e direção\n\nConsulte a direção vinculada à versão ao final deste arquivo.\n\n").replace(/- Direção de animação ainda não preparada; requer aprovação das falas\.\n?/g,"");
+ return base+await critiqueExport(v.id)+direction;}
  const channel=idea.myChannel;
  const how=channel&&idea.formatId?await prisma.channelFormat.findUnique({where:{myChannelId_formatId:{myChannelId:channel.id,formatId:idea.formatId}}}):null;
  const ref={name:channel?.name??"Canal pendente",characters:channelIdentity(channel?.characters,idea.videoFormat?.name),visualStyle:channel?.visualStyle??null,tone:channelIdentity(channel?.tone,idea.videoFormat?.name),rules:scopedRules(channel?.rules),formatName:idea.videoFormat?.name??"Formato pendente",how:how?.howText??""};

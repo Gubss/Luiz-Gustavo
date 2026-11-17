@@ -423,7 +423,7 @@ test("sem ChannelFormat: limite de voz e narrador do perfil chegam ao prompt e �
  }
 });
 
-test("estudo acrescenta plano por cena, preserva falas e referência do canal", async () => {
+test("estudo fica fora do roteirista, preserva falas e referência do canal", async () => {
   const { prisma } = await import("../src/lib/db");
   const { generateScript, loadContext } = await G();
   const { ideaExport } = await import("../src/lib/script-export");
@@ -441,21 +441,34 @@ test("estudo acrescenta plano por cena, preserva falas e referência do canal", 
   const afterExport = (await ideaExport(idea.id))!;
   assert.deepEqual(after.data.falado, before.data.falado);
   assert.equal(after.data.duracaoSeg, before.data.duracaoSeg);
-  assert.equal(after.data.planoCenas?.length, 5);
+  assert.equal(after.data.planoCenas, undefined);
   assert.equal(afterExport.split("# Referência do canal:")[1], beforeExport.split("# Referência do canal:")[1]);
-  assert.match(afterExport, /Cena 1.*Tela:.*Câmera:.*Efeito:.*Etiqueta:/);
-  assert.doesNotMatch(afterExport, /Direção de animação ainda não preparada/);
-  assert.match(textOf(lastScript()), /# Estudo de direção/);
-  assert.doesNotMatch(lastScript().system, /Não produza direção/);
+  assert.doesNotMatch(afterExport, /Cena 1.*Tela:.*Câmera:/);
+  assert.match(afterExport, /Ainda não preparada para esta versão/);
+  assert.doesNotMatch(textOf(lastScript()), /# Estudo de direção/);
+  assert.match(lastScript().system, /Não produza direção/);
 });
 
- test("seção A substitui duração antiga no prompt sem mudar perfil", async()=>{
+ test("seção A não muda duração nem entra no prompt do roteirista", async()=>{
  const {prisma}=await import("../src/lib/db"); const {generateScript}=await G();
  const niche=await prisma.niche.create({data:{name:"PQEA duração"}});
  const channel=await prisma.myChannel.create({data:{name:"Por Que É Assim?",nicheId:niche.id,durationSec:120}});
  const format=await prisma.videoFormat.create({data:{name:"Telefone",nicheId:niche.id,directionStudy:"## A. História\n1. Gancho e loop. Até 90s.\n## B. Direção\n1. Plano por fala.\n## C. Canal\n- Família 3D."}});
  const idea=await prisma.idea.create({data:{myChannelId:channel.id,nicheId:niche.id,formatId:format.id,format:"short",theme:"Fio",titles:"[]"}});
  await generateScript(idea.id,{noRecipeOk:true});
- const prompt=textOf(lastScript()); assert.match(prompt,/Duração estimada desejada: 90s/); assert.doesNotMatch(prompt,/Duração (alvo|estimada desejada): 120s/); assert.match(prompt,/A seção A rege as FALAS/);
+ const prompt=textOf(lastScript()); assert.match(prompt,/Duração estimada desejada: 120s/); assert.doesNotMatch(prompt,/90s|A seção A rege as FALAS|Plano por fala/);
  assert.equal((await prisma.myChannel.findUniqueOrThrow({where:{id:channel.id}})).durationSec,120);
+ });
+
+ test("PR16: prompt histórico do rolimã reproduzido literalmente; direção não interfere",async()=>{
+ const {readFileSync}=await import("node:fs");const {buildScriptRequest}=await G();
+ const historical=JSON.parse(readFileSync("tests/fixtures/rolima-pr16-request.json","utf8"));
+ const user=historical.user as string;const value=(label:string)=>user.split(label+": ")[1].split("\n")[0];
+ const context={block:user.split("\n# IDEIA PARA ROTEIRIZAR")[0],channel:{durationSec:120},videoFormat:{id:"format",name:"Desmontando o Mundo",directionStudy:"## A. História\n90s obrigatório\n## B. Câmera\nTravelling"}};
+ const idea={theme:value("Tema"),chosenTitle:value("Título"),ideaData:JSON.stringify({premissa:value("Premissa invariável"),gancho:value("Gancho sugerido")}),status:"IDEA",scriptData:null,returnNotes:null};
+ const req=buildScriptRequest(context as never,idea,idea.chosenTitle,"","nova");
+ assert.equal(req.system,historical.system);assert.equal(req.user,historical.user);
+ const ranged={...context,channel:{durationSec:120,durationMinSec:60,durationMaxSec:180},block:context.block.replace("Duração alvo: 120s","Duração: 60–180s; a história decide, sem cortar piada nem lógica para encurtar.")};
+ const range=buildScriptRequest(ranged as never,idea,idea.chosenTitle,"","nova");
+ assert.match(range.user,/Duração permitida: 60 a 180s/);assert.doesNotMatch(range.user,/90s|120s|Travelling/);
  });

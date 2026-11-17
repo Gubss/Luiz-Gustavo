@@ -26,7 +26,7 @@ export async function importDirectionAction(formatId: string, _prev: FormState, 
     }
     await prisma.videoFormat.update({ where: { id: formatId }, data: { directionStudy: normalizeStudy(text) } });
     refresh(formatId);
-    return { ok: "Estudo de direção importado. Os próximos roteiros terão plano de cenas." };
+    return { ok: "Estudo importado. Será usado pelos diretores somente após a aprovação das falas." };
   } catch (error) { return { error: errMsg(error) }; }
 }
 
@@ -295,4 +295,10 @@ export async function cleanupAction(nicheId: string, _prev: FormState, fd: FormD
   } catch (e) {
     return { error: errMsg(e) };
   }
+}
+
+export async function saveNarrativeRulesAction(formatId:string,_prev:FormState,fd:FormData):Promise<FormState>{
+ const text=String(fd.get("narrativeRules")??"").trim();
+ if(text.length>12000)return {error:"Use até 12.000 caracteres."};
+ try{await prisma.videoFormat.update({where:{id:formatId},data:{narrativeRules:text||null}});refresh(formatId);return {ok:"Regras narrativas salvas. Direção permanece separada."};}catch(e){return {error:errMsg(e)}}
 }

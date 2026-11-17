@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { NO_DIRECTION, STUDY_MAX } from "@/lib/direction-study";
-import { importDirectionAction, requestDirectionAction } from "../actions";
+import { saveNarrativeRulesAction, importDirectionAction, requestDirectionAction } from "../actions";
 import { FormatGaps } from "@/components/FormatGaps";
 import { gapHint } from "@/lib/classify";
 import { notFound } from "next/navigation";
@@ -301,9 +301,17 @@ export default async function FormatPage({ params, searchParams }: PageProps<"/f
       </section>
 
       {/* Vídeos */}
+      <section className="card space-y-4 p-5" aria-labelledby="narrative-title">
+        <h2 id="narrative-title" className="text-lg font-semibold">Regras do roteirista</h2>
+        <p className="text-sm text-zinc-400">A receita e a voz do canal continuam sendo a base. Este campo é opcional: gancho, lógica, progressão, tom e fechamento. Câmera, luz e som ficam no estudo de direção abaixo.</p>
+        <StateForm action={saveNarrativeRulesAction.bind(null,f.id)} label="Salvar regras narrativas" hint="Não gera roteiro nem usa IA.">
+          <label className="label" htmlFor="narrative-rules">Regras narrativas adicionais</label>
+          <textarea id="narrative-rules" name="narrativeRules" className="input" rows={5} maxLength={12000} defaultValue={f.narrativeRules??""}/>
+        </StateForm>
+      </section>
       <section className="card space-y-4 p-5" aria-labelledby="direction-title">
         <h2 id="direction-title" className="text-lg font-semibold">Estudo de direção</h2>
-        {!f.directionStudy?.trim() ? <p role="status" className="text-amber-300">{NO_DIRECTION}</p> : <p className="text-emerald-300">Estudo importado: os próximos roteiros terão direção por cena.</p>}
+        {!f.directionStudy?.trim() ? <p role="status" className="text-amber-300">{NO_DIRECTION}</p> : <p className="text-emerald-300">Estudo disponível para os diretores após aprovação. Não entra na escrita das falas.</p>}
         <StateForm action={importDirectionAction.bind(null, f.id)} label="Importar estudo pronto">
           <label className="label" htmlFor="direction-study">Cole o estudo de direção</label>
           <textarea id="direction-study" name="directionStudy" className="input" rows={7} maxLength={STUDY_MAX} defaultValue={f.directionStudy ?? ""} />

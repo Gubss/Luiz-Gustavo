@@ -1,3 +1,4 @@
+import { DirectionFlow } from "./direction-flow";
 import { directionWarnings } from "@/lib/script-direction-check";
 import type { Idea } from "@prisma/client";
 import { prisma } from "@/lib/db";
@@ -12,10 +13,12 @@ export async function VersionReview({idea}:{idea:Idea}) {
  if(!current)return <StateForm action={captureLegacyAction.bind(null,idea.id)} label="Revisar roteiro existente" hint="Preserva o texto atual; não chama IA."/>;
  const data=JSON.parse(current.content) as ScriptContent;
  const lines=spokenLines(data);
- const warnings=directionWarnings(lines,data.duracaoSeg);
+ const channel=idea.myChannelId?await prisma.myChannel.findUnique({where:{id:idea.myChannelId},select:{durationMinSec:true,durationMaxSec:true}}):null;
+ const warnings=directionWarnings(lines,data.duracaoSeg,channel?.durationMinSec&&channel?.durationMaxSec?{min:channel.durationMinSec,max:channel.durationMaxSec}:undefined);
  const critiques=await prisma.generation.findMany({where:{scriptVersionId:current.id,kind:"script-critic-optional"},orderBy:{createdAt:"desc"}});
  return <div className="space-y-4 border-t border-line pt-4">
  {warnings.length>0&&<div role="alert" className="rounded border border-amber-600 p-3 text-amber-300"><strong>Conferência automática</strong><ul>{warnings.map(w=><li key={w}>{w}</li>)}</ul></div>}
+ <h2 className="text-lg font-semibold">1. Roteirista e aprovação</h2>
  <p>{idea.projectCode} · versão {current.number} · {idea.approvedVersionId===current.id?"Falas aprovadas":"Aguardando aprovação desta versão"}</p>
  {(data.pendencias??[]).length>0&&<details><summary>Pendências das falas</summary><ul>{data.pendencias?.map((x,i)=><li key={i}>{x}</li>)}</ul></details>}
  <StateForm action={correctScriptAction.bind(null,idea.id)} label="Corrigir trecho" busy="Iniciando correção…" hint="Uma chamada de IA. As outras falas ficam iguais.">
@@ -30,6 +33,7 @@ export async function VersionReview({idea}:{idea:Idea}) {
  <StateForm action={critiqueAction.bind(null,idea.id)} label="Pedir crítica" hint="Opcional · usa IA · não reescreve"><input type="hidden" name="versionId" value={current.id}/></StateForm>
  </div>
  {critiques.map(c=>{const r=JSON.parse(c.output) as {observacoes?:string[];hipoteses?:string[];pendencias?:string[]};return <details key={c.id}><summary>Crítica solicitada · {c.createdAt.toLocaleString("pt-BR")}</summary>{Object.entries(r).map(([k,v])=><div key={k}><strong>{k}</strong><ul>{Array.isArray(v)&&v.map((x,i)=><li key={i}>{x}</li>)}</ul></div>)}</details>})}
+ <DirectionFlow idea={idea}/>
  <details><summary>Versões e comparação ({versions.length})</summary><div className="space-y-4 py-3">{versions.map(v=>{
  const previous=spokenLines(JSON.parse(v.content) as ScriptContent);
  return <article key={v.id} className="rounded border border-line p-3"><h3>Versão {v.number} · {v.category} · {v.origin} {v.id===idea.approvedVersionId?"· aprovada":""}</h3><p>{v.request}</p>

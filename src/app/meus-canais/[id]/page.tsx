@@ -255,8 +255,11 @@ export default async function MyChannelProfilePage({ params }: PageProps<"/meus-
                 <input name="platforms" className="input" defaultValue={c.platforms ?? ""} placeholder="YouTube, TikTok" />
               </div>
               <div>
-                <label className="label">Duração alvo (s)</label>
+                <label className="label">Duração alvo (s), se não usar faixa</label>
                 <input name="durationSec" inputMode="numeric" className="input" defaultValue={c.durationSec ?? ""} placeholder="45" />
+                <label className="label mt-2">Duração mínima (s)<input name="durationMinSec" type="number" min="1" className="input" defaultValue={c.durationMinSec??""}/></label>
+                <label className="label mt-2">Duração máxima (s)<input name="durationMaxSec" type="number" min="1" className="input" defaultValue={c.durationMaxSec??""}/></label>
+                <p className="text-xs text-zinc-400">Com a faixa preenchida, a história decide a duração; o alvo fixo não é usado.</p>
               </div>
             </div>
           </div>

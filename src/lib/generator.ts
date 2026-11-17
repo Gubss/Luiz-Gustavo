@@ -9,7 +9,7 @@
  * Nunca vão duas receitas juntas: o roteiro segue um formato só e leva o nome dele no cabeçalho.
  */
 import { z } from "zod";
-import { directionPrompt, ScenePlanSchema, validateScenePlan, type ScenePlan } from "./direction-study";
+import { type ScenePlan } from "./direction-study";
 import { scopedRules, channelIdentity, completeSample, recipeEvidence } from "./script-context";
 import { appendVersion, ensureProjectCode, changeCategory } from "./script-versions";
 import { ideaExport, exportScript } from "./script-export";
@@ -120,7 +120,7 @@ export function profileBlock(c: ChannelWithScripts, format: PlaybookFormat, opts
     `# PERFIL DO MEU CANAL: ${c.name}`,
     line("Formato principal", formatLabel((c.format as PlaybookFormat) ?? "short", true)),
     line("Plataformas", c.platforms),
-    c.durationSec ? `Duração alvo: ${c.durationSec}s` : null,
+    c.durationMinSec && c.durationMaxSec ? `Duração: ${c.durationMinSec}–${c.durationMaxSec}s; a história decide, sem cortar piada nem lógica para encurtar.` : c.durationSec ? `Duração alvo: ${c.durationSec}s` : null,
     line("Identidade do canal", channelIdentity(c.concept, opts.formatName)),
     line("Personagens", channelIdentity(c.characters, opts.formatName)),
     // Com "como o meu canal faz este formato" preenchido, o resumo de formatos do perfil fica de fora (ele junta todos os formatos).
@@ -192,7 +192,7 @@ export type GeneratorContext = {
   nicheId: string;
   nicheName: string;
   format: PlaybookFormat;
-  videoFormat: { id: string; name: string; description: string | null; videos: number; directionStudy?: string | null };
+  videoFormat: { id: string; name: string; description: string | null; videos: number; directionStudy?: string | null; narrativeRules?: string | null };
   recipe: Awaited<ReturnType<typeof latestRecipe>>;
   recipeStats: RecipeStats | null;
   rule: Awaited<ReturnType<typeof latestRule>>;
@@ -295,7 +295,7 @@ export async function loadContext(opts: { myChannelId: string; formatId: string 
     nicheId: vf.nicheId,
     nicheName: vf.niche.name,
     format,
-    videoFormat: { id: vf.id, name: vf.name, description: vf.description, videos: vf._count.videos, directionStudy: vf.directionStudy },
+    videoFormat: { id: vf.id, name: vf.name, description: vf.description, videos: vf._count.videos, directionStudy: vf.directionStudy, narrativeRules: vf.narrativeRules },
     recipe,
     recipeStats,
     rule,
@@ -547,10 +547,7 @@ Duração é estimada. Liste dúvidas reais e incoerências de narrador em pende
 
 function scriptPrompt(ctx: GeneratorContext, idea: { theme: string; chosenTitle: string | null; ideaData: string | null }, title: string, extra: string) {
  const d=parse<IdeaData>(idea.ideaData);
- const storyStudy = /^## A\. /m.test(ctx.videoFormat.directionStudy ?? "");
- const duration = storyStudy ? Math.min(ctx.channel.durationSec || 90, 90) : ctx.channel.durationSec;
- const block = storyStudy ? ctx.block.replace(/^Duração alvo: .*$/gm, "Duração alvo: até " + duration + "s (estudo de direção)") : ctx.block;
- return [block, "# IDEIA PARA ROTEIRIZAR", "Título: "+title, "Tema: "+idea.theme, isRetell(d,ctx.videoFormat.id)?"RECONTAR NO FORMATO preservando a premissa; gancho antigo não se aplica":"", "Premissa invariável: "+(d?.premissa??idea.theme), "Gancho sugerido: "+(isRetell(d,ctx.videoFormat.id)?"a definir neste formato":d?.gancho??""), "Formato: "+ctx.videoFormat.name, duration?"Duração estimada desejada: "+duration+"s":"", extra?"Pedido: "+extra:""].filter(Boolean).join("\n");
+ return [ctx.block, "# IDEIA PARA ROTEIRIZAR", "Título: "+title, "Tema: "+idea.theme, isRetell(d,ctx.videoFormat.id)?"RECONTAR NO FORMATO preservando a premissa; gancho antigo não se aplica":"", "Premissa invariável: "+(d?.premissa??idea.theme), "Gancho sugerido: "+(isRetell(d,ctx.videoFormat.id)?"a definir neste formato":d?.gancho??""), "Formato: "+ctx.videoFormat.name, ctx.channel.durationMinSec && ctx.channel.durationMaxSec ? "Duração permitida: "+ctx.channel.durationMinSec+" a "+ctx.channel.durationMaxSec+"s; a história decide." : ctx.channel.durationSec?"Duração estimada desejada: "+ctx.channel.durationSec+"s":"", extra?"Pedido: "+extra:""].filter(Boolean).join("\n");
 }
 
 /** Limite de saída do roteiro: raciocínio adaptativo + roteiro inteiro (a chamada é em streaming). */
@@ -616,20 +613,18 @@ function revisionBlock(previous: string, pendingReturn: string | null) {
 
 type ScriptRequest = { system: string; user: string; mode: ScriptMode };
 
-function buildScriptRequest(
+export function buildScriptRequest(
   ctx: GeneratorContext,
   idea: { theme: string; chosenTitle: string | null; ideaData: string | null } & IdeaForRevision,
   title: string,
   extra: string,
   mode: ScriptMode | undefined,
 ): ScriptRequest {
-  const direction = directionPrompt(ctx.videoFormat.directionStudy);
-  const task = direction ? SCRIPT_TASK.replace("Não produza direção, cenas, pacote de publicação ou autochecklist. A produção vem depois da aprovação humana.", "Não produza pacote de publicação ou autochecklist. Acrescente o plano de cenas solicitado, separado das falas; a produção depende de aprovação humana.") : SCRIPT_TASK;
-  const base = scriptPrompt(ctx, idea, title, extra) + direction;
+  const base = scriptPrompt(ctx, idea, title, extra) + (ctx.videoFormat.narrativeRules?.trim() ? "\n# Regras narrativas adicionais do formato (definidas pelo usuário)\n" + ctx.videoFormat.narrativeRules.trim() : "");
   const { canRevise, defaultMode, pendingReturn } = revisionDefaults(idea);
   const want = mode ?? defaultMode;
   const previous = canRevise ? previousScriptJson(idea.scriptData) : null;
-  if (want !== "corrigir" || !previous) return { system: `${BASE_RULES}\n\n${task}`, user: base, mode: "nova" };
+  if (want !== "corrigir" || !previous) return { system: `${BASE_RULES}\n\n${SCRIPT_TASK}`, user: base, mode: "nova" };
   if (!pendingReturn && !extra.trim())
     throw new GeneratorError("Para corrigir o roteiro, diga no pedido extra o que mudar (ou registre a devolução do Estúdio). Para recomeçar, escolha “história nova”.");
   return { system: `${BASE_RULES}\n\n${SCRIPT_TASK}\n\n${REVISE_TASK}`, user: base + "\n" + revisionBlock(previous, pendingReturn), mode: "corrigir" };
@@ -895,7 +890,6 @@ export const NO_RECIPE_MSG =
   "Este formato ainda não tem receita: o roteiro sai só da descrição e dos estudos, e costuma sair pior. Marque a confirmação para escrever assim mesmo.";
 
 export const SpokenSchema = z.object({titulo:z.string(),duracaoSeg:z.number(),falado:z.array(z.object({personagem:z.string(),fala:z.string()})).min(1),pendencias:z.array(z.string())});
-export const DirectedSpokenSchema = SpokenSchema.extend({ planoCenas: ScenePlanSchema });
 function storedSpoken(d:z.infer<typeof SpokenSchema>):ScriptContent {
  return { ...d,historinha:"",formatoCombina:{combina:true,motivo:"",sugestao:""},titulosAlternativos:[],resumo:"",cenas:[],capa:"",descricao:"",hashtags:[],checklist:[],adaptacao:"",conferirFatos:[],dicasDeProducao:[] };
 }
@@ -908,9 +902,7 @@ export async function generateScript(ideaId:string,opts:{title?:string;extra?:st
  const s=await getSettings(); const {idea,ctx}=await ideaContext(ideaId);
  if(!ctx.recipe&&!opts.noRecipeOk) throw new GeneratorError(NO_RECIPE_MSG);
  const req=buildScriptRequest(ctx,idea,opts.title||idea.chosenTitle||idea.theme,opts.extra??"","nova");
- const schema = ctx.videoFormat.directionStudy?.trim() ? DirectedSpokenSchema : SpokenSchema;
- const r=await callStructured({kind:"script",model:s.modelDeep,effort:"medium",system:req.system,user:req.user,schema,maxTokens:SCRIPT_MAX_TOKENS});
- if ("planoCenas" in r.data) validateScenePlan(r.data.planoCenas as ScenePlan, r.data.falado.length);
+ const r=await callStructured({kind:"script",model:s.modelDeep,effort:"medium",system:req.system,user:req.user,schema:SpokenSchema,maxTokens:SCRIPT_MAX_TOKENS});
  const data=storedSpoken({...r.data,pendencias:Array.from(new Set([...r.data.pendencias,...narrationWarnings(r.data.falado)]))}); const ref=await referenceFor(ctx);
  const version=await appendVersion({ideaId,expectedVersionId:idea.currentVersionId,content:JSON.stringify({...data,meta:ctx.meta,channelReference:ref}),markdown:(code,n)=>exportScript(data,ref,code,n,ctx.meta),category:"história",origin:"generation",generationId:r.generationId,model:r.model,costUsd:r.costUsd,title:data.titulo});
  return {...r,data,idea:await prisma.idea.findUniqueOrThrow({where:{id:ideaId}}),version,mode:"nova"};
@@ -932,7 +924,7 @@ export async function correctScript(ideaId:string,versionId:string,lineNumber:nu
  const replacement=normalizeSpokenEntries(r.data.falado,line.who);
  if(!replacement.length) throw new GeneratorError("A correção retornou somente falas vazias.");
  const original=lines.map(l=>({personagem:l.who,fala:l.text}));
- const updated={...data,falado:[...original.slice(0,lineNumber-1),...replacement,...original.slice(endLineNumber)],cenas:data.cenas??[],pendencias:Array.from(new Set([...(data.pendencias??[]),...r.data.pendencias,...(data.planoCenas?.length?["Revisar plano de cenas após a correção das falas."]:[]),...(data.cenas?.length&&replacement.length!==endLineNumber-lineNumber+1?["A correção alterou a quantidade de falas; revisar vínculos e tempos da direção legada antes de produzir."]:[])]))};
+ const updated={...data,planoCenas:undefined,falado:[...original.slice(0,lineNumber-1),...replacement,...original.slice(endLineNumber)],cenas:data.cenas??[],pendencias:Array.from(new Set([...(data.pendencias??[]),...r.data.pendencias,...(data.planoCenas?.length?["Revisar plano de cenas após a correção das falas."]:[]),...(data.cenas?.length&&replacement.length!==endLineNumber-lineNumber+1?["A correção alterou a quantidade de falas; revisar vínculos e tempos da direção legada antes de produzir."]:[])]))};
  const ref=await referenceFor(ctx);
  return appendVersion({ideaId,expectedVersionId:versionId,content:JSON.stringify({...updated,channelReference:ref}),markdown:(code,n)=>exportScript(updated,ref,code,n,ctx.meta),request,category:categoryValue,origin:"correction",generationId:r.generationId,model:r.model,costUsd:r.costUsd});
 }

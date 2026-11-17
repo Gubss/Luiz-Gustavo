@@ -238,7 +238,7 @@ function VoicePanel({ v }: { v: VoiceCheck }) {
 
 
 function ScriptView({c}: {c:ScriptContent;formatName?:string|null}) {
- return <ScriptTabs spoken={<div className="space-y-3">{spokenLines(c).map(l=><p key={l.n}><strong>{l.who}:</strong> {l.text}</p>)}</div>} animation={<div>{c.planoCenas?.length ? c.planoCenas.map((scene,i)=><p key={i}>{sceneLine(scene,i)}</p>) : c.cenas.length?c.cenas.map((s,i)=><p key={i}>{s.inicio}–{s.fim}s (estimado): {s.acao}</p>):<p>A direção será preparada após a aprovação das falas, na etapa de produção.</p>}</div>}/>;
+ return <ScriptTabs spoken={<div className="space-y-3">{spokenLines(c).map(l=><p key={l.n}><strong>{l.who}:</strong> {l.text}</p>)}</div>} animation={<div>{(c.planoCenas?.length||c.cenas.length)>0&&<p className="mb-3 text-amber-300">Direção legada para consulta. Prepare e confira as etapas vinculadas à versão aprovada abaixo antes de produzir.</p>}{c.planoCenas?.length ? c.planoCenas.map((scene,i)=><p key={i}>{sceneLine(scene,i)}</p>) : c.cenas.length?c.cenas.map((s,i)=><p key={i}>{s.inicio}–{s.fim}s (estimado): {s.acao}</p>):<p>Veja abaixo “Direção da versão atual” para preparar ou consultar cena, fotografia, som e integração.</p>}</div>}/>;
 }
 
 export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
