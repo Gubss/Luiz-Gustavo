@@ -291,7 +291,7 @@ export default async function MyVideosPage({ searchParams }: { searchParams: Pro
           </div>
         </header>
         <div className="flex flex-wrap items-start gap-6">
-          <div className="min-w-72 flex-1">
+          <div className="min-w-0 flex-1 basis-full sm:basis-72">
             {reportJob ? (
               <RunningNote job={reportJob} what="Diagnóstico do canal" />
             ) : est ? (

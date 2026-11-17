@@ -1,0 +1,192 @@
+{
+  "ok": true,
+  "apiCost": 0,
+  "results": [
+    {
+      "host": "localhost",
+      "hydrated": true,
+      "menuOpened": true,
+      "navigated": true,
+      "closedAfterNavigation": true
+    },
+    {
+      "host": "127.0.0.1",
+      "hydrated": true,
+      "menuOpened": true,
+      "navigated": true,
+      "closedAfterNavigation": true
+    },
+    {
+      "host": "192.168.0.132",
+      "hydrated": true,
+      "menuOpened": true,
+      "navigated": true,
+      "closedAfterNavigation": true
+    },
+    {
+      "route": "/radar",
+      "width": 320,
+      "noPageOverflow": true
+    },
+    {
+      "route": "/gerador",
+      "width": 320,
+      "noPageOverflow": true
+    },
+    {
+      "route": "/ideias",
+      "width": 320,
+      "noPageOverflow": true
+    },
+    {
+      "route": "/meus-canais",
+      "width": 320,
+      "noPageOverflow": true
+    },
+    {
+      "route": "/meus-videos",
+      "width": 320,
+      "noPageOverflow": true
+    },
+    {
+      "route": "/formatos",
+      "width": 320,
+      "noPageOverflow": true
+    },
+    {
+      "route": "/formatos/cmwid2w8d0001fsjobic0l9s5",
+      "width": 320,
+      "noPageOverflow": true
+    },
+    {
+      "route": "/ideias/cmwidtzdv001qfs6kciw8tczz",
+      "width": 320,
+      "noPageOverflow": true
+    },
+    {
+      "route": "/radar",
+      "width": 390,
+      "noPageOverflow": true
+    },
+    {
+      "route": "/gerador",
+      "width": 390,
+      "noPageOverflow": true
+    },
+    {
+      "route": "/ideias",
+      "width": 390,
+      "noPageOverflow": true
+    },
+    {
+      "route": "/meus-canais",
+      "width": 390,
+      "noPageOverflow": true
+    },
+    {
+      "route": "/meus-videos",
+      "width": 390,
+      "noPageOverflow": true
+    },
+    {
+      "route": "/formatos",
+      "width": 390,
+      "noPageOverflow": true
+    },
+    {
+      "route": "/formatos/cmwid2w8d0001fsjobic0l9s5",
+      "width": 390,
+      "noPageOverflow": true
+    },
+    {
+      "route": "/ideias/cmwidtzdv001qfs6kciw8tczz",
+      "width": 390,
+      "noPageOverflow": true
+    },
+    {
+      "route": "/radar",
+      "width": 768,
+      "noPageOverflow": true
+    },
+    {
+      "route": "/gerador",
+      "width": 768,
+      "noPageOverflow": true
+    },
+    {
+      "route": "/ideias",
+      "width": 768,
+      "noPageOverflow": true
+    },
+    {
+      "route": "/meus-canais",
+      "width": 768,
+      "noPageOverflow": true
+    },
+    {
+      "route": "/meus-videos",
+      "width": 768,
+      "noPageOverflow": true
+    },
+    {
+      "route": "/formatos",
+      "width": 768,
+      "noPageOverflow": true
+    },
+    {
+      "route": "/formatos/cmwid2w8d0001fsjobic0l9s5",
+      "width": 768,
+      "noPageOverflow": true
+    },
+    {
+      "route": "/ideias/cmwidtzdv001qfs6kciw8tczz",
+      "width": 768,
+      "noPageOverflow": true
+    },
+    {
+      "route": "/radar",
+      "width": 1280,
+      "noPageOverflow": true
+    },
+    {
+      "route": "/gerador",
+      "width": 1280,
+      "noPageOverflow": true
+    },
+    {
+      "route": "/ideias",
+      "width": 1280,
+      "noPageOverflow": true
+    },
+    {
+      "route": "/meus-canais",
+      "width": 1280,
+      "noPageOverflow": true
+    },
+    {
+      "route": "/meus-videos",
+      "width": 1280,
+      "noPageOverflow": true
+    },
+    {
+      "route": "/formatos",
+      "width": 1280,
+      "noPageOverflow": true
+    },
+    {
+      "route": "/formatos/cmwid2w8d0001fsjobic0l9s5",
+      "width": 1280,
+      "noPageOverflow": true
+    },
+    {
+      "route": "/ideias/cmwidtzdv001qfs6kciw8tczz",
+      "width": 1280,
+      "noPageOverflow": true
+    },
+    {
+      "serverAction": "save same instructions on isolated database",
+      "ok": true
+    }
+  ],
+  "errors": []
+}
