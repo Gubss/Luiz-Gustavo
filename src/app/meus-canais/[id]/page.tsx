@@ -291,14 +291,16 @@ export default async function MyChannelProfilePage({ params }: PageProps<"/meus-
         </StateForm>
       </WorkSection>
 
-      {c.lessons.length > 0 && (
-        <WorkSection id="detail-2" title="Devoluções do Estúdio">
-          <div>
-            <h2 className="text-lg font-semibold">Devoluções do Estúdio ({c.lessons.length})</h2>
-            <p className="text-sm text-zinc-400">
-              Pontos em que roteiros foram reprovados antes de produzir. Entram em toda ideia e roteiro, com peso maior que a receita do formato.
-            </p>
-          </div>
+      <WorkSection id="detail-2" title={`O que o canal aprendeu (${c.lessons.length})`}>
+        <div>
+          <h2 className="text-lg font-semibold">O que o canal aprendeu ({c.lessons.length})</h2>
+          <p className="text-sm text-zinc-400">
+            Pontos de devolução e correções que você marcou &quot;Vale para o canal todo&quot;. Entram em toda ideia e roteiro do canal, em qualquer formato, com peso maior que a receita. Apagar tira a regra dos próximos roteiros.
+          </p>
+        </div>
+        {c.lessons.length === 0 ? (
+          <p className="text-sm text-zinc-500">Nada ainda. Na devolução de um roteiro, marque &quot;Vale para o canal todo&quot; no ponto que deve valer sempre.</p>
+        ) : (
           <ul className="space-y-1 text-sm">
             {c.lessons.map((l) => (
               <li key={l.id} className="flex items-start justify-between gap-3 rounded border border-line px-3 py-1.5">
@@ -306,10 +308,12 @@ export default async function MyChannelProfilePage({ params }: PageProps<"/meus-
                   <span className="text-zinc-200">{l.text}</span>
                   <span className="block text-xs text-zinc-500">
                     {fmtDate(l.createdAt)}
-                    {l.format && ` · formato ${l.format.name}`}
+                    {l.scope === "canal" ? " · canal todo" : l.format ? ` · só no formato ${l.format.name}` : ""}
+                    {l.scope === "canal" && l.format && ` · veio do formato ${l.format.name}`}
+                    {l.source === "correcao" ? " · correção de fala" : l.source === "devolucao" ? " · devolução" : ""}
                     {l.idea && (
                       <>
-                        {" · "}
+                        {" · roteiro "}
                         <Link href={`/ideias/${l.idea.id}`} className="hover:underline">
                           {l.idea.chosenTitle || l.idea.theme}
                         </Link>
@@ -318,13 +322,13 @@ export default async function MyChannelProfilePage({ params }: PageProps<"/meus-
                   </span>
                 </span>
                 <form action={deleteLessonAction.bind(null, l.id)}>
-                  <button className="btn-ghost px-2 py-0.5 text-xs text-zinc-500 hover:text-red-400">tirar</button>
+                  <button className="btn-ghost px-2 py-0.5 text-xs text-zinc-500 hover:text-red-400" title="Apagar esta regra do canal">apagar</button>
                 </form>
               </li>
             ))}
           </ul>
-        </WorkSection>
-      )}
+        )}
+      </WorkSection>
 
       <WorkSection id="detail-3" title="Roteiros aprovados">
         <div>

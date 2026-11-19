@@ -157,7 +157,8 @@ export function profileBlock(c: ChannelWithScripts, format: PlaybookFormat, opts
 /** Pontos das devoluções do Estúdio (roteiros reprovados no filtro de produção). */
 export async function lessonsBlock(myChannelId: string, formatId: string | null) {
   const rows = await prisma.channelLesson.findMany({
-    where: { myChannelId, formatId: formatId ?? "__none__" },
+    // "canal" vale em todos os formatos; lição antiga ("formato") só no formato de origem.
+    where: { myChannelId, OR: [{ scope: "canal" }, { formatId: formatId ?? "__none__" }] },
     orderBy: { createdAt: "desc" },
     take: 40,
     include: { idea: { select: { chosenTitle: true, theme: true } }, format: { select: { name: true } } },
@@ -165,10 +166,15 @@ export async function lessonsBlock(myChannelId: string, formatId: string | null)
   if (!rows.length) return { block: "", count: 0 };
   const L = [
     "# DEVOLUÇÕES DO ESTÚDIO (pontos em que roteiros meus foram reprovados antes de produzir)",
-    "Preferências registradas neste formato. Premissa e limites fixos do canal têm precedência.",
+    "Regras que o Gubs marcou para o canal todo (valem em qualquer formato) e preferências deste formato. Premissa e limites fixos do canal têm precedência.",
+    "Aplique cada ponto pelo princípio (a técnica por trás dele), não pelo texto literal: o exemplo de origem é só o caso em que o erro apareceu.",
   ];
   for (const r of rows) {
-    const where = [r.format?.name ? `formato ${r.format.name}${r.formatId === formatId ? " (este)" : ""}` : null, r.idea ? `roteiro "${r.idea.chosenTitle || r.idea.theme}"` : null]
+    const where = [
+      r.scope === "canal" ? "vale para o canal todo" : null,
+      r.format?.name ? `${r.scope === "canal" ? "veio do " : ""}formato ${r.format.name}${r.formatId === formatId ? " (este)" : ""}` : null,
+      r.idea ? `roteiro "${r.idea.chosenTitle || r.idea.theme}"` : null,
+    ]
       .filter(Boolean)
       .join(", ");
     L.push(`- ${scopedRules(r.text)}${where ? ` _(${where}, ${r.createdAt.toISOString().slice(0, 10)})_` : ""}`);

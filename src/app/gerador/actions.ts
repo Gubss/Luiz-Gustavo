@@ -10,7 +10,7 @@ import { captureLegacyVersion, approveVersion, restoreVersion } from "@/lib/scri
 import { startJob } from "@/lib/jobs";
 import { createOwnIdeas, createStoryIdea } from "@/lib/own-create";
 import { IDEAS_MAX, ideasFromPairs, parseOwnIdeas } from "@/lib/own-story";
-import { returnPoints } from "@/lib/speech";
+import { recordCorrectionLesson, recordReturn, returnMessage, returnPointsFromForm, scopeOf } from "@/lib/lessons";
 import type { FormState } from "@/app/video/actions";
 
 const BACKGROUND_OK = "Começou em segundo plano. Pode sair desta tela: o aviso no canto mostra quando terminar.";
@@ -195,29 +195,18 @@ export async function regenerateWithFormatAction(ideaId: string, _prev: FormStat
   }
 }
 
-/** Devolução do Estúdio: o roteiro foi reprovado no filtro de produção. Cada ponto vira aprendizado do canal e a ideia fica "devolvida". */
+/** Devolução do Estúdio: o roteiro foi reprovado no filtro de produção. Ponto "canal todo" vira lição do canal; "só este roteiro" fica no projeto. A ideia fica "devolvida". */
 export async function returnIdeaAction(ideaId: string, _prev: FormState, fd: FormData): Promise<FormState> {
-  const raw = String(fd.get("returnNotes") ?? "").trim();
-  const points = returnPoints(raw);
+  const { raw, points } = returnPointsFromForm(fd);
   if (!points.length) return { error: "Cole os pontos em que o roteiro foi reprovado (um por linha)." };
-  const idea = await prisma.idea.findUniqueOrThrow({ where: { id: ideaId }, select: { myChannelId: true, formatId: true, returnNotes: true } });
-  if (!idea.myChannelId) return { error: "Essa ideia não está ligada a um canal seu." };
-  const now = new Date();
-  const stamp = now.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
-  await prisma.$transaction([
-    prisma.idea.update({
-      where: { id: ideaId },
-      data: {
-        status: "RETURNED",
-        returnedAt: now,
-        returnNotes: [idea.returnNotes, `Devolução de ${stamp}:\n${raw}`].filter(Boolean).join("\n\n"),
-      },
-    }),
-
-  ]);
-  refresh(ideaId);
-  revalidatePath(`/meus-canais/${idea.myChannelId}`);
-  return { ok: "Devolução registrada no projeto. Não virou regra do canal." };
+  try {
+    const r = await recordReturn(ideaId, raw, points);
+    refresh(ideaId);
+    revalidatePath(`/meus-canais/${r.myChannelId}`);
+    return { ok: returnMessage(r.channel, r.script) };
+  } catch (e) {
+    return { error: errMsg(e) };
+  }
 }
 
 export async function deleteLessonAction(lessonId: string) {
@@ -227,8 +216,8 @@ export async function deleteLessonAction(lessonId: string) {
 }
 
 export async function correctScriptAction(ideaId:string,_prev:FormState,fd:FormData):Promise<FormState> {
- try { const versionId=String(fd.get("versionId")??""); const line=Number(fd.get("line")); const request=String(fd.get("request")??""); const category=String(fd.get("category")??"");
- await startJob({kind:"script",targetId:ideaId,label:"Correção de fala",href:"/ideias/"+ideaId,expectedSec:60},async()=>{const v=await correctScript(ideaId,versionId,line,request,category,Number(fd.get("endLine"))||line);return "Versão "+v.number+" salva; demais falas preservadas.";}); refresh(ideaId);return {ok:BACKGROUND_OK}; } catch(e){return {error:errMsg(e)}}
+ try { const versionId=String(fd.get("versionId")??""); const line=Number(fd.get("line")); const request=String(fd.get("request")??""); const category=String(fd.get("category")??""); const scope=scopeOf(fd.get("escopo"));
+ await startJob({kind:"script",targetId:ideaId,label:"Correção de fala",href:"/ideias/"+ideaId,expectedSec:60},async()=>{const v=await correctScript(ideaId,versionId,line,request,category,Number(fd.get("endLine"))||line);const lesson=scope==="canal"?await recordCorrectionLesson(ideaId,request):null;if(lesson)revalidatePath("/meus-canais/"+lesson.myChannelId);return "Versão "+v.number+" salva; demais falas preservadas. "+(lesson?"A correção virou regra do canal.":"A correção ficou só neste roteiro.");}); refresh(ideaId);return {ok:BACKGROUND_OK}; } catch(e){return {error:errMsg(e)}}
 }
 export async function critiqueAction(ideaId:string,_prev:FormState,fd:FormData):Promise<FormState> {
  try {const versionId=String(fd.get("versionId")??"");await startJob({kind:"script",targetId:ideaId,label:"Crítica opcional",href:"/ideias/"+ideaId,expectedSec:45},async()=>{const r=await requestCritique(ideaId,versionId);return "Crítica registrada, sem alterar o roteiro. Custo: "+money(r.costUsd);});refresh(ideaId);return {ok:BACKGROUND_OK};} catch(e){return {error:errMsg(e)}}

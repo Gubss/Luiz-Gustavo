@@ -163,8 +163,10 @@ roteiros aprovados do perfil nunca entram. A ideia dos balões fica de fora.
 com uma linha de descrição). O tema fica; o roteiro reconta a ideia no motor da receita (gancho e estrutura antigos não valem).
 
 **Devolução do Estúdio:** na tela da ideia, cole os pontos em que o roteiro foi reprovado no filtro de produção (um por linha).
-A ideia fica **Devolvida** e cada ponto vira aprendizado do canal, que entra em toda ideia e roteiro com peso maior que a receita
-(lista também no perfil do canal, com *tirar*).
+A ideia fica **Devolvida** e cada ponto aparece numa linha com **Vale para o canal todo** ou **Só este roteiro** (padrão).
+Ponto "canal todo" vira lição do canal (`ChannelLesson`, `scope = canal`): entra em toda ideia e roteiro, em qualquer formato, com
+peso maior que a receita, aplicado pelo princípio. "Só este roteiro" fica só na devolução do projeto. A correção de fala tem a mesma
+escolha. A lista fica no perfil do canal, em **O que o canal aprendeu**, com *apagar*.
 
 ## Cartilha do nicho (etapa 5, agora só histórico)
 

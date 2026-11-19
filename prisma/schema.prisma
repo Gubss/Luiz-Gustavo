@@ -621,7 +621,10 @@ model ChannelLesson {
   ideaId      String?
   formatId    String?
   text        String
+  /// devolucao | correcao | preferencia-*
   source      String   @default("devolucao")
+  /// canal = vale em todos os formatos do canal; formato = só no formatId (lições antigas).
+  scope       String   @default("formato")
   createdAt   DateTime @default(now())
 
   myChannel MyChannel    @relation(fields: [myChannelId], references: [id], onDelete: Cascade)

@@ -732,9 +732,9 @@ export default async function IdeaPage({ params }: PageProps<"/ideias/[id]">) {
             {idea.returnedAt && <span className="text-xs text-zinc-500">devolvida em {fmtDateTime(idea.returnedAt)}</span>}
           </header>
           {idea.lessons.length > 0 && (
-            <Collapsible title="Histórico de devoluções" meta={`${idea.lessons.length} aprendizados`}>
+            <Collapsible title="Viraram regra do canal" meta={`${idea.lessons.length} ${idea.lessons.length === 1 ? "regra" : "regras"}`}>
               <p className="mb-1 text-xs text-zinc-500">
-                Estes pontos viraram aprendizado do canal: entram em toda geração de ideia e roteiro, com peso maior que a receita do formato.
+                Pontos deste roteiro que viraram regra do canal: entram em toda ideia e roteiro (em todos os formatos, se marcados &quot;canal todo&quot;), com peso maior que a receita do formato. Os pontos &quot;só este roteiro&quot; ficam na devolução do projeto.
               </p>
               <ul className="space-y-1 text-sm">
                 {idea.lessons.map((l) => (
