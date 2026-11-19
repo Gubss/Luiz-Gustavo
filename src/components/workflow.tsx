@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
+import { returnPoints } from "@/lib/speech";
 
 /** Native disclosure: usable before hydration, with page-specific browser memory. */
 export function RememberDetails({ children, open, storageKey, ...props }: React.ComponentProps<"details"> & { storageKey?: string }) {
@@ -57,7 +58,16 @@ export function CopyScript({ url }: { url: string }) {
 export function ReturnInput() {
   const [text, setText] = useState("");
   const [error, setError] = useState("");
+  const [round, setRound] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
+  // Depois de registrar, o React reseta o formulário: limpa o texto e as escolhas junto (senão as bolinhas voltam ao padrão e o destaque não).
+  useEffect(() => {
+    const form = fileRef.current?.form;
+    if (!form) return;
+    const clear = () => { setText(""); setRound((r) => r + 1); };
+    form.addEventListener("reset", clear);
+    return () => form.removeEventListener("reset", clear);
+  }, []);
   async function load(file?: File) {
     if (!file) return;
     if (!file.name.toLowerCase().endsWith(".md")) { setError("Escolha um arquivo .md."); return; }
@@ -70,9 +80,38 @@ export function ReturnInput() {
     <textarea id="return-notes" name="returnNotes" required rows={6} className="input" value={text} onChange={(e) => setText(e.target.value)} placeholder="Um ponto por linha" />
     <input ref={fileRef} type="file" accept=".md,text/markdown" className="sr-only" aria-label="Arquivo de devolução" onChange={(e) => { void load(e.target.files?.[0]); e.target.value = ""; }} />
     <button type="button" className="btn-ghost btn-sm" onClick={() => fileRef.current?.click()}>Escolher .md</button>
-    <p className="text-xs text-zinc-500">Revise o texto antes de salvar. Cada linha vira um aprendizado do canal.</p>
     {error && <p role="alert" className="text-sm text-red-300">{error}</p>}
+    <ReturnPointScopes key={round} text={text} />
   </div>;
+}
+
+/** Cada ponto numa linha, com "Vale para o canal todo" ou "Só este roteiro" (padrão). Envia `ponto` + `escopo-<i>`. */
+function ReturnPointScopes({ text }: { text: string }) {
+  const points = returnPoints(text);
+  const [scopes, setScopes] = useState<Record<string, "canal" | "roteiro">>({});
+  if (!points.length) return <p className="text-xs text-zinc-500">Cada linha vira um ponto. Depois de colar, escolha para cada um se vale para o canal todo ou só para este roteiro.</p>;
+  const channel = points.filter((p, i) => scopes[i + "|" + p] === "canal").length;
+  return <fieldset className="space-y-2">
+    <legend className="label">Para cada ponto: vale para o canal todo ou só para este roteiro?</legend>
+    <ol className="space-y-2">
+      {points.map((p, i) => {
+        const key = i + "|" + p;
+        const scope = scopes[key] ?? "roteiro";
+        const option = (value: "canal" | "roteiro", label: string) => (
+          <label className={"inline-flex cursor-pointer items-center gap-1.5 rounded-md border px-2 py-1 text-xs " + (scope === value ? (value === "canal" ? "border-emerald-500 bg-emerald-600/10 text-emerald-200" : "border-zinc-500 bg-zinc-800 text-zinc-100") : "border-line text-zinc-400 hover:text-zinc-200")}>
+            <input type="radio" name={"escopo-" + i} value={value} checked={scope === value} onChange={() => setScopes((s) => ({ ...s, [key]: value }))} className="accent-emerald-500" />
+            {label}
+          </label>
+        );
+        return <li key={key} className="rounded border border-line px-3 py-2">
+          <input type="hidden" name="ponto" value={p} />
+          <p className="text-sm text-zinc-200"><span className="mr-2 tabular-nums text-zinc-500">{i + 1}.</span>{p}</p>
+          <div className="mt-1.5 flex flex-wrap gap-2">{option("canal", "Vale para o canal todo")}{option("roteiro", "Só este roteiro")}</div>
+        </li>;
+      })}
+    </ol>
+    <p className="text-xs text-zinc-500">{channel} {channel === 1 ? "ponto vira regra do canal" : "pontos viram regra do canal"} (entram em todos os formatos) · {points.length - channel} {points.length - channel === 1 ? "fica" : "ficam"} só neste roteiro. A frase é guardada como você escreveu.</p>
+  </fieldset>;
 }
 
 export function OpenSection({ target, children }: { target: string; children: ReactNode }) {

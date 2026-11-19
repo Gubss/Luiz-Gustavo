@@ -29,6 +29,10 @@ export async function VersionReview({idea}:{idea:Idea}) {
  <label className="label">Até a fala<select className="input" name="endLine" defaultValue=""><option value="">Somente a fala escolhida</option>{lines.map(l=><option key={l.n} value={l.n}>{l.n}. {l.who}: {l.text}</option>)}</select></label>
  <label className="label">O que você quer mudar?<textarea className="input" name="request" required maxLength={4000} rows={2}/></label>
  <label className="label">Tipo de mudança<select className="input" name="category">{CHANGE_CATEGORIES.map(c=><option key={c}>{c}</option>)}</select></label>
+ <fieldset className="space-y-1"><legend className="label">Esta correção vale para</legend><div className="flex flex-wrap gap-3 text-sm">
+ <label className="inline-flex items-center gap-1.5"><input type="radio" name="escopo" value="roteiro" defaultChecked className="accent-emerald-500"/>Só este roteiro</label>
+ <label className="inline-flex items-center gap-1.5"><input type="radio" name="escopo" value="canal" className="accent-emerald-500"/>Vale para o canal todo</label>
+ </div><p className="text-xs text-zinc-500">&quot;Canal todo&quot; guarda o seu pedido como regra do canal: entra em todo roteiro, em qualquer formato.</p></fieldset>
  </StateForm>
  <div className="flex flex-wrap gap-3">
 
