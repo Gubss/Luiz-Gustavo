@@ -174,6 +174,11 @@ princípio) no prompt dos três diretores, e fica fora do gerador de roteiro. Na
 As regras da nota "Para colar no Radar - direção de câmera" (11, Por Que É Assim?) entram uma vez com
 `npm run lessons:direction-pqea` (idempotente: rodar de novo não duplica).
 
+**Fecho (regra de 16/11):** o fecho volta ao começo, sem pedir comentário nem inscrição; a caixa 7 do checklist e a crítica
+(`fechoCerto`) cobram isso. `npm run lessons:fecho-pqea` tira do perfil do Por Que É Assim? a linha antiga de fecho com pergunta
+de duas opções (texto anterior salvo em `backups/radar-fecho-pqea-*.json`) e grava a regra 10 e as partes de roteiro das regras
+3 e 9 como regras de roteiro do canal (idempotente).
+
 ## Cartilha do nicho (etapa 5, agora só histórico)
 
 A tela continua para consulta das cartilhas já geradas, mas não gera mais e o gerador não usa.

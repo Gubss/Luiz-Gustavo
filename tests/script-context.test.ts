@@ -11,6 +11,9 @@ test("context excludes unknown, wrong-format and cut voice; preserves complete s
  assert.equal(completeSample("Era uma vez alguma coisa… (cortado)"),false);
  assert.match(scopedRules("Mãe só braço.\nSempre inscrição\nPai só pernas."),/Mãe só braço/);
  assert.doesNotMatch(scopedRules("Sempre inscrição"),/inscrição/);
+ // Proibir o pedido (regra de 16/11) fica; exigir a pergunta de duas opções sai.
+ assert.match(scopedRules("O fecho volta ao começo, sem pedir comentário ou inscrição."),/sem pedir comentário/);
+ assert.doesNotMatch(scopedRules("- Sempre: fecho com pergunta falada de duas opções e um motivo para se inscrever."),/duas opções/);
  // Cotas saem; regras contra repetição ficam ("publicado" contém "cada").
  assert.match(scopedRules("- Nunca: repetir frase ou bordão de vídeo publicado."),/publicado/);
  assert.match(scopedRules("O bordão muda a cada episódio."),/episódio/);

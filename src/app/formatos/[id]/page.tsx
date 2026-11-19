@@ -583,7 +583,7 @@ export default async function FormatPage({ params, searchParams }: PageProps<"/f
                   rows={10}
                   className="input font-mono text-xs"
                   defaultValue={howOf.get(c.id) ?? ""}
-                  placeholder={"Cole aqui o texto do formato no seu canal. Ex.:\nO motor (sempre nesta ordem): 1. Primeira frase: o desastre já aconteceu… \nO fecho: pergunta falada de duas opções…\nO que nunca pode: ensinar; furo de lógica…"}
+                  placeholder={"Cole aqui o texto do formato no seu canal. Ex.:\nO motor (sempre nesta ordem): 1. Primeira frase: o desastre já aconteceu… \nO fecho: volta ao começo, sem pedir comentário…\nO que nunca pode: ensinar; furo de lógica…"}
                 />
               </StateForm>
             </Collapsible>

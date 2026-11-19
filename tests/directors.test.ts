@@ -226,3 +226,28 @@ test("lições de direção (19/11): correção 'canal todo' vira regra dos dire
  assert.deepEqual(rows.map(r=>r.text),PQEA_CAMERA_RULES);assert.ok(rows.every(r=>r.source==="direcao"&&r.scope==="canal"));
  const pqeaBlock=await directionLessonsBlock(pqea.id);assert.ok(pqeaBlock.indexOf("- ROSTO DE QUEM FALA")<pqeaBlock.indexOf("- SOM (sonoplastia)"),"ordem 1 → 11");
 });
+
+test("fecho PQEA (regra de 16/11): tira a pergunta de duas opções do perfil com backup, regra 10 e partes de roteiro de 3 e 9 chegam ao gerador; idempotente",async()=>{
+ const {prisma}=await import("../src/lib/db");const {lessonsBlock,profileBlock}=await import("../src/lib/generator");const {directionLessonsBlock}=await import("../src/lib/lessons");
+ const {mkdtempSync,readFileSync}=await import("node:fs");const {tmpdir}=await import("node:os");const {join}=await import("node:path");
+ const OLD="- Sempre: fecho com pergunta falada de duas opções, que o vídeo não respondeu, e um motivo para se inscrever ligado à história.";
+ const rules=`- Sempre: mãe só braço.\r\n${OLD}\r\n- Nunca: repetir frase de vídeo publicado.`;
+ let pqea=await prisma.myChannel.findFirst({where:{name:"Por Que É Assim?"}});
+ if(!pqea){const n=await prisma.niche.create({data:{name:"Família 3D fecho"}});pqea=await prisma.myChannel.create({data:{name:"Por Que É Assim?",nicheId:n.id}});}
+ await prisma.myChannel.update({where:{id:pqea.id},data:{rules}});
+ const {applyPqeaClosingRule,PQEA_SCRIPT_RULES}=await import("../scripts/radar-fecho-pqea");
+ const dir=mkdtempSync(join(tmpdir(),"radar-fecho-"));
+ const first=await applyPqeaClosingRule(new Date(),dir);
+ assert.deepEqual([first.removed,first.created,first.skipped],[[OLD],3,0]);
+ const after=(await prisma.myChannel.findUniqueOrThrow({where:{id:pqea.id}})).rules!;
+ assert.equal(after,"- Sempre: mãe só braço.\r\n- Nunca: repetir frase de vídeo publicado.");
+ const saved=JSON.parse(readFileSync(first.backup!,"utf8"));assert.equal(saved.antes,rules);assert.deepEqual(saved.removidas,[OLD]);
+ const second=await applyPqeaClosingRule(new Date(),dir);
+ assert.deepEqual([second.removed,second.backup,second.created,second.skipped],[[],null,0,3]);
+ // Regras de roteiro chegam ao gerador inteiras (o "sem pedir … inscrição" não é cortado) e ficam fora da direção.
+ const block=(await lessonsBlock(pqea.id,null)).block;
+ assert.match(block,/O fecho volta ao começo, sem pedir comentário ou inscrição/);assert.match(block,/Nunca anda na rua, nunca abraça/);assert.match(block,/O roteiro não pede cena/);
+ assert.doesNotMatch(profileBlock({...pqea,rules:after,scripts:[]} as unknown as Parameters<typeof profileBlock>[0],"short"),/duas opções/);
+ assert.doesNotMatch(await directionLessonsBlock(pqea.id),/O roteiro não pede cena/);
+ assert.equal(PQEA_SCRIPT_RULES.length,3);
+});

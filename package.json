@@ -16,6 +16,7 @@
     "track": "tsx --env-file=.env scripts/track.ts",
     "phase1:setup": "tsx scripts/radar-phase1-setup.ts",
     "lessons:direction-pqea": "tsx scripts/radar-direcao-pqea.ts",
+    "lessons:fecho-pqea": "tsx scripts/radar-fecho-pqea.ts",
     "typecheck": "next typegen && tsc --noEmit",
     "phase1:regression": "tsx scripts/radar-phase1-regression.ts"
   },
