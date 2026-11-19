@@ -295,7 +295,7 @@ export default async function MyChannelProfilePage({ params }: PageProps<"/meus-
         <div>
           <h2 className="text-lg font-semibold">O que o canal aprendeu ({c.lessons.length})</h2>
           <p className="text-sm text-zinc-400">
-            Pontos de devolução e correções que você marcou &quot;Vale para o canal todo&quot;. Entram em toda ideia e roteiro do canal, em qualquer formato, com peso maior que a receita. Apagar tira a regra dos próximos roteiros.
+            Pontos de devolução e correções que você marcou &quot;Vale para o canal todo&quot;. Os de roteiro entram em toda ideia e roteiro do canal, em qualquer formato, com peso maior que a receita; os de direção entram nos diretores de cena, fotografia e som. Apagar tira a regra dos próximos roteiros e direções.
           </p>
         </div>
         {c.lessons.length === 0 ? (
@@ -310,7 +310,7 @@ export default async function MyChannelProfilePage({ params }: PageProps<"/meus-
                     {fmtDate(l.createdAt)}
                     {l.scope === "canal" ? " · canal todo" : l.format ? ` · só no formato ${l.format.name}` : ""}
                     {l.scope === "canal" && l.format && ` · veio do formato ${l.format.name}`}
-                    {l.source === "correcao" ? " · correção de fala" : l.source === "devolucao" ? " · devolução" : ""}
+                    {l.source === "direcao" ? " · direção" : l.source === "correcao" ? " · correção de fala" : l.source === "devolucao" ? " · devolução" : ""}
                     {l.idea && (
                       <>
                         {" · roteiro "}

@@ -8,6 +8,7 @@ import { callStructured, estimateCost, costUsd } from "./claude";
 import { getSettings } from "./settings";
 import { spokenLines } from "./script-lines";
 import type { ScriptContent } from "./generator";
+import { directionLessonsBlock } from "./lessons";
 
 export const STAGES = ["scene", "photography", "sound", "integration"] as const;
 export type Stage = typeof STAGES[number];
@@ -75,9 +76,14 @@ export async function scriptIntentions(versionId:string){
  }
  return out;
 }
-export function directionRequest(stage:Exclude<Stage,"integration">,content:string,run:Pick<DirectionRun,"study"|"reference"|"scene"|"photography">,intentions:string[]=[]){
+/** Regras de direção que o Gubs marcou para o canal todo (bloco próprio no system, acima da tarefa). */
+export async function channelDirectionLessons(ideaId:string){
+ const idea=await prisma.idea.findUnique({where:{id:ideaId},select:{myChannelId:true}});
+ return directionLessonsBlock(idea?.myChannelId);
+}
+export function directionRequest(stage:Exclude<Stage,"integration">,content:string,run:Pick<DirectionRun,"study"|"reference"|"scene"|"photography">,intentions:string[]=[],lessons=""){
  const data=JSON.parse(content) as ScriptContent;
- return {system:SYSTEM+(intentions.length?"\n"+INTENTIONS:"")+"\n"+TASKS[stage],user:JSON.stringify({...(intentions.length?{intencoesDoGubs:intentions}:{}),roteiro:spokenLines(data),acontecimentosAprovados:(data.cenas??[]).map(s=>({acao:s.acao})),duracaoEstimada:data.duracaoSeg,referencia:JSON.parse(run.reference),instrucoesDoUsuario:instructionsFor(stage,run.study),...(stage!=="scene"?{encenacao:JSON.parse(run.scene!)}:{}),...(stage==="sound"?{fotografia:JSON.parse(run.photography!)}:{})})};
+ return {system:SYSTEM+(intentions.length?"\n"+INTENTIONS:"")+(lessons?"\n"+lessons:"")+"\n"+TASKS[stage],user:JSON.stringify({...(intentions.length?{intencoesDoGubs:intentions}:{}),roteiro:spokenLines(data),acontecimentosAprovados:(data.cenas??[]).map(s=>({acao:s.acao})),duracaoEstimada:data.duracaoSeg,referencia:JSON.parse(run.reference),instrucoesDoUsuario:instructionsFor(stage,run.study),...(stage!=="scene"?{encenacao:JSON.parse(run.scene!)}:{}),...(stage==="sound"?{fotografia:JSON.parse(run.photography!)}:{})})};
 }
 export const isDirectionRunning=(run:DirectionRun|null)=>Boolean(run?.runningStage && Date.now()-run.updatedAt.getTime()<15*60_000);
 export function nextStage(run:DirectionRun|null):Stage|null{for(const stage of STAGES)if(!run?.[stage])return stage;return null;}
@@ -100,7 +106,7 @@ export async function estimateDirection(ideaId:string,versionId:string){
  const {modelDeep}=await getSettings();
  // Account for the full context before the first snapshot exists.
  const context=run?.study.startsWith('{"version":1,')?run:await initialContext(ideaId,version.content);
- const req=directionRequest(stage,version.content,context,await scriptIntentions(versionId));
+ const req=directionRequest(stage,version.content,context,await scriptIntentions(versionId),await channelDirectionLessons(ideaId));
  return estimateCost(modelDeep,req.system+req.user,6000,directionMaxTokens(stage,lineCount(version.content)));
 }
 export async function initialContext(ideaId:string,content:string){
@@ -140,7 +146,7 @@ export async function runDirector(ideaId:string,versionId:string,stage:Stage){
   const lines=spokenLines(JSON.parse(version.content));let result:unknown;let generationId:string|undefined;let cost=0;
   if(stage==="integration")result=integrate(version.content,SceneSchema.parse(JSON.parse(claimed.scene!)),PhotoSchema.parse(JSON.parse(claimed.photography!)),SoundSchema.parse(JSON.parse(claimed.sound!)));
   else{
-   const {modelDeep}=await getSettings();const req=directionRequest(stage,version.content,claimed,await scriptIntentions(versionId));
+   const {modelDeep}=await getSettings();const req=directionRequest(stage,version.content,claimed,await scriptIntentions(versionId),await channelDirectionLessons(ideaId));
    const options={kind:"direction-"+stage,model:modelDeep,effort:"medium" as const,...req,maxTokens:directionMaxTokens(stage,lines.length)};
    const response=stage==="scene"?await callStructured({...options,schema:SceneSchema}):stage==="photography"?await callStructured({...options,schema:PhotoSchema}):await callStructured({...options,schema:SoundSchema});
    result=response.data;generationId=response.generationId;cost=response.costUsd;
@@ -176,9 +182,9 @@ export async function estimateDirectionPipeline(ideaId:string, versionId:string)
  const {modelDeep}=await getSettings();
  if(!remaining.length)return {model:modelDeep,usd:0,usdMax:0,calls:0};
  const context=run?.study.startsWith('{"version":1,')?run:await initialContext(ideaId,version.content);
- let usd=0,usdMax=0;const count=lineCount(version.content);const intentions=await scriptIntentions(versionId);
+ let usd=0,usdMax=0;const count=lineCount(version.content);const intentions=await scriptIntentions(versionId);const lessons=await channelDirectionLessons(ideaId);
  for(const stage of remaining){
-  const request=directionRequest(stage,version.content,{...context,scene:context.scene??"null",photography:context.photography??"null"},intentions);
+  const request=directionRequest(stage,version.content,{...context,scene:context.scene??"null",photography:context.photography??"null"},intentions,lessons);
   const futureInputs=(stage!=="scene"&&!context.scene?1:0)+(stage==="sound"&&!context.photography?1:0);
   const cost=estimateCost(modelDeep,request.system+request.user,6000,directionMaxTokens(stage,count));
   usd+=cost.usd+costUsd(modelDeep,futureInputs*6000,0);
@@ -225,8 +231,8 @@ export function clearStale(list:StaleMark[],stage:DirectorStage,target:string){
 const uniq=(xs:string[])=>Array.from(new Set(xs));
 const REDO="A etapa anterior foi corrigida; atualize para ficar coerente com ela, sem outras mudanças.";
 
-export function correctionRequest(stage:DirectorStage,target:string,request:string,content:string,run:Pick<DirectionRun,"study"|"reference"|"scene"|"photography"|"sound">,intentions:string[]=[]){
- const base=directionRequest(stage,content,run,intentions);
+export function correctionRequest(stage:DirectorStage,target:string,request:string,content:string,run:Pick<DirectionRun,"study"|"reference"|"scene"|"photography"|"sound">,intentions:string[]=[],lessons=""){
+ const base=directionRequest(stage,content,run,intentions,lessons);
  const scenes=run.scene?SceneSchema.parse(JSON.parse(run.scene)):null;
  const sc=scenes?.cenas.find(c=>c.id===target);
  const scope=target===WHOLE_STAGE
@@ -249,7 +255,7 @@ async function correctionContext(ideaId:string,versionId:string,stage:DirectorSt
 export async function estimateDirectionCorrection(ideaId:string,versionId:string,stage:DirectorStage,target:string=WHOLE_STAGE){
  const {version,run}=await correctionContext(ideaId,versionId,stage,target);
  const {modelDeep}=await getSettings();
- const req=correctionRequest(stage,target,"",version.content,run,await scriptIntentions(versionId));
+ const req=correctionRequest(stage,target,"",version.content,run,await scriptIntentions(versionId),await channelDirectionLessons(ideaId));
  return estimateCost(modelDeep,req.system+req.user,4000,correctionMaxTokens(stage,target,lineCount(version.content)));
 }
 
@@ -303,7 +309,7 @@ export async function correctDirection(ideaId:string,versionId:string,stage:Dire
  try{
   const count=lineCount(version.content);
   const {modelDeep}=await getSettings();
-  const req=correctionRequest(stage,target,request,version.content,claimed,await scriptIntentions(versionId));
+  const req=correctionRequest(stage,target,request,version.content,claimed,await scriptIntentions(versionId),await channelDirectionLessons(ideaId));
   const options={kind:"direction-fix-"+stage,model:modelDeep,effort:"medium" as const,...req,maxTokens:correctionMaxTokens(stage,target,count)};
   const whole=target===WHOLE_STAGE;
   const response=stage==="scene"?await callStructured({...options,schema:whole?SceneSchema:SceneOneSchema})

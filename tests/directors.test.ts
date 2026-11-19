@@ -195,3 +195,34 @@ test("roteiro de 31 falas (~2 min): diretores pedem o teto novo, som cresce com 
  const sound=requests.at(-1)!;assert.match(sound.system,/só pelo falaId/);assert.equal(JSON.parse(sound.user).roteiro.length,31);
  const run=await prisma.directionRun.findUniqueOrThrow({where:{versionId:version.id}});assert.ok(run.integration);assert.equal(JSON.parse(run.sound!).falas.length,31);
 });
+
+test("lições de direção (19/11): correção 'canal todo' vira regra dos diretores, fica fora do roteiro, apagar tira; importação PQEA (11 regras) idempotente",async()=>{
+ const {runDirectionPipeline,correctDirection,directionRequest}=await D();const {approveVersion}=await import("../src/lib/script-versions");
+ const {recordDirectionLesson,directionLessonsBlock}=await import("../src/lib/lessons");const {lessonsBlock}=await import("../src/lib/generator");
+ const {prisma,idea,version,content}=await fixture(true,4);await approveVersion(idea.id,version.id);
+ const before=requests.length;await runDirectionPipeline(idea.id,version.id);
+ for(const r of requests.slice(before))assert.doesNotMatch(r.system,/REGRAS DE DIREÇÃO DO CANAL/,"sem lição, prompt igual ao de antes");
+ const RULE="ROSTO_VISIVEL: quem fala aparece de frente, com o objeto citado ao fundo";
+ // A tela grava a lição depois da correção dar certo; "só este roteiro" não grava nada.
+ await correctDirection(idea.id,version.id,"scene","C01",RULE);const lesson=await recordDirectionLesson(idea.id,RULE);
+ assert.equal(lesson!.source,"direcao");assert.equal(lesson!.scope,"canal");
+ const block=await directionLessonsBlock(idea.myChannelId);assert.match(block,/aplique cada regra pelo princípio/);assert.match(block,/ROSTO_VISIVEL/);
+ // Próxima direção (outra etapa, outro trecho) leva a regra no system, acima da tarefa.
+ const at=requests.length;await correctDirection(idea.id,version.id,"photography","C02","Luz da janela");
+ const sent=requests.slice(at).at(-1)!;assert.match(sent.system,/REGRAS DE DIREÇÃO DO CANAL/);assert.match(sent.system,/ROSTO_VISIVEL/);
+ assert.ok(sent.system.indexOf("REGRAS DE DIREÇÃO DO CANAL")<sent.system.indexOf("Receba a encenação"),"acima da tarefa da etapa");
+ // Lição de direção não entra no gerador de roteiro.
+ assert.doesNotMatch((await lessonsBlock(idea.myChannelId!,idea.formatId)).block,/ROSTO_VISIVEL/);
+ // Apagar tira a regra da direção seguinte.
+ await prisma.channelLesson.delete({where:{id:lesson!.id}});
+ const ctx=await (await D()).initialContext(idea.id,content);
+ assert.doesNotMatch(directionRequest("scene",content,ctx,[],await directionLessonsBlock(idea.myChannelId)).system,/ROSTO_VISIVEL/);
+ // Importação das 11 regras da nota de câmera: grava 11 na ordem, rodar de novo não duplica.
+ const n=await prisma.niche.create({data:{name:"Família 3D"}});const pqea=await prisma.myChannel.create({data:{name:"Por Que É Assim?",nicheId:n.id}});
+ const {importPqeaDirectionRules,PQEA_CAMERA_RULES}=await import("../scripts/radar-direcao-pqea");
+ assert.deepEqual(await importPqeaDirectionRules(),{channelId:pqea.id,created:11,skipped:0});
+ assert.deepEqual(await importPqeaDirectionRules(),{channelId:pqea.id,created:0,skipped:11});
+ const rows=await prisma.channelLesson.findMany({where:{myChannelId:pqea.id},orderBy:[{createdAt:"asc"},{id:"asc"}]});
+ assert.deepEqual(rows.map(r=>r.text),PQEA_CAMERA_RULES);assert.ok(rows.every(r=>r.source==="direcao"&&r.scope==="canal"));
+ const pqeaBlock=await directionLessonsBlock(pqea.id);assert.ok(pqeaBlock.indexOf("- ROSTO DE QUEM FALA")<pqeaBlock.indexOf("- SOM (sonoplastia)"),"ordem 1 → 11");
+});

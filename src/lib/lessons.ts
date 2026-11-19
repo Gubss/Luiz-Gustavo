@@ -63,3 +63,29 @@ export async function recordCorrectionLesson(ideaId: string, request: string) {
     data: { myChannelId: idea.myChannelId, ideaId, formatId: idea.formatId, text: request.trim().slice(0, 1000), source: "correcao", scope: "canal" },
   });
 }
+
+/** Correção da direção marcada "canal todo": o pedido vira regra de direção do canal (source "direcao"). */
+export async function recordDirectionLesson(ideaId: string, request: string) {
+  const idea = await prisma.idea.findUniqueOrThrow({ where: { id: ideaId }, select: { myChannelId: true, formatId: true } });
+  if (!idea.myChannelId || !request.trim()) return null;
+  return prisma.channelLesson.create({
+    data: { myChannelId: idea.myChannelId, ideaId, formatId: idea.formatId, text: request.trim().slice(0, 1000), source: "direcao", scope: "canal" },
+  });
+}
+
+/** Cabeçalho do bloco de direção: as regras valem pelo princípio, não pelo texto literal. */
+export const DIRECTION_LESSONS_HEADER =
+  "REGRAS DE DIREÇÃO DO CANAL (o Gubs marcou para o canal todo; valem em toda cena de todo episódio): aplique cada regra pelo princípio (a técnica por trás dela), não pelo texto literal; o exemplo é só o caso em que o erro apareceu. Use o que couber nesta etapa. As intenções do Gubs desta versão prevalecem se conflitarem.";
+
+/** Lições de direção do canal, da mais antiga à mais recente (as 40 últimas). Só source "direcao". */
+export async function directionLessonsBlock(myChannelId: string | null | undefined) {
+  if (!myChannelId) return "";
+  const rows = await prisma.channelLesson.findMany({
+    where: { myChannelId, source: "direcao" },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    take: 40,
+    select: { text: true },
+  });
+  if (!rows.length) return "";
+  return [DIRECTION_LESSONS_HEADER, ...rows.reverse().map((r) => "- " + r.text)].join("\n");
+}

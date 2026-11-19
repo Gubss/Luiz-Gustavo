@@ -168,6 +168,12 @@ Ponto "canal todo" vira lição do canal (`ChannelLesson`, `scope = canal`): ent
 peso maior que a receita, aplicado pelo princípio. "Só este roteiro" fica só na devolução do projeto. A correção de fala tem a mesma
 escolha. A lista fica no perfil do canal, em **O que o canal aprendeu**, com *apagar*.
 
+**Correção da direção:** a correção só da direção (cena, fotografia, som) tem a mesma escolha. "Canal todo" grava a lição com
+`source = direcao` depois que a correção dá certo; ela entra num bloco próprio (**REGRAS DE DIREÇÃO DO CANAL**, aplicar pelo
+princípio) no prompt dos três diretores, e fica fora do gerador de roteiro. Na lista aparece com a marca *direção*.
+As regras da nota "Para colar no Radar - direção de câmera" (11, Por Que É Assim?) entram uma vez com
+`npm run lessons:direction-pqea` (idempotente: rodar de novo não duplica).
+
 ## Cartilha do nicho (etapa 5, agora só histórico)
 
 A tela continua para consulta das cartilhas já geradas, mas não gera mais e o gerador não usa.

@@ -158,7 +158,8 @@ export function profileBlock(c: ChannelWithScripts, format: PlaybookFormat, opts
 export async function lessonsBlock(myChannelId: string, formatId: string | null) {
   const rows = await prisma.channelLesson.findMany({
     // "canal" vale em todos os formatos; lição antiga ("formato") só no formato de origem.
-    where: { myChannelId, OR: [{ scope: "canal" }, { formatId: formatId ?? "__none__" }] },
+    // Lições de direção ("direcao") ficam com os diretores, fora do roteiro.
+    where: { myChannelId, source: { not: "direcao" }, OR: [{ scope: "canal" }, { formatId: formatId ?? "__none__" }] },
     orderBy: { createdAt: "desc" },
     take: 40,
     include: { idea: { select: { chosenTitle: true, theme: true } }, format: { select: { name: true } } },
