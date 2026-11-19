@@ -87,6 +87,86 @@ export function RepeatWarning({ repeats }: { repeats: OwnMatch[] }) {
   );
 }
 
+type IdeaWithRels = Idea & { publishedVideo?: MyChannelVideo | null; videoFormat?: { id: string; name: string } | null };
+
+const usd = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+/** Custo de IA da ideia (geração + roteiro), "—" quando não houve gasto registrado. */
+function ideaCost(idea: Idea) {
+  const total = (idea.ideaCostUsd ?? 0) + (idea.scriptCostUsd ?? 0);
+  return total > 0 ? `US$ ${usd.format(total)}` : "—";
+}
+
+// Colunas do modo Lista no computador: ideia | formato | status | data | custo (literal para o Tailwind achar a classe).
+const ROW_COLS = "md:grid-cols-[minmax(0,1fr)_8rem_7rem_5rem_4.5rem]";
+
+/** Linha compacta de uma ideia (modo Lista do banco de ideias). A linha inteira abre a ideia. */
+export function IdeaRow({ idea, channelName }: { idea: IdeaWithRels; channelName?: string | null }) {
+  const titles = parse<string[]>(idea.titles) ?? [];
+  const title = idea.chosenTitle || titles[0] || idea.theme;
+  const href = `/ideias/${idea.id}`;
+  const tipo = idea.format === "long" ? "Longo" : "Short";
+  return (
+    <li className="group relative flex items-center gap-3 border-b border-line px-3 py-2 last:border-b-0 hover:bg-zinc-800/40">
+      <div className={`min-w-0 flex-1 md:grid md:items-center md:gap-3 ${ROW_COLS}`}>
+        <div className="min-w-0">
+          <Link href={href} className="block truncate text-sm font-medium group-hover:text-red-300 after:absolute after:inset-0 after:content-['']" title={title}>
+            {title}
+          </Link>
+          <div className="hidden truncate text-xs text-zinc-500 md:block">
+            {tipo}
+            {channelName ? ` · ${channelName}` : ""}
+          </div>
+        </div>
+        <span className="hidden truncate text-xs text-violet-200 md:block" title={idea.videoFormat?.name ?? "sem formato"}>
+          {idea.videoFormat?.name ?? <span className="text-zinc-500">sem formato</span>}
+        </span>
+        <div className="mt-1 flex min-w-0 items-center gap-x-2 md:contents">
+          <span className="shrink-0 md:block">
+            <StatusBadge status={idea.status} />
+          </span>
+          <span className="shrink-0 text-xs text-zinc-500 md:text-zinc-400">{fmtDate(idea.createdAt)}</span>
+          <span className="min-w-0 truncate text-xs text-zinc-500 md:hidden">
+            · {tipo}
+            {channelName ? ` · ${channelName}` : ""}
+          </span>
+          <span className="hidden text-right text-xs text-zinc-400 tabular-nums md:block">{ideaCost(idea)}</span>
+        </div>
+      </div>
+      <div className="relative z-10 flex shrink-0 items-center gap-1">
+        <Link href={href} className="btn-secondary btn-sm hidden w-[8.25rem] justify-center sm:inline-flex">
+          {idea.script ? "Ver roteiro" : "Escrever roteiro"}
+        </Link>
+        <Menu>
+          <Link href={href} className="menu-item">
+            {idea.script ? "Ver roteiro" : "Escrever roteiro"}
+          </Link>
+          <Link href={href} className="menu-item">
+            Abrir a ideia completa
+          </Link>
+          <DeleteIdeaButton action={deleteIdeaInline.bind(null, idea.id)} label="Apagar ideia" className="menu-item text-red-300" />
+        </Menu>
+      </div>
+    </li>
+  );
+}
+
+/** Cabeçalho das colunas do modo Lista (só no computador). */
+export function IdeaRowHeader() {
+  return (
+    <div className="hidden items-center gap-3 border-b border-line px-3 py-2 text-[11px] font-medium tracking-wide text-zinc-500 md:flex">
+      <div className={`grid flex-1 gap-3 ${ROW_COLS}`}>
+        <span>Ideia · tipo · canal</span>
+        <span>Formato</span>
+        <span>Status</span>
+        <span>Data</span>
+        <span className="text-right">Custo</span>
+      </div>
+      <span className="w-[10.75rem] shrink-0 text-center">Ações</span>
+    </div>
+  );
+}
+
 /** Cartão de uma ideia (gerador e banco de ideias): o essencial à vista, o resto em "Ver detalhes". */
 export function IdeaCard({
   idea,
