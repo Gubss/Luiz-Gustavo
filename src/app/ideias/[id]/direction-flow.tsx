@@ -37,6 +37,10 @@ async function StageCorrection({ideaId,versionId,stage,run,marks}:{ideaId:string
     <input type="hidden" name="versionId" value={versionId}/><input type="hidden" name="stage" value={stage}/>
     <label className="label">Trecho<select className="input" name="target" defaultValue={WHOLE_STAGE}><option value={WHOLE_STAGE}>Toda a etapa</option>{scenes.map(c=><option key={c.id} value={c.id}>{c.id} · falas {c.falaInicial}–{c.falaFinal} · {c.intencao.slice(0,70)}</option>)}</select></label>
     <label className="label">O que você quer mudar?<textarea className="input" name="request" required maxLength={4000} rows={2}/></label>
+    <fieldset className="space-y-1"><legend className="label">Esta correção vale para</legend><div className="flex flex-wrap gap-3 text-sm">
+     <label className="inline-flex items-center gap-1.5"><input type="radio" name="escopo" value="roteiro" defaultChecked className="accent-emerald-500"/>Só este roteiro</label>
+     <label className="inline-flex items-center gap-1.5"><input type="radio" name="escopo" value="canal" className="accent-emerald-500"/>Vale para o canal todo</label>
+    </div><p className="text-xs text-zinc-500">&quot;Canal todo&quot; guarda o seu pedido como regra de direção do canal: entra na direção de todo roteiro, em qualquer formato.</p></fieldset>
    </StateForm></div>
   </details>
   {history.length>0&&<details><summary className="text-sm text-zinc-400">Versões anteriores ({history.length})</summary><ol className="mt-2 space-y-2 text-sm">{history.map((h,i)=><li key={i} className="border-l border-line pl-3"><p className="text-zinc-300">{new Date(h.at).toLocaleString("pt-BR")} · {targetLabel(h.target)} · {h.request}</p><details><summary className="text-zinc-400">Ver resultado anterior</summary><div className="mt-2"><DirectionResult value={JSON.parse(h.value)}/></div></details></li>)}</ol></details>}

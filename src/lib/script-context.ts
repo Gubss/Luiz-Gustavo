@@ -1,6 +1,7 @@
 /** Context only from the selected channel/format. Raw studies remain intact. */
 export function scopedRules(text: string | null | undefined) {
- return (text??"").split(/\r?\n/).filter(line=>!/(?:inscrev|inscri|\bCTA\b|pergunta.*duas opções|piada.*(?:obrigat|\bcada\s+\d|pelo menos)|bord[aã]o.*(?:\bcada\s+\d|\bmáximo\b)|nunca.*n[uú]mero|sem conta e sem número)/i.test(line)).join("\n");
+ // Proibição de pedir comentário/inscrição (regra de 16/11) fica: só sai a exigência de CTA.
+ return (text??"").split(/\r?\n/).filter(line=>/\b(?:sem|nada de|nunca|não|nem)\s+pedir\b/i.test(line)||!/(?:inscrev|inscri|\bCTA\b|pergunta.*duas opções|piada.*(?:obrigat|\bcada\s+\d|pelo menos)|bord[aã]o.*(?:\bcada\s+\d|\bmáximo\b)|nunca.*n[uú]mero|sem conta e sem número)/i.test(line)).join("\n");
 }
 export function completeSample(text:string) {
  return !text.trim().endsWith("...") && text.trim().length>20 && /[.!?…][”"')]*$/.test(text.trim()) && !/(?:\(cortado\)|\[truncad|…$)/i.test(text.trim());

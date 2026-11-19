@@ -395,7 +395,7 @@ test("segunda passada confere o checklist do Gubs inteiro (historinha, conta em 
   assert.deepEqual(reviewPoints(code, base).points, []);
   const bad = reviewPoints(code, { ...base, historinha: "", contas: [{ cena: 4, frase: "uns dez gramas" }], viradaPlantada: false, fechoCerto: false }).points;
   assert.equal(bad.length, 4);
-  assert.match(bad.join("\n"), /historinha em 1 frase[\s\S]*Tema de desenho com conta[\s\S]*não foi plantada[\s\S]*duas opções/);
+  assert.match(bad.join("\n"), /historinha em 1 frase[\s\S]*Tema de desenho com conta[\s\S]*não foi plantada[\s\S]*fecho não volta ao começo/);
 });
 
 test("sem ChannelFormat: limite de voz e narrador do perfil chegam ao prompt e à exportação",async()=>{
