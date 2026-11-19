@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { IDEA_STATUS } from "@/lib/idea-status";
-import { IdeaCard } from "@/components/IdeaCard";
+import { IdeaCard, IdeaRow, IdeaRowHeader } from "@/components/IdeaCard";
+import { IdeasView } from "./view-toggle";
 import { repeatsForIdeas } from "@/lib/my-catalog";
 import { Collapsible, EmptyState, FilterChip, FilterRow, PageHeader, Pagination, SearchBox, Tabs, makeHref, one, paginate, type SP } from "@/components/ui";
 
@@ -129,11 +130,25 @@ export default async function IdeasPage({ searchParams }: PageProps<"/ideias">) 
         </EmptyState>
       ) : (
         <>
-          <div className="grid items-start gap-3 md:grid-cols-2">
-            {pg.slice.map((i) => (
-              <IdeaCard key={i.id} idea={i} channelName={channels.length > 1 && i.myChannelId ? names.get(i.myChannelId) : null} repeats={repeats.get(i.id)} />
-            ))}
-          </div>
+          <IdeasView
+            grid={
+              <div className="grid items-start gap-3 md:grid-cols-2">
+                {pg.slice.map((i) => (
+                  <IdeaCard key={i.id} idea={i} channelName={channels.length > 1 && i.myChannelId ? names.get(i.myChannelId) : null} repeats={repeats.get(i.id)} />
+                ))}
+              </div>
+            }
+            list={
+              <div className="card p-0">
+                <IdeaRowHeader />
+                <ul>
+                  {pg.slice.map((i) => (
+                    <IdeaRow key={i.id} idea={i} channelName={i.myChannelId ? names.get(i.myChannelId) : null} />
+                  ))}
+                </ul>
+              </div>
+            }
+          />
           <Pagination page={pg.page} pages={pg.pages} total={pg.total} label="ideias" href={(n) => href({ page: String(n) })} />
         </>
       )}
